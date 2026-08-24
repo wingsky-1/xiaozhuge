@@ -35,6 +35,10 @@ function canonical(text) {
   const parsed = JSON.parse(text);
   // projectRoot 是生成环境相关的绝对路径（本地/CI 各不同），不参与一致性比较
   delete parsed.projectRoot;
+  // tests 段是「测试索引 -> 名称」的运行期映射，id 编号随执行顺序漂移，
+  // 不参与一致性比较；mutant 的 coveredBy/killedBy 已在签名中剥离。
+  if (parsed.tests !== undefined) parsed.tests = [];
+  if (parsed.testFiles !== undefined) parsed.testFiles = [];
   const normalized = sortDeep(parsed);
   if (normalized.files) {
     for (const file of Object.keys(normalized.files)) {
