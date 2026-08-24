@@ -37,6 +37,13 @@ pnpm install
 pnpm build && pnpm test && pnpm lint && pnpm typecheck
 ```
 
+## `scripts/` 目录速览
+
+- `scripts/check-mutation-baseline.mjs` — mutation 基线新鲜度校验
+- `scripts/rename-adr.mjs` — ADR 重编号工具
+- `scripts/spikes/` — P1 spike 四连的可复现验证脚本
+- `scripts/scenarios/` — 场景化验收脚本
+
 ## License
 
 MIT
