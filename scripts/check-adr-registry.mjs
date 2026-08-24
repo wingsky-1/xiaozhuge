@@ -50,7 +50,8 @@ for (const file of entries) {
     errors.push(
       `ADR 编号 ${num} 重复: ${byNumber.get(num)} 与 ${file}` +
         ` —— 后合并一方请改用下一个可用编号（当前最大 ${nextFree(byNumber)}），` +
-        `运行 node scripts/rename-adr.mjs ${num} <新编号> 同步更新全部引用`,
+        `运行 node scripts/rename-adr.mjs ${num} <新编号> 同步仓库内引用` +
+        `（GitHub issue/PR 内的编号引用请搜索人工修改）`,
     );
   } else {
     byNumber.set(num, file);
