@@ -1,0 +1,4 @@
+# S2 spike：本 bundle 不直接插入 entry——由驱动脚本的 --patch overlay
+# 按 id 插入 spike-s2-host 并注入 config（同时禁用 one-shot headless-runner）。
+# 保留此文件以满足 dsh.bundle.patch 声明。
+[]
