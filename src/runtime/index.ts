@@ -12,11 +12,20 @@ export type {
   MemberRecord,
   TeamRegistry,
 } from "./types.js";
-export { TASK_STATUSES, TASK_TRANSITIONS, GATE_STATUSES, canTransition } from "./types.js";
+export {
+  TASK_STATUSES,
+  TASK_TRANSITIONS,
+  GATE_STATUSES,
+  RESERVED_STAGES,
+  TEMPLATE_SOURCES,
+  canTransition,
+  isReservedStage,
+} from "./types.js";
 export { layout, roomLayout, memberMailboxDir } from "./paths.js";
 export type { Layout, RoomLayout } from "./paths.js";
 export {
   ensureDir,
+  linkNoReplace,
   readJson,
   writeJsonAtomic,
   sweepTmp,
@@ -43,3 +52,19 @@ export {
 } from "./recovery.js";
 export type { DeliveryRecovery, SentinelRecovery } from "./recovery.js";
 export { RuntimeError, LedgerError, LockError, GateError } from "./errors.js";
+export * from "./mailbox.js";
+export type { Envelope } from "./mailbox.js";
+export * from "./blackboard.js";
+export type { Shard } from "./blackboard.js";
+export {
+  validateTeamTemplate,
+  validateRoleSpec,
+  validateRoleSet,
+  SECTIONS_REQUIRED_ENUM,
+} from "./template.js";
+export type { ValidationError, ValidationResult } from "./template.js";
+export {
+  MAILBOX_SEGMENTS,
+  DELIVERY_WAKEUP_MATRIX,
+  GATE_FLOW,
+} from "./protocol.js";

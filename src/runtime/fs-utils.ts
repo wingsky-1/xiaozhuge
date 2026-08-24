@@ -3,7 +3,7 @@
  * 故障模型为进程崩溃（page cache 不丢）；掉电级持久性（父目录 fsync）属
  * 过度设计，不在此实现。
  */
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { link, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
@@ -63,4 +63,19 @@ export function confineToRoot(root: string, target: string): string {
     throw new Error(`archive target escapes TEAM_HOME: ${target}`);
   }
   return resolvedTarget;
+}
+
+/**
+ * 原子 create-if-not-exists 复制引用：target 已存在时抛 EEXIST（不覆盖）。
+ * Node 无 RENAME_NOREPLACE；防覆盖发布只能用 link。
+ * @returns true = 本次创建；false = target 已存在（调用方决定残片处理）。
+ */
+export async function linkNoReplace(src: string, target: string): Promise<boolean> {
+  try {
+    await link(src, target);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") return false;
+    throw error;
+  }
 }

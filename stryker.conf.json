@@ -2,8 +2,15 @@
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
   "packageManager": "pnpm",
   "testRunner": "vitest",
-  "plugins": ["@stryker-mutator/vitest-runner"],
-  "reporters": ["html", "clear-text", "progress"],
+  "plugins": [
+    "@stryker-mutator/vitest-runner"
+  ],
+  "reporters": [
+    "html",
+    "clear-text",
+    "json",
+    "progress"
+  ],
   "coverageAnalysis": "perTest",
   "incremental": true,
   "incrementalFile": "stryker-incremental.json",
@@ -12,5 +19,8 @@
     "low": 70,
     "break": 70
   },
-  "mutate": ["src/**/*.ts", "!src/**/*.d.ts"]
+  "mutate": [
+    "src/**/*.ts",
+    "!src/**/*.d.ts"
+  ]
 }

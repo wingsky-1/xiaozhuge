@@ -5,13 +5,6 @@
 
 export const VERSION = "0.0.0-dev" as const;
 
-/** 框架保留态三元组——通用归约（着色/阻塞高亮/闭环判定）唯一认可的阶段锚点。 */
-export const STAGES = ["running", "blocked", "done"] as const;
-
-export type Stage = (typeof STAGES)[number];
-
-export function isStage(value: string): value is Stage {
-  return (STAGES as readonly string[]).includes(value);
-}
+export { RESERVED_STAGES as STAGES, isReservedStage as isStage } from "./runtime/types.js";
 
 export * from "./runtime/index.js";

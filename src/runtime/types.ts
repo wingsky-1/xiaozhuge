@@ -5,6 +5,16 @@
  * 零 harness 依赖。宿主绑定层（把 TEAM_HOME 解析到具体落点）不在此处。
  */
 
+/** 框架保留态三元组——通用归约唯一认可的阶段锚点（业务子状态仅展示）。 */
+export const RESERVED_STAGES = ["running", "blocked", "done"] as const;
+
+export type ReservedStage = (typeof RESERVED_STAGES)[number];
+
+/** 模板/Role Spec 三级来源标记（ADR 0002 #13：同名不跨级覆盖，仅标来源）。 */
+export const TEMPLATE_SOURCES = ["builtin", "user", "project"] as const;
+
+export type TemplateSource = (typeof TEMPLATE_SOURCES)[number];
+
 /** 框架保留态三元组之外的账本入口态。 */
 export const TASK_STATUSES = [
   "queued",
@@ -117,4 +127,9 @@ export interface GateRecord {
   requestedAt: number;
   resolvedBy?: string;
   resolvedAt?: number;
+}
+
+/** 保留态判定（原 isStage，语义收窄为保留态三元组）。 */
+export function isReservedStage(value: string): value is ReservedStage {
+  return (RESERVED_STAGES as readonly string[]).includes(value);
 }
