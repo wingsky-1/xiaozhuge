@@ -20,8 +20,13 @@ try {
   entries = readdirSync(DIR)
     .filter((f) => f.endsWith(".md"))
     .sort();
-} catch {
-  console.error(`::error::${DIR} 目录不存在或不可读`);
+} catch (error) {
+  // 仓库尚无任何 ADR（目录未建）是合法状态，视为零条通过
+  if (/** @type {NodeJS.ErrnoException} */ (error).code === "ENOENT") {
+    console.log(`ADR registry OK: 0 entries (${DIR} 不存在)`);
+    process.exit(0);
+  }
+  console.error(`::error::${DIR} 目录不可读: ${/** @type {Error} */ (error).message}`);
   process.exit(1);
 }
 
