@@ -1,0 +1,30 @@
+{
+  "name": "@wingsky-1/dsh-xiaozhuge",
+  "version": "0.0.0-dev",
+  "private": true,
+  "description": "Xiaozhuge (小诸葛): agent team framework for DeepSeek Harness — MVP 阶段，不发布",
+  "type": "module",
+  "license": "MIT",
+  "author": "wingsky-1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wingsky-1/xiaozhuge.git"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.21.0",
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.2.0",
+    "eslint": "^10.9.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}
