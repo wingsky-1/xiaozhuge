@@ -68,3 +68,12 @@ export {
   DELIVERY_WAKEUP_MATRIX,
   GATE_FLOW,
 } from "./protocol.js";
+export {
+  loadTemplate,
+  instantiateSnapshot,
+  builtinScenarioDir,
+  TEAM_FILE,
+  ROLES_DIR,
+  PROMPTS_DIR,
+} from "./template-loader.js";
+export type { LoadedTemplate } from "./template-loader.js";

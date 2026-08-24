@@ -1,0 +1,14 @@
+{
+  "id": "hardener",
+  "title": "加固测试",
+  "prompt": "./prompts/hardener.md",
+  "briefing": {
+    "format": "structured",
+    "sections_required": ["background", "acceptance"]
+  },
+  "dod": [
+    "新增边界/负路径测试且全部门禁绿",
+    "变异测试得分不低于既有基线"
+  ],
+  "max_hops": 3
+}

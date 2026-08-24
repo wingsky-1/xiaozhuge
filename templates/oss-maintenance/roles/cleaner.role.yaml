@@ -1,0 +1,14 @@
+{
+  "id": "cleaner",
+  "title": "清理简化",
+  "prompt": "./prompts/cleaner.md",
+  "briefing": {
+    "format": "structured",
+    "sections_required": ["background", "boundary"]
+  },
+  "dod": [
+    "无行为变更的证明（公共接口与测试结果前后一致）",
+    "删除的死代码/冗余逐一列明"
+  ],
+  "max_hops": 2
+}

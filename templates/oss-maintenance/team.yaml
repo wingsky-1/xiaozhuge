@@ -1,0 +1,25 @@
+{
+  "name": "oss-maintenance",
+  "version": 1,
+  "tiers": [
+    { "id": "master", "prompt": "./prompts/master.md" },
+    { "id": "issue-master", "prompt": "./prompts/issue-master.md" }
+  ],
+  "roles": ["spec-writer", "coder", "cleaner", "hardener", "qa"],
+  "comm_mode": "auto",
+  "archives": [
+    { "id": "run-log", "type": "file", "target": "archive/run-log.md" },
+    {
+      "id": "tracking",
+      "type": "url",
+      "url": "https://github.com/example/tracking"
+    }
+  ],
+  "gates": [{ "id": "plan-approval", "at": "master", "on": "stage-enter:queued" }],
+  "resources": {
+    "max_active_rooms": 3,
+    "max_handoffs_per_task": 12,
+    "task_max_rounds": 3
+  },
+  "stages_ext": ["deciding", "building", "review"]
+}
