@@ -1,0 +1,5 @@
+# S1 spike bundle patch：向宿主插入 team_echo 工具注册服务。
+# 写法对照 @wingsky-1/dsh-notifier 的 cordis.patch.yml（insert + 包名指向插件入口）。
+- insert:
+    - id: spike-team-echo
+      name: '@wingsky-1/spike-team-echo'

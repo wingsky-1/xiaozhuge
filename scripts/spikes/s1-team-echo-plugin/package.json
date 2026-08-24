@@ -1,0 +1,13 @@
+{
+  "name": "@wingsky-1/spike-team-echo",
+  "version": "0.0.0-spike",
+  "private": true,
+  "type": "module",
+  "description": "S1 spike: minimal dsh bundle registering the team_echo native tool (issue #4)",
+  "main": "index.js",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
