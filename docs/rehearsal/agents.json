@@ -1,0 +1,18 @@
+{
+  "members": {
+    "coder": {
+      "member": "coder",
+      "durableId": "dur-coder-27",
+      "tier": 1,
+      "status": "spawned",
+      "lastSeen": 1787603530947
+    },
+    "qa": {
+      "member": "qa",
+      "durableId": "dur-qa-27",
+      "tier": 1,
+      "status": "spawned",
+      "lastSeen": 1787603530963
+    }
+  }
+}

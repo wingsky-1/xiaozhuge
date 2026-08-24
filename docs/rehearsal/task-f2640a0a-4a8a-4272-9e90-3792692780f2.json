@@ -1,0 +1,19 @@
+{
+  "id": "task-f2640a0a-4a8a-4272-9e90-3792692780f2",
+  "title": "README 补 scripts 目录速览",
+  "status": "done",
+  "room": "root",
+  "assignee": "coder",
+  "touched": [],
+  "mutexGroups": [],
+  "rounds": 0,
+  "maxRounds": 3,
+  "dod": [
+    "README 含四行目录说明",
+    "不改动其他文件"
+  ],
+  "rev": 3,
+  "createdAt": 1787603535758,
+  "updatedAt": 1787603592116,
+  "artifact": "https://github.com/wingsky-1/xiaozhuge/pull/28"
+}
