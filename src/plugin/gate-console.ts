@@ -12,6 +12,7 @@
  */
 import { readdir } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { WebRoute } from "@deepseek-ai/dsh-host-webserver";
 import { join } from "node:path";
 import { listGates, openGate, resolveGate } from "../runtime/gates.js";
 import { EventLog } from "../runtime/event-log.js";
@@ -58,11 +59,7 @@ function uaFingerprint(req: IncomingMessage): string {
   return `len${ua.length}:${ua.slice(-6)}`;
 }
 
-export function makeGateRoutes(deps: GateRouteDeps): Array<{
-  kind: "exact" | "prefix";
-  path: string;
-  handler: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
-}> {
+export function makeGateRoutes(deps: GateRouteDeps): WebRoute[] {
   return [
     {
       kind: "exact",
@@ -226,11 +223,7 @@ async function resolve(session, gateId, decision) {
 }
 
 /** Console 页面路由（GET 直出）。 */
-export function makeConsoleRoute(): {
-  kind: "exact";
-  path: string;
-  handler: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
-} {
+export function makeConsoleRoute(): WebRoute {
   return {
     kind: "exact",
     path: ROUTES_CONSOLE,
