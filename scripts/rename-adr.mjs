@@ -79,6 +79,10 @@ for (const root of SCAN_ROOTS) {
 
 console.log(`OK: ${join(DIR, oldFile)} -> ${join(DIR, newFile)}，引用更新 ${refCount} 个文件`);
 console.log("请 review 改动后自行提交");
+console.log(
+  `注意：GitHub 上 issue/PR 内容无法自动修改——请在 GitHub 搜索 "ADR ${oldNum}"，` +
+    `将命中条目内的编号人工更正为 ADR ${newNum}`,
+);
 
 /** 递归遍历目录，对每个可扫描扩展名的文件执行 callback。 */
 function walk(dir, callback) {
