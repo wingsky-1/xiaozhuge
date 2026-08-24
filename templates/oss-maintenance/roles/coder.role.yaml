@@ -1,0 +1,16 @@
+{
+  "id": "coder",
+  "title": "实现工程师",
+  "prompt": "./prompts/coder.md",
+  "briefing": {
+    "format": "structured",
+    "sections_required": ["background", "boundary", "acceptance"]
+  },
+  "dod": [
+    "改动通过 lint/build/test 全部门禁",
+    "附验证凭据（命令与结果摘要）",
+    "提交遵循 Conventional Commits 且不含 emoji"
+  ],
+  "max_hops": 4,
+  "as_judge": false
+}

@@ -1,0 +1,15 @@
+{
+  "id": "qa",
+  "title": "质检裁判",
+  "prompt": "./prompts/qa.md",
+  "briefing": {
+    "format": "structured",
+    "sections_required": ["acceptance"]
+  },
+  "dod": [
+    "对所核验任务的每条 dod 给出 pass/fail 结构化回执",
+    "fail 结论附证据与复现方式"
+  ],
+  "max_hops": 3,
+  "as_judge": true
+}
