@@ -53,7 +53,7 @@ beforeEach(() => {
 describe("插件装配", () => {
   it("插件名与注入声明", () => {
     expect(name).toBe("xiaozhuge-team");
-    expect(inject).toEqual(["tools"]);
+    expect(inject).toEqual(["tools", "webServer"]);
   });
 
   it("注册 11 个 team_* 工具且命名规范", () => {

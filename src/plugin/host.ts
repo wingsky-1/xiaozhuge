@@ -8,12 +8,13 @@
 import { resolveTeamHome } from "../team-home.js";
 import { createHandlers, type Handlers } from "./handlers.js";
 import { schemas } from "./schemas.js";
+import { makeGateRoutes, makeConsoleRoute } from "./gate-console.js";
 
 /** 稳定的 cordis 插件名。 */
 export const name = "xiaozhuge-team";
 
-/** 需要的服务：tools（工具注册表）。 */
-export const inject = ["tools"];
+/** 需要的服务：tools（工具注册表）+ webServer（Gate Console 与 resolve 端点）。 */
+export const inject = ["tools", "webServer"];
 
 /** 工具执行上下文中最小必需的 agent 面（结构化鸭子类型，零类型依赖）。 */
 interface AgentView {
@@ -31,6 +32,7 @@ function sessionIdOf(execAgent: AgentView | undefined): string {
  */
 export function apply(ctx: {
   tools: { register: (definition: unknown) => () => void };
+  webServer?: { register: (route: unknown) => () => void } | null;
   logger: { info: (msg: string) => void; warn: (msg: string) => void };
   get(key: string): unknown;
 }): () => void {
@@ -171,6 +173,16 @@ export function apply(ctx: {
     schemas.handoff,
     (args, agent) => handlersFor(agent).handoff(args),
   );
+
+  // Gate Console + resolve 端点（webServer 可选注入：headless 形态无此服务）。
+  const ws = ctx.webServer;
+  if (typeof ws === "object" && ws !== null) {
+    const teamHomeFor = (sessionId: string) => resolveTeamHome(sessionId);
+    for (const route of [...makeGateRoutes({ teamHomeFor }), makeConsoleRoute()]) {
+      disposers.push(ws.register(route));
+    }
+    ctx.logger.info("[xiaozhuge] gate console routes registered");
+  }
 
   ctx.logger.info("[xiaozhuge] all team_* tools registered");
 
