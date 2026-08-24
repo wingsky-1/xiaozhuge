@@ -31,7 +31,7 @@ body:
       label: 授权分区
       options:
         - label: zone/auto——Agent 全流程自治，CI 全绿即合并
-        - label: zone/red-line——涉及协议/API/依赖/CI 变更，须先获维护者 approved
+        - label: zone/red-line——涉及协议/API/依赖/CI 变更，须先获维护者 state/approved
   - type: textarea
     id: notes
     attributes:
