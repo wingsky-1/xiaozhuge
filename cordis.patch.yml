@@ -1,0 +1,6 @@
+# 小诸葛主 bundle patch：向宿主名册插入 team 工具与 Gate Console 服务。
+# 工具面（team_*）经 ctx.tools 注册；Gate 路由经 ctx.webServer 注册
+# （headless 等 webServer 缺位形态自动降级为纯工具面）。
+- insert:
+    - id: xiaozhuge-team
+      name: '@wingsky-1/dsh-xiaozhuge'

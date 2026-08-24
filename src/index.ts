@@ -8,3 +8,6 @@ export const VERSION = "0.0.0-dev" as const;
 export { RESERVED_STAGES as STAGES, isReservedStage as isStage } from "./runtime/types.js";
 
 export * from "./runtime/index.js";
+
+// 插件装配导出：dsh loader 经包入口解析 name/inject/apply。
+export { name, inject, apply } from "./plugin/host.js";
