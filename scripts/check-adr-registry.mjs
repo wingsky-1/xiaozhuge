@@ -3,14 +3,23 @@
  * 校验 docs/adr/ 注册表一致性：
  * 1. 文件名 = NNNN-kebab-case-topic.md（四位零填充编号）；
  * 2. 编号全局唯一——允许空洞（并行分支各占一号、合并序不定，禁空洞会卡死合法并行工作）；
- * 3. 首行标题 `# ADR <编号>: <标题>` 且编号与文件名一致，防止改名后正文引用失配。
+ * 3. 首行标题 `# ADR <编号>: <标题>` 且编号与文件名一致，防止改名后正文引用失配；
+ * 4. 全仓 `ADR <编号>` 引用必须指向已存在编号——并行撞号改名后漏改引用在此被抓住。
+ *
+ * 撞号修复方式：后合并一方改为下一个可用编号，
+ * 运行 `node scripts/rename-adr.mjs <旧编号> <新编号>` 可同步更新全部引用。
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const DIR = "docs/adr";
+// 引用扫描范围：文档 + 源码 + 测试 + 脚本；排除构建产物与依赖
+const SCAN_ROOTS = ["docs", "src", "tests", "scripts"];
+const SCAN_SKIP = new Set(["node_modules", "dist", ".git", ".dsh", ".stryker-tmp"]);
+const SCAN_EXTS = new Set([".md", ".mjs", ".js", ".ts", ".yml", ".yaml"]);
 const FILE_RE = /^(\d{4})-[a-z0-9-]+\.md$/;
 const TITLE_RE = /^# ADR (\d{4}): /;
+const REF_RE = /\bADR[ -](\d{4})\b/g;
 
 const errors = [];
 const byNumber = new Map();
@@ -38,7 +47,11 @@ for (const file of entries) {
   }
   const num = match[1];
   if (byNumber.has(num)) {
-    errors.push(`ADR 编号 ${num} 重复: ${byNumber.get(num)} 与 ${file}`);
+    errors.push(
+      `ADR 编号 ${num} 重复: ${byNumber.get(num)} 与 ${file}` +
+        ` —— 后合并一方请改用下一个可用编号（当前最大 ${nextFree(byNumber)}），` +
+        `运行 node scripts/rename-adr.mjs ${num} <新编号> 同步更新全部引用`,
+    );
   } else {
     byNumber.set(num, file);
   }
@@ -50,6 +63,49 @@ for (const file of entries) {
     errors.push(`${file}: 正文头编号 ADR ${titleMatch[1]} 与文件名编号 ${num} 不一致`);
   }
 }
+
+/** 收集全仓 `ADR NNNN` 引用，指向不存在编号的记为错误。 */
+function checkReferences() {
+  for (const root of SCAN_ROOTS) {
+    walk(root, (path) => {
+      const text = readFileSync(path, "utf8");
+      for (const match of text.matchAll(REF_RE)) {
+        const ref = match[1];
+        if (!byNumber.has(ref)) {
+          // 计算相对展示路径失败时退回原始 path
+          errors.push(`${path}: 引用了不存在的 ADR ${ref}`);
+        }
+      }
+    });
+  }
+}
+
+/** 递归遍历目录，对每个可扫描扩展名的文件执行 callback。 */
+function walk(dir, callback) {
+  let dirents;
+  try {
+    dirents = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return; // 扫描根不存在（如 src/ 尚未创建）不算错误
+  }
+  for (const entry of dirents) {
+    if (SCAN_SKIP.has(entry.name)) continue;
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walk(path, callback);
+    } else if (SCAN_EXTS.has(entry.name.slice(entry.name.lastIndexOf(".")))) {
+      callback(path);
+    }
+  }
+}
+
+function nextFree(byNumber) {
+  let n = 1;
+  while (byNumber.has(String(n).padStart(4, "0"))) n += 1;
+  return String(n).padStart(4, "0");
+}
+
+checkReferences();
 
 if (errors.length > 0) {
   for (const message of errors) console.error(`::error::${message}`);
