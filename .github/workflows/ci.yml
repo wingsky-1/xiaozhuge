@@ -36,4 +36,4 @@ jobs:
       - name: Mutation gate (score >= 70, incremental)
         run: pnpm mutation
       - name: Check incremental baseline is up to date
-        run: git diff --exit-code stryker-incremental.json || (echo "::error::stryker-incremental.json 有变化，请本地跑 pnpm mutation 后提交更新基线" && exit 1)
+        run: node scripts/check-mutation-baseline.mjs
