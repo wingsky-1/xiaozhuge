@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -59,15 +59,25 @@ describe("fs-utils 原子写", () => {
     expect(await readJson(file)).toEqual({ a: 1 });
     const entries = await import("node:fs/promises").then((m) => m.readdir(join(home, "nested")));
     expect(entries.filter((e) => e.startsWith(".tmp-"))).toEqual([]);
+    // 库残片形态（<target>.<digest>）同样不应存在
+    expect(entries.filter((e) => e.includes(".json.") && !e.endsWith(".json"))).toEqual([]);
   });
 
-  it("sweepTmp 清扫临时残片并返回数量", async () => {
+  it("sweepTmp 清扫两类临时残片并返回数量", async () => {
     const home = tmpHome();
     await ensureDir(home);
     writeFileSync(join(home, ".tmp-x-1-2"), "{}");
+    writeFileSync(join(home, "data.json.aB3dEf9gH2j"), "{}");
     writeFileSync(join(home, "keep.json"), "{}");
-    expect(await sweepTmp(home)).toBe(1);
+    writeFileSync(join(home, "notes.md"), "x");
+    mkdirSync(join(home, "dir.json.not-a-file"), { recursive: true }); // 目录残片不计数不误删
+    expect(await sweepTmp(home)).toBe(2);
+    expect(existsSync(join(home, ".tmp-x-1-2"))).toBe(false);
+    expect(existsSync(join(home, "data.json.aB3dEf9gH2j"))).toBe(false);
     expect(await sweepTmp(home)).toBe(0);
+    expect(existsSync(join(home, "keep.json"))).toBe(true);
+    expect(existsSync(join(home, "notes.md"))).toBe(true);
+    expect(existsSync(join(home, "dir.json.not-a-file"))).toBe(true);
   });
 
   it("confineToRoot 拒绝越界目标", () => {

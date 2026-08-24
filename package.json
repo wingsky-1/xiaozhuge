@@ -41,5 +41,8 @@
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
+  },
+  "dependencies": {
+    "write-file-atomic": "8.0.0"
   }
 }
