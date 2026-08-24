@@ -35,6 +35,8 @@
 ```bash
 pnpm install
 pnpm build && pnpm test && pnpm lint && pnpm typecheck
+pnpm cov        # 覆盖率（全局四维 >= 70 + 产出 cobertura 报告）
+pnpm cov:patch  # 增量覆盖率门禁：变更行 >= 80%（需 pip install diff-cover）
 ```
 
 ## `scripts/` 目录速览

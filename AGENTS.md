@@ -10,7 +10,8 @@
 ## 命令
 
 - 质量门禁: `pnpm lint && pnpm typecheck && pnpm build && pnpm test && pnpm cov`
-  （完成定义 = 全绿；覆盖率基线 70）
+  （完成定义 = 全绿；覆盖率基线 70；CI 另有增量门禁——变更行覆盖率 >= 80，
+  本地用 `pnpm cov:patch` 复现，需 `pip install diff-cover`）
 - 变异测试: `pnpm mutation`（得分基线 70，增量模式；基线文件
   `stryker-incremental.json` 入库，跑完有变化须一并提交）
 - 构建: `pnpm build`
