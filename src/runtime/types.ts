@@ -87,7 +87,7 @@ export interface MemberRecord {
   /** durable subagent id（父死后凭此对账）。 */
   durableId: string;
   /** 直接父成员名（根成员为 null）。 */
-  parent: string | null;
+  parent?: string | null;
   /** 所处层级（0 = Tier-0 主控）。 */
   tier: number;
   status: "spawned" | "running" | "stopped" | "dead";
