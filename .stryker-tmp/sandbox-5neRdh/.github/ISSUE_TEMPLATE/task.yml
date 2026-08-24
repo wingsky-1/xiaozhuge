@@ -1,0 +1,38 @@
+name: 任务（Task）
+description: 提报一个待实现的任务 / 功能 / 修复
+title: "[task] "
+labels: ["zone/auto"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目标
+      description: 要达成什么，一句话说清。
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 可执行的判据（命令 + 预期结果），不接受自然语言自评。
+      placeholder: |
+        - [ ] pnpm test 全绿，新增用例覆盖 X 行为
+        - [ ] pnpm cov 覆盖率不低于基线
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 影响范围
+      description: 预期触碰的目录/模块；跨模块大改动请改用决策模板。
+  - type: checkboxes
+    id: zone
+    attributes:
+      label: 授权分区
+      options:
+        - label: zone/auto——Agent 全流程自治，CI 全绿即合并
+        - label: zone/red-line——涉及协议/API/依赖/CI 变更，须先获维护者 approved
+  - type: textarea
+    id: notes
+    attributes:
+      label: 补充说明
