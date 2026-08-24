@@ -19,7 +19,7 @@
 
 1. 任务只来自 issue；一次一个聚焦任务，变更半径超限必须拆分。
 2. 功能分支 + PR，CI 全绿后 squash merge。
-3. 红线（须先在 issue 内方案评审获 `approved` 再动手）：公共 API/协议行为变更、
+3. 红线（须先在 issue 内方案评审获 `state/approved` 再动手）：公共 API/协议行为变更、
    新增第三方依赖、`.github/` workflow 变更、安全语义变更、目录协议与 team_* 工具面变更。
 4. 设计文档 `docs/agent-team/` 为冻结版定稿——修订不改正文，走 `docs/adr/` 增量 ADR。
 5. 小步提交，Conventional Commits（禁止 emoji）。

@@ -34,4 +34,4 @@ body:
   - type: markdown
     attributes:
       value: |
-        > 维护者批准后在 issue 上打 `approved` label；Agent 以此为动工凭据，PR 必须链接本 issue。
+        > 维护者批准后在 issue 上打 `state/approved` label；Agent 以此为动工凭据，PR 必须链接本 issue。

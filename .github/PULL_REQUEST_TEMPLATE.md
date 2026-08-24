@@ -1,4 +1,4 @@
-<!-- 关联 issue：Closes #NNN（zone/red-line 任务必须链接已 approved 的决策 issue） -->
+<!-- 关联 issue：Closes #NNN（zone/red-line 任务必须链接已 state/approved 的决策 issue） -->
 
 ## 变更内容
 
@@ -15,4 +15,4 @@
 
 ## 变更半径
 
-- [ ] 未触碰红线（协议不变量 / team_* 工具面 / 新依赖 / `.github/`）；若触碰，已链接 approved 决策 issue
+- [ ] 未触碰红线（协议不变量 / team_* 工具面 / 新依赖 / `.github/`）；若触碰，已链接 state/approved 决策 issue
