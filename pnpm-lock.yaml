@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      write-file-atomic:
+        specifier: 8.0.0
+        version: 8.0.0
     devDependencies:
       '@deepseek-ai/dsh-agent':
         specifier: 0.1.1-rc.2
@@ -1615,6 +1619,10 @@ packages:
     resolution: {integrity: sha512-BN22B5eaMMI9UMtjrGd5g5eCYPpCPDUy0FJXbYsaT5zYxjFOckS53SQDE3pWkVoWpHXVb3BrYcEN4Twa55B5cA==}
     engines: {node: '>=0.10.0'}
 
+  write-file-atomic@8.0.0:
+    resolution: {integrity: sha512-dYwyZredl67GyLLIHJnRM3h2PcOmN5SkcgC7eM5DPDEOEl6dLFqVrMg3F1Ea32usj4VSVZtd2H4MtKTNOf6nPg==}
+    engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}
+
   yocto-queue@0.1.0:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
@@ -3066,6 +3074,10 @@ snapshots:
       stackback: 0.0.2
 
   word-wrap@1.2.5: {}
+
+  write-file-atomic@8.0.0:
+    dependencies:
+      signal-exit: 4.1.0
 
   yocto-queue@0.1.0: {}
 
