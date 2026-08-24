@@ -15,7 +15,7 @@
 # 用法：bash scripts/spikes/s2-goal-continuation.sh
 # 约束：全程 DSH_HOME=$(mktemp -d) 隔离；kill 只针对本脚本自建的实例，
 #       且 kill 前以 /proc/<pid>/environ 核验其 DSH_HOME 属于临时目录。
-# 判定报告：docs/adr/0002-s2-goal-continuation.md
+# 判定报告：docs/adr/0005-s2-goal-continuation.md
 # =============================================================================
 set -uo pipefail
 

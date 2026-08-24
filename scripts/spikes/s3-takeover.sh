@@ -15,7 +15,7 @@
 # 约束：全程 DSH_HOME=$(mktemp -d) 隔离；本脚本不 kill 任何进程（种子 runner
 #       投递完任务后自然退出，即产生孤儿 durable subagent——与 kill 死法在
 #       lineage 校验上等价：校验只比对持久化 parentSession 与调用者 session id）。
-# 判定报告：docs/adr/0003-s3-subagent-takeover.md
+# 判定报告：docs/adr/0006-s3-subagent-takeover.md
 # =============================================================================
 set -uo pipefail
 

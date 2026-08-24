@@ -1,4 +1,4 @@
-# ADR 0002: S2 spike 判定报告 —— goal 续轮语义（长驻形态）
+# ADR 0005: S2 spike 判定报告 —— goal 续轮语义（长驻形态）
 
 - 状态：Accepted
 - 日期：2026-08-24

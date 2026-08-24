@@ -1,4 +1,4 @@
-# ADR 0003: S3 spike 判定报告 —— 跨代 subagent 接管
+# ADR 0006: S3 spike 判定报告 —— 跨代 subagent 接管
 
 - 状态：Accepted
 - 日期：2026-08-24
