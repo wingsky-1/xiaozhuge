@@ -1,0 +1,4 @@
+# S4 spike bundle patch：插入用户消息流观测探针服务。
+- insert:
+    - id: spike-s4-probe
+      name: '@wingsky-1/spike-s4-probe'

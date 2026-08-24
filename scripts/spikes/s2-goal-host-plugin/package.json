@@ -1,0 +1,13 @@
+{
+  "name": "@wingsky-1/spike-s2-host",
+  "version": "0.0.0-spike",
+  "private": true,
+  "type": "module",
+  "description": "S2 spike: non-exiting minimal agent host for goal-round observation (issue #4)",
+  "main": "index.js",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

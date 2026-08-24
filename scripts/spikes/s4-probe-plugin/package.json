@@ -1,0 +1,13 @@
+{
+  "name": "@wingsky-1/spike-s4-probe",
+  "version": "0.0.0-spike",
+  "private": true,
+  "type": "module",
+  "description": "S4 spike: message-flow observation probe for plugins (issue #4)",
+  "main": "index.js",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
