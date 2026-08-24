@@ -10,6 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        # fetch 全量历史与分支 refs：diff-cover 需要 origin/main 作 diff 基线
+        with:
+          fetch-depth: 0
       # 零依赖静态校验，置于 install 前以快速失败
       - name: ADR registry check (unique numbering, filename/title consistency)
         run: node scripts/check-adr-registry.mjs
