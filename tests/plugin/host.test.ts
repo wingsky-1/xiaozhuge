@@ -92,7 +92,7 @@ describe("execute 路由与输出包装", () => {
   it("team_init 经 execute 走到 handler 并包装 ok 输出", async () => {
     const { registered } = makeHost();
     const init = registered.get("team_init")!;
-    const result = (await init.execute({}, { agent: { session: { id: "session-h1" } } })) as {
+    const result = (await init.execute({}, { agent: { id: "session-h1" } })) as {
       ok: boolean;
       lock: string;
     };
@@ -106,10 +106,10 @@ describe("execute 路由与输出包装", () => {
 
   it("同会话复用同一实例根：init 重入 reentered", async () => {
     const { registered } = makeHost();
-    await registered.get("team_init")!.execute({}, { agent: { session: { id: "session-h2" } } });
+    await registered.get("team_init")!.execute({}, { agent: { id: "session-h2" } });
     const again = (await registered
       .get("team_init")!
-      .execute({}, { agent: { session: { id: "session-h2" } } })) as { lock: string };
+      .execute({}, { agent: { id: "session-h2" } })) as { lock: string };
     expect(again.lock).toBe("reentered");
   });
 
@@ -117,10 +117,10 @@ describe("execute 路由与输出包装", () => {
     const { registered } = makeHost();
     const a = (await registered
       .get("team_init")!
-      .execute({}, { agent: { session: { id: "session-a" } } })) as { home: string };
+      .execute({}, { agent: { id: "session-a" } })) as { home: string };
     const b = (await registered
       .get("team_init")!
-      .execute({}, { agent: { session: { id: "session-b" } } })) as { home: string };
+      .execute({}, { agent: { id: "session-b" } })) as { home: string };
     expect(a.home).not.toBe(b.home);
   });
 
@@ -133,13 +133,13 @@ describe("execute 路由与输出包装", () => {
   it("参数缺失给 invalid-arguments（S1 结论：自行校验）", async () => {
     const { registered } = makeHost();
     await expect(
-      registered.get("team_send")!.execute({ to: "x" }, { agent: { session: { id: "s" } } }),
+      registered.get("team_send")!.execute({ to: "x" }, { agent: { id: "s" } }),
     ).rejects.toMatchObject({ code: "invalid-arguments" });
   });
 
   it("spawn 后 send 可达（路由到同一实例根）", async () => {
     const { registered } = makeHost();
-    const exec = { agent: { session: { id: "session-route" } } };
+    const exec = { agent: { id: "session-route" } };
     await registered.get("team_init")!.execute({}, exec);
     await registered.get("team_spawn")!.execute(
       { member: "qa", durable_id: "d-q", role: "qa", tier: 1 },
