@@ -10,6 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # 零依赖静态校验，置于 install 前以快速失败
+      - name: ADR registry check (unique numbering, filename/title consistency)
+        run: node scripts/check-adr-registry.mjs
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
