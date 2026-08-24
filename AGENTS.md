@@ -30,6 +30,8 @@
 8. 例外：`typescript` 锁 `~5.9`——Stryker 10 依赖 TS 旧 JS API
    （`parseConfigFileTextToJson`），TS 7 原生编译器已移除（实证撞过）；待 Stryker
    支持 TS 7 后再升。
+9. issue 治理：正文一经创建不可修改——后续讨论、决策修订、结论推翻一律通过
+   追加评论留痕，保持线性可追溯；开工时以「正文 + 全部评论」中最新评论口径为准。
 
 ## 输入安全
 
