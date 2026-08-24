@@ -10,6 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        # fetch 全量历史与分支 refs：diff-cover 需要 origin/main 作 diff 基线
+        with:
+          fetch-depth: 0
       # 零依赖静态校验，置于 install 前以快速失败
       - name: ADR registry check (unique numbering, filename/title consistency)
         run: node scripts/check-adr-registry.mjs
@@ -25,6 +28,13 @@ jobs:
       - run: pnpm test
       - name: Coverage gate (>= 70)
         run: pnpm cov
+      # 增量门禁（#30）：本次 PR 变更行覆盖率 >= 80%；自托管 diff-cover，数据不出仓库
+      - name: Patch coverage gate (changed lines >= 80%)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install --disable-pip-version-check diff-cover
+      - run: pnpm cov:patch
 
   mutation:
     runs-on: ubuntu-latest

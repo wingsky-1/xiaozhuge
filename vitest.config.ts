@@ -7,6 +7,8 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["src/**"],
+      // text 供人读；cobertura 供 diff-cover 增量门禁消费（#30）。
+      reporter: ["text", "cobertura"],
       thresholds: {
         lines: 70,
         functions: 70,
