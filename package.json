@@ -18,6 +18,7 @@
     "build": "tsc --project tsconfig.json",
     "test": "vitest run",
     "cov": "vitest run --coverage",
+    "cov:patch": "diff-cover coverage/cobertura-coverage.xml --compare-branch=origin/main --fail-under=80",
     "mutation": "stryker run",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
