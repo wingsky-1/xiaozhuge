@@ -23,7 +23,10 @@ function sortDeep(value) {
 }
 
 function canonical(text) {
-  return JSON.stringify(sortDeep(JSON.parse(text)), null, 2);
+  const parsed = JSON.parse(text);
+  // projectRoot 是生成环境相关的绝对路径（本地/CI 各不同），不参与一致性比较
+  delete parsed.projectRoot;
+  return JSON.stringify(sortDeep(parsed), null, 2);
 }
 
 const current = canonical(readFileSync(FILE, "utf8"));
