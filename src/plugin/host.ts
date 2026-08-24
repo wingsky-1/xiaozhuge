@@ -66,11 +66,20 @@ export function apply(ctx: {
         schema: {
           type: "object",
           properties: {
-            ok: { type: "boolean" },
-            result: true,
+            ok: { type: "boolean", description: "Whether the call succeeded." },
+            error: {
+              type: "object",
+              properties: {
+                code: { type: "string" },
+                message: { type: "string" },
+              },
+              required: ["code", "message"],
+              additionalProperties: false,
+              description: "Present on failure only.",
+            },
           },
           required: ["ok"],
-          additionalProperties: false,
+          additionalProperties: true,
         },
         render(_args: unknown, value: unknown) {
           return [{ type: "text" as const, text: JSON.stringify(value) }];
