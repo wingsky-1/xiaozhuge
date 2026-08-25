@@ -31,14 +31,27 @@ function sortDeep(value) {
 
 /**
  * 剥离单个 mutant 的运行期噪声，返回**结构保持的规范化对象**（幂等：
- * 对已剥离对象再次应用结果不变）。保留 mutatorName / replacement /
- * static / location.start 作为稳定身份。
+ * 对已剥离对象再次应用结果不变）。
+ * - 剥：id/killedBy/testsCompleted/coveredBy/statusReason/status——
+ *   纯执行产物，Stryker 读取基线不需要；
+ * - 留：完整 location（start+end）与 mutatorName/replacement/static——
+ *   Stryker 增量读取要按位置解构匹配，剥 end 会直接崩
+ *   （`Cannot destructure property 'line'`，实证）。
  */
 function stripMutant(mutant) {
-  const { id, killedBy, testsCompleted, coveredBy, statusReason, status, location, ...rest } = mutant;
+  const { id, killedBy, testsCompleted, coveredBy, statusReason, status, ...rest } = mutant;
   void id; void killedBy; void testsCompleted; void coveredBy; void statusReason; void status;
+  return sortDeep(rest);
+}
+
+/**
+ * 语义比较用的 mutant 身份签名：在剥离基础上再剥 location.end
+ * （增量产物的列宽漂移字段）——仅用于比较路径，不写回。
+ */
+function mutantSignature(mutant) {
+  const { location, ...rest } = mutant;
   const stableLocation = location ? { start: location.start } : undefined;
-  return sortDeep({ ...rest, location: stableLocation });
+  return JSON.stringify(sortDeep({ ...rest, location: stableLocation }));
 }
 
 /** 解析并规范化为对象树：剥环境噪声字段、mutants 换成排序后的身份对象。 */
@@ -70,7 +83,7 @@ function canonical(text) {
     for (const file of Object.keys(normalized.files)) {
       const entry = normalized.files[file];
       if (Array.isArray(entry.mutants)) {
-        entry.mutants = entry.mutants.map((m) => JSON.stringify(m)).sort();
+        entry.mutants = entry.mutants.map(mutantSignature).sort();
       }
     }
   }
