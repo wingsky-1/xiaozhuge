@@ -26,6 +26,7 @@ export const TEAM_TOOL_MANIFEST: ReadonlyArray<readonly [string, string]> = [
   ["team_task_list", "任务账本查询"],
   ["team_state_get", "黑板读"],
   ["team_state_set", "黑板写（running|blocked|done）"],
+  ["team_reconcile", "对账全量视图（scope=audit 为旁路 report-only）"],
   ["team_handoff", "显式交接（dod 回执核验）"],
 ];
 
@@ -40,6 +41,7 @@ export function toolManifestText(): string {
     "",
     "盲区声明：goal 管理、subagent 启动/唤醒、MCP 等宿主侧能力不在本清单范围内，",
     "其存在性请以当轮系统提示词与实际可用工具为准。",
+    "启动对账一律先跑 team_reconcile：一次返回成员对照表、任务快照与事件游标。",
   ];
   return lines.join("\n");
 }

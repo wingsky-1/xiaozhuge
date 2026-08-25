@@ -160,6 +160,24 @@ export const schemas = {
       additionalProperties: false,
     },
   },
+  // team_reconcile（ADR 0015，#66）：对账全量视图一次返回；scope=audit 为
+  // 旁路 report-only 子命令（只输出文件元数据，不读内容）。
+  reconcile: {
+    parameters: {
+      type: "object",
+      properties: {
+        scope: {
+          type: "string",
+          enum: ["overview", "audit"],
+          description:
+            "overview (default): snapshot summary, member/ledger cross-view, task snapshot, " +
+            "event cursors, goal placeholder. audit: additionally diffs ledger touched_paths " +
+            "against the recorded workspace tree (metadata only).",
+        },
+      },
+      additionalProperties: false,
+    },
+  },
   stateGet: {
     parameters: {
       type: "object",
