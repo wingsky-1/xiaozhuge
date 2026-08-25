@@ -1,15 +1,24 @@
 #!/usr/bin/env node
 /**
- * 校验 stryker-incremental.json 与提交基线是否内容一致。
- * 两层规范化后比较：
+ * 校验 stryker-incremental.json 与提交基线是否内容一致（--normalize 时
+ * 兼作 CI 归档规范化工具，见 baseline.yml）。
+ *
+ * 两种模式共用一套语义规范：
  * 1. 对象键递归排序（Stryker 键序不稳定）；
- * 2. 每个文件的 mutants 列表按「身份集合」语义比较——只保留稳定身份指纹
- *    （mutatorName / replacement / static / location.start），剥离一切跨
- *    运行非确定字段：id / killedBy / testsCompleted / coveredBy /
- *    statusReason（测试执行顺序与 id 编号漂移）、status（增量模式
- *    NoCoverage/Killed/Survived 会翻转，变异分数由 thresholds.break 门禁
- *    保障，基线校验只管 mutant 集合是否一致）、location.end（增量产物
- *    列宽漂移）。
+ * 2. 每个文件的 mutants 列表按「身份集合」语义比较——签名只保留稳定身份
+ *    指纹（mutatorName / replacement / static / location.start），剥离一切
+ *    跨运行非确定字段：status / statusReason（增量模式结果会翻转，分数由
+ *    thresholds.break 门禁保障）、killedBy / testsCompleted / coveredBy
+ *    （测试执行顺序与 id 编号漂移）、id（生成顺序相关）、location.end
+ *    （列宽漂移）。tests / testFiles 数组同理置空后不参与比较。
+ *
+ * ⚠ 归档写回约束（实证教训，勿再"优化"掉）：
+ * --normalize 写回的是**最小干预**版（只删 projectRoot、稳定键序），
+ * 必须原样保留 id、完整 location（start+end）、coveredBy/killedBy/status、
+ * tests/testFiles 数组与 mutants 原始顺序——它们全是 Stryker 增量复用的
+ * 输入：differ 按 `${file}@start-end\nmutator: replacement}` 匹配并依赖
+ * coveredBy/killedBy 计算测试覆盖差异；剥 end 直接崩（`Cannot destructure
+ * property 'line'`），排序/剥 id 或清空 tests 会使复用失效退化为全量重跑。
  */
 import { execSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -30,55 +39,28 @@ function sortDeep(value) {
 }
 
 /**
- * 剥离单个 mutant 的运行期噪声，返回**结构保持的规范化对象**（幂等：
- * 对已剥离对象再次应用结果不变）。
- * - 剥：id/killedBy/testsCompleted/coveredBy/statusReason/status——
- *   纯执行产物，Stryker 读取基线不需要；
- * - 留：完整 location（start+end）与 mutatorName/replacement/static——
- *   Stryker 增量读取要按位置解构匹配，剥 end 会直接崩
- *   （`Cannot destructure property 'line'`，实证）。
- */
-function stripMutant(mutant) {
-  const { id, killedBy, testsCompleted, coveredBy, statusReason, status, ...rest } = mutant;
-  void id; void killedBy; void testsCompleted; void coveredBy; void statusReason; void status;
-  return sortDeep(rest);
-}
-
-/**
- * 语义比较用的 mutant 身份签名：在剥离基础上再剥 location.end
- * （增量产物的列宽漂移字段）——仅用于比较路径，不写回。
+ * 语义比较用的 mutant 身份签名：剥执行结果字段（status/statusReason/
+ * killedBy/testsCompleted/coveredBy——增量模式会翻转，分数由门禁保障）
+ * 与 id（生成顺序相关）、location.end（列宽漂移）。
  */
 function mutantSignature(mutant) {
-  const { location, ...rest } = mutant;
+  const { status, statusReason, killedBy, testsCompleted, coveredBy, id, location, ...rest } = mutant;
+  void status; void statusReason; void killedBy; void testsCompleted; void coveredBy; void id;
   const stableLocation = location ? { start: location.start } : undefined;
   return JSON.stringify(sortDeep({ ...rest, location: stableLocation }));
 }
 
-/** 解析并规范化为对象树：剥环境噪声字段、mutants 换成排序后的身份对象。 */
+/** 规范化为对象树：最小干预（删 projectRoot、稳定键序），结构全保留。 */
 function normalizedObject(text) {
   const parsed = JSON.parse(text);
-  // projectRoot 是生成环境相关的绝对路径（本地/CI 各不同），不参与一致性比较
   delete parsed.projectRoot;
-  // tests 段是「测试索引 -> 名称」的运行期映射，id 编号随执行顺序漂移，
-  // 不参与一致性比较；mutant 的 coveredBy/killedBy 已在剥离中去除。
-  if (parsed.tests !== undefined) parsed.tests = [];
-  if (parsed.testFiles !== undefined) parsed.testFiles = [];
-  const normalized = sortDeep(parsed);
-  if (normalized.files) {
-    for (const file of Object.keys(normalized.files)) {
-      const entry = normalized.files[file];
-      if (Array.isArray(entry.mutants)) {
-        entry.mutants = entry.mutants
-          .map(stripMutant)
-          .sort((a, b) => (JSON.stringify(a) < JSON.stringify(b) ? -1 : 1));
-      }
-    }
-  }
-  return normalized;
+  return sortDeep(parsed);
 }
 
 function canonical(text) {
   const normalized = normalizedObject(text);
+  if (normalized.tests !== undefined) normalized.tests = [];
+  if (normalized.testFiles !== undefined) normalized.testFiles = [];
   if (normalized.files) {
     for (const file of Object.keys(normalized.files)) {
       const entry = normalized.files[file];
@@ -90,14 +72,8 @@ function canonical(text) {
   return JSON.stringify(normalized, null, 2);
 }
 
-const current = canonical(readFileSync(FILE, "utf8"));
-
-// --normalize：把**结构保持的**规范化结果写回文件（CI 基线归档用）——
-// 保留 mutant 对象形态（只剥运行期噪声、稳定键序），快照 PR 的 git diff
-// 只含真实变异体身份变化，且二次执行幂等。
-// 注意：不能写回 canonical() 输出——那是签名串数组，供比较专用，
-// 写回后二次处理时字符串会被当对象解构而变形。
 if (process.argv[2] === "--normalize") {
+  // CI 归档用：最小干预规范化写回。二次执行幂等（键序已稳定、无字段增删）。
   writeFileSync(
     FILE,
     JSON.stringify(normalizedObject(readFileSync(FILE, "utf8")), null, 2) + "\n",
@@ -106,6 +82,7 @@ if (process.argv[2] === "--normalize") {
   process.exit(0);
 }
 
+const current = canonical(readFileSync(FILE, "utf8"));
 const head = execSync(`git show HEAD:${FILE}`, {
   encoding: "utf8",
   maxBuffer: 64 * 1024 * 1024,
