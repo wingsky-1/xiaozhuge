@@ -65,9 +65,15 @@ describe("加载器拒绝语义", () => {
     await expect(loadTemplate(join(scratch, "nope"), "user")).rejects.toThrow(/missing team.yaml/);
   });
 
-  it("非 JSON 兼容内容（MVP 子集外）即抛错并说明子集边界", async () => {
-    const dir = makeScratchTemplate("name: !!weird\n- anchor");
-    await expect(loadTemplate(dir, "user")).rejects.toThrow(/JSON-compatible YAML/);
+  it("非 YAML 内容（tab 缩进等硬禁区）即抛错并说明解析边界", async () => {
+    // 合法 JSON ≠ 全部合法 YAML：tab 缩进的键值对是 YAML 硬禁区
+    const dir = makeScratchTemplate('name: "x"\n\tversion: 1\n');
+    await expect(loadTemplate(dir, "user")).rejects.toThrow(/not valid YAML/);
+  });
+
+  it("顶层非映射（纯标量/数组）即拒", async () => {
+    const dir = makeScratchTemplate("- just\n- a\n- list\n");
+    await expect(loadTemplate(dir, "user")).rejects.toThrow(/not valid YAML/);
   });
 
   it("校验不通过的模板列出全部错误", async () => {

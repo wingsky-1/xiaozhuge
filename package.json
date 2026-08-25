@@ -43,6 +43,7 @@
     }
   },
   "dependencies": {
-    "write-file-atomic": "8.0.0"
+    "write-file-atomic": "8.0.0",
+    "yaml": "2.9.0"
   }
 }
