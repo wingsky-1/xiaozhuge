@@ -75,5 +75,10 @@ export {
   TEAM_FILE,
   ROLES_DIR,
   PROMPTS_DIR,
+  PLAYBOOKS_DIR,
+  TIER0_PLAYBOOK_FILE,
+  TIER0_PLAYBOOK_SEPARATOR,
+  loadTier0Playbook,
+  assembleTier0Prompt,
 } from "./template-loader.js";
-export type { LoadedTemplate } from "./template-loader.js";
+export type { LoadedTemplate, Tier0Playbook } from "./template-loader.js";

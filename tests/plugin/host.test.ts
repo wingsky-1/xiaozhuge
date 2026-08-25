@@ -96,13 +96,17 @@ describe("execute 路由与输出包装", () => {
       ok: boolean;
       lock: string;
       tier0_prompt: string | null;
+      playbook_digest?: string;
     };
     expect(result.ok).toBe(true);
     expect(["acquired", "reentered"]).toContain(result.lock);
-    // #11 缺口闭合：返回值内联携带 Tier-0 规程全文（自包含，hub worktree 可用）
+    // #42 分层组装：返回值 = 规程全文 + 固定分隔符 + 场景段，附 playbook 审计摘要
     expect(typeof result.tier0_prompt).toBe("string");
     expect(result.tier0_prompt).toContain("巡场");
     expect(result.tier0_prompt).toContain("资源防护三项");
+    expect(result.tier0_prompt).toContain("tier0 playbook / scenario prompt boundary");
+    expect(result.tier0_prompt).toContain("一级主控场景编排");
+    expect(result.playbook_digest).toMatch(/^[0-9a-f]{16}$/);
     // 渲染投影是 JSON 文本块
     const blocks = init.output.render({}, result) as Array<{ type: string; text: string }>;
     expect(blocks[0]?.type).toBe("text");

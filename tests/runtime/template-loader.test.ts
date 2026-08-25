@@ -51,6 +51,14 @@ describe("包内置 oss-maintenance 模板", () => {
       expect(role.prompt_inlined).toBeTruthy();
     }
   });
+
+  it("实例化快照（#42）：传入 playbook digest 即记录，旧调用缺省为 null", async () => {
+    const loaded = await loadTemplate(BUILTIN_DIR, "builtin");
+    const without = instantiateSnapshot(loaded) as { playbook_digest: unknown };
+    expect(without.playbook_digest).toBeNull();
+    const withDigest = instantiateSnapshot(loaded, "0123456789abcdef") as { playbook_digest: unknown };
+    expect(withDigest.playbook_digest).toBe("0123456789abcdef");
+  });
 });
 
 describe("加载器拒绝语义", () => {
