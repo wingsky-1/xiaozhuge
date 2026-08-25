@@ -8,7 +8,7 @@
  * 来源三级：builtin（包内只读）/ user / project——同名不跨级覆盖，
  * 加载时标记来源即可区分（#13 冻结口径）。
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
@@ -20,6 +20,16 @@ import { validateTeamTemplate, validateRoleSet } from "./template.js";
 export const TEAM_FILE = "team.yaml";
 export const ROLES_DIR = "roles";
 export const PROMPTS_DIR = "prompts";
+
+/**
+ * 框架层 Tier-0 规程的包内落点与组装分隔符（#42 定稿，增量 ADR 0009）。
+ * 规程来源仅 builtin（不进 ADR 0002 三级体系）；分隔符是显式协议常量，
+ * 其确切格式由测试锁定——改动即协议变更。
+ */
+export const PLAYBOOKS_DIR = "playbooks";
+export const TIER0_PLAYBOOK_FILE = "tier0-playbook.md";
+export const TIER0_PLAYBOOK_SEPARATOR =
+  "\n\n===== tier0 playbook / scenario prompt boundary =====\n\n";
 
 export interface LoadedTemplate {
   /** team.yaml 解析结果（已通过校验）。 */
@@ -122,12 +132,14 @@ async function readFile2(dir: string): Promise<string[]> {
 }
 
 /** 实例化快照：模板 + 角色 + 来源标记 + digest（写入 TEAM_HOME/team.yaml 的对象）。 */
-export function instantiateSnapshot(loaded: LoadedTemplate): Record<string, unknown> {
+export function instantiateSnapshot(loaded: LoadedTemplate, playbookDigest?: string): Record<string, unknown> {
   return {
     name: loaded.template.name,
     version: loaded.template.version,
     source: loaded.source,
     digest: loaded.digest,
+    // Tier-0 规程摘要（#42）：仅审计字段；旧快照无此字段按缺省容忍（只增不改）。
+    playbook_digest: playbookDigest ?? null,
     tiers: loaded.template.tiers,
     roles: Object.values(loaded.roles).map((r) => ({
       id: r.id,
@@ -144,4 +156,29 @@ export function instantiateSnapshot(loaded: LoadedTemplate): Record<string, unkn
 /** 便捷：包内置只读模板目录（builtin 来源）。 */
 export function builtinScenarioDir(packageRoot: string): string {
   return join(packageRoot, "templates", "oss-maintenance");
+}
+
+/** Tier-0 规程加载结果：全文 + 内容摘要（sha256 前 16 位，仅审计字段）。 */
+export interface Tier0Playbook {
+  text: string;
+  digest: string;
+}
+
+/**
+ * 加载包内 Tier-0 巡场规程（唯一事实源 playbooks/tier0-playbook.md）。
+ * 同步读取：文件随包分发、体量小，且缺失即发布物损坏——直接抛错，
+ * 不参与 ADR 0002 三级来源与错误码契约（非用户输入引发）。
+ */
+export function loadTier0Playbook(packageRoot: string): Tier0Playbook {
+  const path = join(packageRoot, PLAYBOOKS_DIR, TIER0_PLAYBOOK_FILE);
+  const text = readFileSync(path, "utf8");
+  return { text, digest: createHash("sha256").update(text).digest("hex").slice(0, 16) };
+}
+
+/**
+ * tier0_prompt 组装（#42 显式协议）：规程全文 + 固定分隔符 + 场景 tiers[0].prompt。
+ * 对任意场景成立——单层模板（如 research-report）实例化后同样获得规程全文。
+ */
+export function assembleTier0Prompt(playbook: Tier0Playbook, scenarioPrompt: string): string {
+  return playbook.text + TIER0_PLAYBOOK_SEPARATOR + scenarioPrompt;
 }

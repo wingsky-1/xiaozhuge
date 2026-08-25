@@ -40,12 +40,19 @@
 - [ADR 0006](docs/adr/0006-s3-subagent-takeover.md) — S3 spike：跨代 subagent 接管
 - [ADR 0007](docs/adr/0007-cas-lock-proper-lockfile.md) — CAS 锁切换 proper-lockfile
 - [ADR 0008](docs/adr/0008-single-tier-template-and-dynamic-orchestration.md) — 单层模板放宽（tiers 下限 1）与主控动态编排
+- [ADR 0009](docs/adr/0009-framework-scenario-layering-and-tier0-assembly.md) — 框架/场景提示词分层与 Tier-0 规程组装（#42）
 
 ## 内置模板（templates/）
 
 - `templates/oss-maintenance/` — 开源仓库 issue/PR 自治维护场景（两层主控）
 - `templates/research-report/` — 通用资料编写场景：单层主控直调五角色
   （收集 / 验证 / 整理 / 编写 / 复核），主控按任务形态动态编排（ADR 0008）
+
+## 框架规程（playbooks/）
+
+- `playbooks/tier0-playbook.md` — Tier-0 巡场规程唯一事实源：来源仅 builtin
+  （不进模板三级体系），由 `team_init` 以「规程全文 + 固定分隔符 + 场景段」
+  组装为 `tier0_prompt` 返回（ADR 0009）。
 
 ## 开发
 
@@ -67,3 +74,4 @@ pnpm mutation   # 变异测试（增量模式，得分基线 70；基线文件 s
 ## License
 
 MIT
+

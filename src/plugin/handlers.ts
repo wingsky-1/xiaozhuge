@@ -12,7 +12,13 @@ import { fileURLToPath } from "node:url";
 import type { TaskRecord, TaskStatus } from "../runtime/types.js";
 import { ensureDir, writeJsonAtomic } from "../runtime/fs-utils.js";
 import { layout } from "../runtime/paths.js";
-import { builtinScenarioDir, instantiateSnapshot, loadTemplate } from "../runtime/template-loader.js";
+import {
+  assembleTier0Prompt,
+  builtinScenarioDir,
+  instantiateSnapshot,
+  loadTemplate,
+  loadTier0Playbook,
+} from "../runtime/template-loader.js";
 import { Ledger, findConflicts } from "../runtime/ledger.js";
 import { EventLog } from "../runtime/event-log.js";
 import { Registry } from "../runtime/registry.js";
@@ -161,13 +167,22 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
         // room.lock CAS 幂等：同会话重入成功，异会话重复实例化拒绝。
         const outcome = await acquireCas(l.roomLock, sessionId);
         await reg().write(await reg().read());
-        // 模板快照落盘 + Tier-0 规程内联（#11 缺口闭合）：fresh 会话无需
-        // 仓库其余文件即可获得完整巡场规程。
+        // 模板快照落盘 + Tier-0 组装（#42 分层定稿）：tier0_prompt =
+        // 规程全文（playbooks/tier0-playbook.md，唯一事实源）+ 固定分隔符 +
+        // 场景 tiers[0].prompt；快照增补 playbook_digest 审计字段。
         const loaded = await loadTemplate(builtinScenarioDir(PACKAGE_ROOT), "builtin");
-        await writeJsonAtomic(l.teamYaml, instantiateSnapshot(loaded));
+        const playbook = loadTier0Playbook(PACKAGE_ROOT);
+        await writeJsonAtomic(l.teamYaml, instantiateSnapshot(loaded, playbook.digest));
         await appendEvent("system", "team/init", { instance_note: args.instance_note ?? null, lock: outcome });
         const tier0PromptPath = (loaded.template.tiers as Array<{ prompt?: string }>)[0]?.prompt ?? "";
-        return { ok: true, lock: outcome, home: l.teamHome, tier0_prompt: loaded.prompts[tier0PromptPath] ?? null };
+        const scenarioPrompt = loaded.prompts[tier0PromptPath] ?? "";
+        return {
+          ok: true,
+          lock: outcome,
+          home: l.teamHome,
+          tier0_prompt: assembleTier0Prompt(playbook, scenarioPrompt),
+          playbook_digest: playbook.digest,
+        };
       } catch (error) {
         wrap(error);
       }
