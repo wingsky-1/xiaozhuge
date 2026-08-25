@@ -1,0 +1,50 @@
+# 变异测试基线自动归档（issue #62，参照 dsh-plugin-hub#225）：
+# main 每次合入源码后全量重跑变异并快照基线，PR 侧只做增量跑 + 分数门禁，
+# 不再要求人工提交基线。防循环：本 workflow 只改基线文件时被 paths-ignore 过滤。
+name: Baseline
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "stryker-incremental.json"
+  workflow_dispatch:
+
+concurrency:
+  group: baseline-${{ github.event_name }}
+  # 连续合入时新触发取代旧全量跑；手动 dispatch 完整执行
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Mutation full run (score >= 70)
+        run: pnpm mutation
+      - name: Open baseline snapshot PR if changed
+        id: snapshot
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: chore/mutation-baseline
+          title: "chore: mutation baseline snapshot"
+          body: |
+            自动归档：main 全量变异后的增量基线快照（issue #62）。
+            合入后由 `paths-ignore` 防止再次触发全量跑。
+          commit-message: "chore: refresh stryker incremental baseline"
+          add-paths: stryker-incremental.json
+          labels: chore
+      - name: Auto-merge baseline PR (best effort, manual fallback)
+        if: steps.snapshot.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr merge --squash --delete-branch "${{ steps.snapshot.outputs.pull-request-number }}" \
+            || echo "::warning::baseline PR 自动合并失败，请人工处理"
