@@ -13,10 +13,9 @@ import { existsSync, readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 import type { IndexInjection, WebRoute } from "@deepseek-ai/dsh-host-webserver";
-import { resolveTeamHome, userTemplatesRoot, projectTemplatesRoot } from "../team-home.js";
+import { resolveTeamHome, userTemplatesRoot, projectTemplatesRoot } from "./team-home.js";
 import { createHandlers, PACKAGE_ROOT } from "./handlers.js";
-import { layout } from "../runtime/paths.js";
-import { listScenarios } from "../runtime/template-loader.js";
+import { layout, listScenarios } from "../runtime/index.js";
 import { fetchSiteAllowed, originAllowed } from "./gate-console.js";
 
 /** 独立入口页路径。 */

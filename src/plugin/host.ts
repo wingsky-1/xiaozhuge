@@ -9,7 +9,7 @@
 import type { Agent } from "@deepseek-ai/dsh-agent";
 import type { ToolDefinition, ToolRunContext } from "@deepseek-ai/dsh-tools";
 import type { WebRoute } from "@deepseek-ai/dsh-host-webserver";
-import { resolveTeamHome } from "../team-home.js";
+import { resolveTeamHome } from "./team-home.js";
 import { createHandlers, type Handlers } from "./handlers.js";
 import { schemas } from "./schemas.js";
 import { makeGateRoutes, makeConsoleRoute } from "./gate-console.js";

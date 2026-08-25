@@ -15,9 +15,9 @@
 import { readdir, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { linkNoReplace, readJson, TMP_PREFIX, writeJsonAtomic } from "./fs-utils.js";
-import { memberMailboxDir } from "./paths.js";
-import { recoverDeliveries } from "./recovery.js";
+import { linkNoReplace, readJson, TMP_PREFIX, writeJsonAtomic } from "../kernel/fs-utils.js";
+import { memberMailboxDir } from "../kernel/paths.js";
+import { recoverDeliveries } from "../kernel/recovery.js";
 
 export const DELIVERING_PREFIX = ".delivering-";
 export const PROCESSED_DIR = "processed";

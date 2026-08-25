@@ -7,10 +7,10 @@
 import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { roomLayout } from "./paths.js";
-import { isReservedStage } from "./types.js";
-import { readJson, writeJsonAtomic } from "./fs-utils.js";
-import { RuntimeError } from "./errors.js";
+import { roomLayout } from "../kernel/paths.js";
+import { isReservedStage } from "../kernel/types.js";
+import { readJson, writeJsonAtomic } from "../kernel/fs-utils.js";
+import { RuntimeError } from "../kernel/errors.js";
 
 /** 黑板分片：保留态 + 自由业务负载（ext 仅展示，不参与归约）。 */
 export interface Shard {

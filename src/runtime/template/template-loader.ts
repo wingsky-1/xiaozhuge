@@ -13,7 +13,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { join, sep } from "node:path";
 import { parse as parseYaml } from "yaml";
-import type { TemplateSource } from "./types.js";
+import type { TemplateSource } from "../kernel/types.js";
 import { validateTeamTemplate, validateRoleSet } from "./template.js";
 
 /** 模板场景目录内的固定文件名（v2.2 定稿 §7.1）。 */

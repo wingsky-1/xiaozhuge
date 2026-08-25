@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { apply, name, inject } from "../../src/plugin/host.js";
 import { schemas } from "../../src/plugin/schemas.js";
-import { resolveTeamHome } from "../../src/team-home.js";
+import { resolveTeamHome } from "../../src/plugin/team-home.js";
 import { createHandlers } from "../../src/plugin/handlers.js";
 
 interface RegisteredTool {

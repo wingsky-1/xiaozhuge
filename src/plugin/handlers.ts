@@ -9,10 +9,16 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { TaskRecord, TaskStatus, TemplateSource } from "../runtime/types.js";
-import { ensureDir, writeJsonAtomic } from "../runtime/fs-utils.js";
-import { layout } from "../runtime/paths.js";
+import type {
+  TaskRecord,
+  TaskStatus,
+  TemplateSource,
+  ScenarioRoot,
+} from "../runtime/index.js";
 import {
+  ensureDir,
+  writeJsonAtomic,
+  layout,
   assembleTier0Prompt,
   builtinTemplatesRoot,
   instantiateSnapshot,
@@ -20,15 +26,20 @@ import {
   loadTier0Playbook,
   resolveScenarioDir,
   DEFAULT_SCENARIO,
-} from "../runtime/template-loader.js";
-import type { ScenarioRoot } from "../runtime/template-loader.js";
-import { userTemplatesRoot, projectTemplatesRoot } from "../team-home.js";
-import { Ledger, findConflicts } from "../runtime/ledger.js";
-import { EventLog } from "../runtime/event-log.js";
-import { Registry } from "../runtime/registry.js";
-import { getShard, listShards, setShard } from "../runtime/blackboard.js";
-import { acknowledge, claim, deliver, readUnread } from "../runtime/mailbox.js";
-import { acquireCas } from "../runtime/cas-lock.js";
+  Ledger,
+  findConflicts,
+  EventLog,
+  Registry,
+  getShard,
+  listShards,
+  setShard,
+  acknowledge,
+  claim,
+  deliver,
+  readUnread,
+  acquireCas,
+} from "../runtime/index.js";
+import { userTemplatesRoot, projectTemplatesRoot } from "./team-home.js";
 
 /** 统一错误形状：{ error: { code, message } }，模型可读可路由。 */
 export class ToolError extends Error {

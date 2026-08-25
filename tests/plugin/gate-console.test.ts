@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { fetchSiteAllowed, makeGateRoutes, makeConsoleRoute, originAllowed } from "../../src/plugin/gate-console.js";
-import { EventLog } from "../../src/runtime/event-log.js";
+import { EventLog } from "../../src/runtime/kernel/event-log.js";
 
 const SESSION = "session-gate-test";
 let home: string;
