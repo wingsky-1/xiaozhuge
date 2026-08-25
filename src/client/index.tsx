@@ -1,0 +1,395 @@
+/**
+ * 小诸葛浏览器端插件：输入框内「创建团队」按钮（官方 slots 方案，ADR 0014 修订）。
+ *
+ * 经 `conversation.input.right` 插槽渲染在输入框工具行右端、发送按钮旁边——
+ * 宿主官方扩展点，非 DOM 注入（宿主升级不失效，主题/样式自动适配）。
+ *
+ * 交互：
+ * - 仅首轮对话展示（InputZone.session.blank = 无用户消息且未建团）；
+ * - 点击弹「选团段（场景）」浮层（复用 /api/xiaozhuge/team/scenarios 枚举）；
+ * - 选定后本会话一键建团：team/create（服务端 init 持久化）→ session.prompt
+ *   投递 tier0_prompt；工作区随会话推导（session.list cwd），输入框草稿作首条
+ *   用户任务（空则只投递规程）。
+ */
+import { useEffect, useRef, useState } from "react";
+import type { ConversationSnapshot } from "@deepseek-ai/dsh-client-runtime/client";
+import type { Context } from "@deepseek-ai/cordis";
+import type { IApiClient } from "@deepseek-ai/dsh-client-connection/client";
+
+/**
+ * conversation.input.right 插槽 owner share（InputZone）。
+ * 类型面未从 conversation 包 re-export（contract/slots 不在 exports 面），
+ * 此处按官方 slots.d.ts 的 InputZone 结构本地声明——运行时形状一致，
+ * 仅消费 session.blank / session.sessionId / input.draft 三个字段。
+ */
+export interface InputZone {
+  readonly session: ConversationSnapshot;
+  readonly input: { readonly draft: string };
+}
+
+/** apply 时注入的宿主 typed API 客户端（connection.api），组件经模块级引用使用。 */
+let apiClient: IApiClient | null = null;
+
+/** 团队状态探测（服务端只读 GET）。 */
+interface TeamStatus {
+  is_team: boolean;
+  name?: string | null;
+  playbook_digest?: string | null;
+}
+
+/** 场景枚举项（/api/xiaozhuge/team/scenarios）。 */
+interface ScenarioEntry {
+  name: string;
+  source: "builtin" | "user" | "project";
+}
+
+/**
+ * 启动消息头：与独立入口页 /xiaozhuge/launch 的 BOOT_MESSAGE_HEAD 保持一致
+ * （client bundle 与服务端隔离，无法 import 共享——改动须两侧同步，
+ * tests/plugin/team-launch.test.ts 的契约断言兜底）。
+ */
+export const BOOT_MESSAGE_HEAD =
+  "团队已由人经入口创建，实例初始化完成。以下是你的 Tier-0 规程与场景编排" +
+  "提示词全文（规程在前、场景段在后，以固定分隔符分界），请从启动对账节开始执行：";
+
+/** 本插件注册名（cordis 名册 id = npm 包名，经 dsh.client 契约）。 */
+export const name = "@wingsky-1/dsh-xiaozhuge";
+
+/** 需要的浏览器端服务：slots（插槽注册）+ connection（typed RPC 客户端）。 */
+export const inject = ["slots", "connection"];
+
+/** 浮层内固定文案。 */
+const COPY = {
+  button: "创建团队",
+  dialogTitle: "选择团队场景",
+  loading: "加载场景列表…",
+  empty: "暂无可用场景",
+  loadFailed: "加载失败",
+  go: "在本会话创建团队并发送",
+  creating: "创建中…",
+  createFailed: "创建失败",
+  projectBadge: "当前工作区",
+};
+
+/** 场景浮层（React 组件，固定在视口居中）。 */
+function ScenarioPicker(props: {
+  scenarios: ScenarioEntry[];
+  busy: boolean;
+  error: string | null;
+  selected: ScenarioEntry | null;
+  onSelect: (entry: ScenarioEntry) => void;
+  onGo: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={COPY.dialogTitle}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,.35)",
+        zIndex: 99999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+      onClick={(ev) => {
+        if (ev.target === ev.currentTarget) props.onClose();
+      }}
+    >
+      <div
+        style={{
+          background: "var(--dsw-specific-input-major, #fff)",
+          color: "var(--dsw-alias-label-primary, #1a1a1a)",
+          borderRadius: 12,
+          boxShadow: "0 8px 40px rgba(0,0,0,.3)",
+          width: "min(420px, calc(100vw - 32px))",
+          maxHeight: "80vh",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          fontSize: 14,
+        }}
+      >
+        <div
+          style={{
+            padding: "14px 16px",
+            borderBottom: "1px solid var(--dsw-alias-border-l2, #e5e7eb)",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <strong style={{ fontSize: 15 }}>{COPY.dialogTitle}</strong>
+          <button
+            type="button"
+            aria-label="关闭"
+            onClick={props.onClose}
+            style={{
+              marginLeft: "auto",
+              background: "none",
+              border: "none",
+              fontSize: 18,
+              lineHeight: 1,
+              cursor: "pointer",
+              color: "var(--dsw-alias-label-tertiary, #6b7280)",
+              padding: "4px 6px",
+            }}
+          >
+            ×
+          </button>
+        </div>
+        <div style={{ padding: "12px 16px", overflow: "auto", minHeight: 80 }}>
+          {props.scenarios.length === 0 ? (
+            <div style={{ opacity: 0.6, padding: "20px 0", textAlign: "center" }}>
+              {props.error ?? COPY.empty}
+            </div>
+          ) : (
+            props.scenarios.map((s) => (
+              <label
+                key={`${s.source}:${s.name}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "9px 10px",
+                  border: "1px solid var(--dsw-alias-border-l2, #e5e7eb)",
+                  borderRadius: 8,
+                  marginBottom: 8,
+                  cursor: "pointer",
+                  background: "var(--dsw-alias-bg-module-platform, #fafafa)",
+                }}
+              >
+                <input
+                  type="radio"
+                  name="xzg-scenario"
+                  value={`${s.source}:${s.name}`}
+                  defaultChecked={s.source === "builtin"}
+                  onChange={() => props.onSelect(s)}
+                />
+                <span style={{ fontWeight: 500 }}>{s.name}</span>
+                <span style={{ marginLeft: "auto", fontSize: 12, opacity: 0.55 }}>
+                  {s.source === "project" ? COPY.projectBadge : s.source}
+                </span>
+              </label>
+            ))
+          )}
+        </div>
+        <div
+          style={{
+            padding: "10px 16px",
+            borderTop: "1px solid var(--dsw-alias-border-l2, #e5e7eb)",
+          }}
+        >
+          {props.error && props.scenarios.length > 0 ? (
+            <div style={{ color: "#cf222e", fontSize: 13, marginBottom: 8 }}>{props.error}</div>
+          ) : null}
+          <button
+            type="button"
+            disabled={props.busy || props.selected === null}
+            onClick={props.onGo}
+            style={{
+              width: "100%",
+              padding: "9px 0",
+              border: "none",
+              borderRadius: 8,
+              background: "var(--dsw-static-deepseek-500, #2da44e)",
+              color: "#fff",
+              fontSize: 14,
+              cursor: props.busy ? "wait" : "pointer",
+            }}
+          >
+            {props.busy ? COPY.creating : COPY.go}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 输入框内「创建团队」按钮组件（conversation.input.right 插槽）。
+ * 读 InputZone owner props（point-in-time snapshot，宿主 re-render 保持最新）：
+ * - session.blank：官方「无用户消息」位（首轮判定，发消息后自动翻转 false）；
+ * - session.sessionId：当前会话 id；
+ * - input.draft：输入框草稿（首条用户任务）。
+ */
+export function TeamCreateButton(props: InputZone) {
+  const { session, input } = props;
+  const [open, setOpen] = useState(false);
+  const [scenarios, setScenarios] = useState<ScenarioEntry[]>([]);
+  const [selected, setSelected] = useState<ScenarioEntry | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isTeam, setIsTeam] = useState(false);
+  const loadedRef = useRef(false);
+  const cwdRef = useRef<string | undefined>(undefined);
+
+  const sessionId = session.sessionId;
+
+  // 建团状态探测：随会话重置（切到已建团会话立即隐藏按钮），仅首轮探测。
+  useEffect(() => {
+    loadedRef.current = false;
+    cwdRef.current = undefined;
+    setIsTeam(false);
+    if (!session.blank || !sessionId) return;
+    loadedRef.current = true;
+    let cancelled = false;
+    fetch(`/api/xiaozhuge/team/status?session=${encodeURIComponent(sessionId)}`)
+      .then((r) => r.json())
+      .then((d: TeamStatus) => {
+        if (!cancelled) setIsTeam(d.is_team === true);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [sessionId, session.blank]);
+
+  // 仅首轮（blank 且未建团）展示。
+  if (!session.blank || isTeam) return null;
+
+  async function loadScenarios(): Promise<ScenarioEntry[]> {
+    // 工作区随会话推导：session.list 的 cwd（会话工作目录）→ project 层模板可见。
+    try {
+      if (apiClient) {
+        const v = await apiClient.sessions.list({});
+        const row = v.result.ok ? (v.result.value.items ?? []).find((i) => i.sessionId === sessionId) : undefined;
+        cwdRef.current = row?.cwd;
+      }
+    } catch {
+      // cwd 缺失仅影响 project 层模板；builtin/user 仍可用。
+    }
+    const url = `/api/xiaozhuge/team/scenarios${cwdRef.current ? `?workspace=${encodeURIComponent(cwdRef.current)}` : ""}`;
+    const r = await fetch(url).then((res) => res.json());
+    return (r.scenarios ?? []) as ScenarioEntry[];
+  }
+
+  function openPicker() {
+    setOpen(true);
+    setError(null);
+    setSelected(null);
+    void loadScenarios()
+      .then((list) => {
+        setScenarios(list);
+        // 默认选中 builtin 首项。
+        const first = list.find((s) => s.source === "builtin") ?? list[0] ?? null;
+        setSelected(first);
+      })
+      .catch((e: Error) => {
+        setScenarios([]);
+        setError(`${COPY.loadFailed}：${e.message}`);
+      });
+  }
+
+  async function createTeam() {
+    if (busy || selected === null) return;
+    const entry = selected;
+    // 快照当前会话与草稿（异步期间用户可能切换会话/输入）。
+    const targetSession = sessionId;
+    const draft = (input.draft ?? "").trim();
+    setBusy(true);
+    setError(null);
+    try {
+      // ① 服务端 init 持久化（同源 REST 端点，双头断言由服务端执行）。
+      const created = await fetch("/api/xiaozhuge/team/create", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          session: targetSession,
+          scenario: entry.name,
+          source: entry.source,
+          // 工作区随会话推导（session.list cwd），无需用户填写。
+          ...(cwdRef.current ? { workspace: cwdRef.current } : {}),
+        }),
+      }).then((r) => r.json());
+      if (!created?.ok) {
+        const msg = created?.error?.message ?? created?.error?.code ?? "创建失败";
+        throw new Error(msg);
+      }
+      // ② 投递 tier0_prompt 到当前会话（输入框草稿作首条用户任务）。
+      const bootText = `${BOOT_MESSAGE_HEAD}\n\n${created.tier0_prompt}`;
+      const promptText = draft ? `【我的任务】${draft}\n\n${bootText}` : bootText;
+      if (!apiClient) throw new Error("宿主 API 客户端不可用");
+      const r = await apiClient.sessions.prompt({
+        sessionId: targetSession,
+        mode: "queue",
+        content: [{ type: "text", text: promptText }],
+      });
+      if (!r.result.ok) {
+        throw new Error(r.result.error?.message ?? "规程投递失败");
+      }
+      setIsTeam(true);
+      setOpen(false);
+    } catch (e) {
+      setError(`${COPY.createFailed}：${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        id="xzg-team-create-btn"
+        title="选择团队场景并在本会话创建团队"
+        onClick={() => openPicker()}
+        style={{
+          whiteSpace: "nowrap",
+          fontSize: 12,
+          lineHeight: 1,
+          padding: "6px 10px",
+          borderRadius: 14,
+          border: "1px solid var(--dsw-static-deepseek-500, rgba(45,164,78,.5))",
+          background: "rgba(45,164,78,.12)",
+          color: "var(--dsw-static-deepseek-500, #2da44e)",
+          cursor: "pointer",
+          display: "inline-flex",
+          alignItems: "center",
+          flex: "none",
+        }}
+      >
+        {COPY.button}
+      </button>
+      {open ? (
+        <ScenarioPicker
+          scenarios={scenarios}
+          busy={busy}
+          error={error}
+          selected={selected}
+          onSelect={setSelected}
+          onGo={() => void createTeam()}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * 浏览器端插件装配：注册 conversation.input.right 插槽。
+ * @param ctx - 客户端 cordis 上下文（inject: slots + connection）。
+ */
+export function apply(ctx: Context): void {
+  // 注入宿主 typed API 客户端（connection.api）：组件经模块级引用使用。
+  const connection = ctx.get("connection") as { api: IApiClient } | undefined;
+  apiClient = connection?.api ?? null;
+  const slots = ctx.get("slots") as {
+    inject: (key: string, callback: () => unknown) => void;
+    register: (
+      spec: { name: string; id: string; order?: number },
+      component: (props: InputZone) => unknown,
+    ) => unknown;
+  };
+  slots.inject("conversation.input.right", () =>
+    slots.register(
+      {
+        name: "conversation.input.right",
+        id: "xiaozhuge-team-create",
+        order: 0,
+      },
+      TeamCreateButton,
+    ),
+  );
+}

@@ -44,6 +44,7 @@
 - [ADR 0010](docs/adr/0010-gate-console-hardening.md) — Gate Console 安全加固与自批风险定性（#2）
 - [ADR 0011](docs/adr/0011-team-launch-entry.md) — Team 拉起入口与 team_init 工具面下线（#51）
 - [ADR 0012](docs/adr/0012-two-stage-review.md) — oss-maintenance 两阶段核验（规格/成品双任务拆分，#46）
+- [ADR 0014](docs/adr/0014-in-session-team-launch.md) — 团队拉起入口收敛进会话输入框（#51 修订）
 
 ## 内置模板（templates/）
 
