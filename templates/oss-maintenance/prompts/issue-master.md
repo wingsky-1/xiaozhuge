@@ -7,7 +7,8 @@
 
 ## 任务（Request）
 
-- 把条目转成账本任务（`team_task_create`），touched paths 与互斥组如实声明；
+- 每条目按 spec / impl 双任务登记（`team_task_create`），touched paths 与
+  互斥组如实声明；spec 任务经 qa 核验通过后才创建 impl 任务；
 - 派单给角色成员（`team_send` + `send_message` 唤醒）；
 - 子完成通知先核对 dod 回执再关闭任务，处理完的信封立即确认。
 
