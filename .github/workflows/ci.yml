@@ -46,6 +46,9 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # 构建产物依赖：client 契约测试读 dist/client.js，双进程 CAS 测试解析
+      # dist/runtime/kernel/cas-lock.js——沙箱无产物则 dry run 必挂。
+      - run: pnpm build
       - name: Mutation gate (score >= 70, incremental)
         run: pnpm mutation
       - name: Check incremental baseline is up to date
