@@ -14,6 +14,7 @@ import { createHandlers, type Handlers } from "./handlers.js";
 import { schemas } from "./schemas.js";
 import { makeGateRoutes, makeConsoleRoute } from "./gate-console.js";
 import { makeLaunchRoutes } from "./team-launch.js";
+import { makeOverviewRoute } from "./team-overview.js";
 
 /** 稳定的 cordis 插件名。 */
 export const name = "xiaozhuge-team";
@@ -197,7 +198,12 @@ export function apply(ctx: {
   const ws = ctx.webServer;
   if (typeof ws === "object" && ws !== null) {
     const teamHomeFor = (sessionId: string) => resolveTeamHome(sessionId);
-    for (const route of [...makeGateRoutes({ teamHomeFor }), makeConsoleRoute(), ...makeLaunchRoutes()]) {
+    for (const route of [
+      ...makeGateRoutes({ teamHomeFor }),
+      makeConsoleRoute(),
+      ...makeLaunchRoutes(),
+      makeOverviewRoute(teamHomeFor),
+    ]) {
       disposers.push(ws.register(route));
     }
     ctx.logger.info("[xiaozhuge] gate console + team launch routes registered");

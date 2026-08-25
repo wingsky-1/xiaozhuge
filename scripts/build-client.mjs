@@ -62,6 +62,21 @@ const r = await build({
   external: EXTERNALS,
   entryPoints: [SRC],
   jsx: "automatic",
+  // css-as-text（issue 68）：宿主 loader 只 load JS，React Flow 样式无法作为
+  // 独立 .css 文件交付——把样式当文本打进 bundle，运行时一次性注入 <style>。
+  // 经 onLoad 插件按 @xyflow/react 路径精确过滤（全局 '.css' 后缀映射会吞掉
+  // 未来一切正常 css 导入），其余 css 导入维持 esbuild 默认行为。
+  plugins: [
+    {
+      name: "css-as-text-xyflow-only",
+      setup(build) {
+        build.onLoad({ filter: /node_modules[\\/]@xyflow[\\/]react[\\/].*\.css$/ }, async (args) => {
+          const text = await import("node:fs/promises").then((fs) => fs.readFile(args.path, "utf8"));
+          return { contents: text, loader: "text" };
+        });
+      },
+    },
+  ],
   logLevel: "warning",
   write: false,
 });

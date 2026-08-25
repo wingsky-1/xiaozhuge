@@ -5,7 +5,8 @@
  * 物理分层（仅归类，导出符号与对外 API 不变）：
  * - kernel/   数据内核：类型、路径、原子写、CAS 锁、账本、事件流、门禁、恢复；
  * - collab/   协作语义：信箱三段式、黑板分片；
- * - template/ 模板系统：Team/Role Spec 校验与三级模板加载。
+ * - template/ 模板系统：Team/Role Spec 校验与三级模板加载；
+ * - view/     只读投影：事件流/注册表/黑板 → 视图模型纯函数（团队视图）。
  */
 export type {
   TaskRecord,
@@ -67,6 +68,12 @@ export * from "./collab/mailbox.js";
 export type { Envelope } from "./collab/mailbox.js";
 export * from "./collab/blackboard.js";
 export type { Shard } from "./collab/blackboard.js";
+export * from "./view/overview.js";
+export type {
+  NodeTone,
+  OverviewRoomInput,
+  OverviewInput,
+} from "./view/overview.js";
 export {
   validateTeamTemplate,
   validateRoleSpec,

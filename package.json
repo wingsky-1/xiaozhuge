@@ -26,6 +26,7 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.client.json --noEmit"
   },
   "devDependencies": {
+    "@dagrejs/dagre": "3.1.1",
     "@deepseek-ai/cordis": "4.0.1",
     "@deepseek-ai/dsh-agent": "0.1.1-rc.2",
     "@deepseek-ai/dsh-client-connection": "0.1.1-rc.2",
@@ -41,6 +42,7 @@
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
     "@vitest/coverage-v8": "^4.1.11",
+    "@xyflow/react": "12.11.3",
     "esbuild": "^0.28.2",
     "eslint": "^10.9.0",
     "typescript": "^5.9.3",

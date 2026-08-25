@@ -17,11 +17,19 @@ const bundle = readFileSync(join(ROOT, "dist", "client.js"), "utf8");
 function stubModule(name, exports) {
   return { name, exports };
 }
+const noop = () => {};
 const reactStub = stubModule("react", {
-  useState: () => [undefined, () => {}],
-  useEffect: () => {},
-  useRef: () => ({ current: undefined }),
+  useState: (v) => [v, noop],
+  useEffect: noop,
+  useLayoutEffect: noop,
+  useMemo: (fn) => fn(),
+  useCallback: (fn) => fn,
+  useRef: (v) => ({ current: v }),
   createElement: () => ({ $$typeof: Symbol.for("react.element") }),
+  createContext: (defaultValue) => ({ Provider: () => null, Consumer: () => null, _defaultValue: defaultValue }),
+  memo: (c) => c,
+  forwardRef: (render) => (props) => render(props, null),
+  version: "stub",
 });
 const jsxRuntimeStub = stubModule("react/jsx-runtime", {
   jsx: () => ({ $$typeof: Symbol.for("react.element") }),
@@ -91,7 +99,7 @@ const mod = registered?.factory ? loader.factories.get(registered.id) : null;
 assert(mod !== null, "factory 产物已注册");
 assert(typeof mod?.apply === "function", "exports.apply 是函数");
 assert(Array.isArray(mod?.inject), "exports.inject 是数组");
-assert(JSON.stringify(mod?.inject) === JSON.stringify(["slots", "connection"]), "inject = [slots, connection]");
+assert(JSON.stringify(mod?.inject) === JSON.stringify(["slots", "connection", "sessions"]), "inject = [slots, connection, sessions]");
 
 // ---- apply(ctx) 插槽注册 ----
 const ctxStub = {
@@ -106,6 +114,15 @@ const ctxStub = {
         },
       };
     }
+    if (key === "sessions") {
+      // ISessions 导航子集（团队视图「打开会话」用）。
+      return {
+        open: noop,
+        openSubagent: noop,
+        subagentAddress: () => undefined,
+        refreshSubagents: async () => {},
+      };
+    }
     if (key === "slots") {
       return {
         inject(slotKey, callback) {
@@ -115,7 +132,10 @@ const ctxStub = {
         },
         register(spec, component) {
           assert(spec.name === "conversation.input.right", "register 声明 conversation.input.right");
-          assert(spec.id === "xiaozhuge-team-create", "register id = xiaozhuge-team-create");
+          assert(
+            spec.id === "xiaozhuge-team-create" || spec.id === "xiaozhuge-team-view-watcher",
+            `register id 合法（实际 ${spec.id}）`,
+          );
           assert(typeof component === "function", "组件是函数（React 组件）");
           return () => {};
         },
@@ -125,7 +145,7 @@ const ctxStub = {
   },
 };
 mod.apply(ctxStub);
-assert(registrations.length === 1, "apply 完成 1 次插槽注册");
+assert(registrations.length === 2, "apply 完成 2 次插槽注册");
 
 console.log(failed === 0 ? "\n全部客户端契约断言通过。" : `\n${failed} 项失败`);
 process.exit(failed === 0 ? 0 : 1);

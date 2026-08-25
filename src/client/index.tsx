@@ -15,6 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ConversationSnapshot } from "@deepseek-ai/dsh-client-runtime/client";
 import type { Context } from "@deepseek-ai/cordis";
 import type { IApiClient } from "@deepseek-ai/dsh-client-connection/client";
+import { TeamView, bindSessionsService } from "./team-view.js";
 
 /**
  * conversation.input.right 插槽 owner share（InputZone）。
@@ -55,8 +56,8 @@ export const BOOT_MESSAGE_HEAD =
 /** 本插件注册名（cordis 名册 id = npm 包名，经 dsh.client 契约）。 */
 export const name = "@wingsky-1/dsh-xiaozhuge";
 
-/** 需要的浏览器端服务：slots（插槽注册）+ connection（typed RPC 客户端）。 */
-export const inject = ["slots", "connection"];
+/** 需要的浏览器端服务：slots（插槽注册）+ connection（typed RPC 客户端）+ sessions（成员会话导航）。 */
+export const inject = ["slots", "connection", "sessions"];
 
 /** 浮层内固定文案。 */
 const COPY = {
@@ -368,20 +369,27 @@ export function TeamCreateButton(props: InputZone) {
 }
 
 /**
- * 浏览器端插件装配：注册 conversation.input.right 插槽。
- * @param ctx - 客户端 cordis 上下文（inject: slots + connection）。
+ * 浏览器端插件装配：注册 conversation.input.right 插槽（建团按钮 + 团队
+ * tab 协调器）；绑定宿主服务句柄。
+ * @param ctx - 客户端 cordis 上下文。
  */
 export function apply(ctx: Context): void {
   // 注入宿主 typed API 客户端（connection.api）：组件经模块级引用使用。
   const connection = ctx.get("connection") as { api: IApiClient } | undefined;
   apiClient = connection?.api ?? null;
+  // 成员「打开会话」导航面（ISessions 公开契约子集：open/openSubagent/
+  // subagentAddress/refreshSubagents）。
+  bindSessionsService(
+    (ctx.get("sessions") as unknown as Parameters<typeof bindSessionsService>[0] | undefined) ?? null,
+  );
   const slots = ctx.get("slots") as {
     inject: (key: string, callback: () => unknown) => void;
-    register: (
-      spec: { name: string; id: string; order?: number },
-      component: (props: InputZone) => unknown,
-    ) => unknown;
+    register: <P>(
+      spec: { name: string; id: string; order?: number; label?: string },
+      component: (props: P) => unknown,
+    ) => () => void;
   };
+  slotsService = slots;
   slots.inject("conversation.input.right", () =>
     slots.register(
       {
@@ -392,4 +400,76 @@ export function apply(ctx: Context): void {
       TeamCreateButton,
     ),
   );
+  // 团队 tab 存在性协调器（issue 68）：插槽无按会话显隐字段，动态
+  // register/dispose 实现「非团队会话不出现」；恒驻 input.right 条目承载
+  // 探测 hooks（渲染 null，零视觉占位）。
+  slots.inject("conversation.input.right", () =>
+    slots.register(
+      {
+        name: "conversation.input.right",
+        id: "xiaozhuge-team-view-watcher",
+        order: 1,
+      },
+      TeamViewWatcher,
+    ),
+  );
+}
+
+/** 模块级 slots 句柄（协调器动态注册团队 tab 用）。 */
+let slotsService: {
+  register: <P>(
+    spec: { name: string; id: string; order?: number; label?: string },
+    component: (props: P) => unknown,
+  ) => () => void;
+} | null = null;
+
+/** 团队 view entry 当前 disposer（null = 未注册）。 */
+let teamViewDisposer: (() => void) | null = null;
+
+/** 团队 tab 注册参数：order 20 排在对话与轨迹(order 10)之后。 */
+const TEAM_VIEW_SPEC = {
+  name: "conversation.view",
+  id: "xiaozhuge-team-view",
+  order: 20,
+  label: "团队",
+} as const;
+
+/** 按期望状态注册/注销团队 tab（幂等）。 */
+export function setTeamViewTab(present: boolean): void {
+  if (present && teamViewDisposer === null && slotsService !== null) {
+    teamViewDisposer = slotsService.register(TEAM_VIEW_SPEC, TeamView);
+  } else if (!present && teamViewDisposer !== null) {
+    teamViewDisposer();
+    teamViewDisposer = null;
+  }
+}
+
+/**
+ * 团队 tab 存在性协调器：随当前会话探测 team/status，is_team 时注册 tab、
+ * 否则注销。dispose 即刻生效（切走立即消失），register 在探测完成后（团队
+ * 会话首次切入约一个 RTT 后出现）——时序毛边为 v1 已知取舍。
+ */
+export function TeamViewWatcher(props: InputZone): null {
+  const sessionId = props.session.sessionId;
+  useEffect(() => {
+    let cancelled = false;
+    if (!sessionId) {
+      setTeamViewTab(false);
+      return;
+    }
+    fetch(`/api/xiaozhuge/team/status?session=${encodeURIComponent(sessionId)}`)
+      .then((r) => r.json())
+      .then((d: TeamStatus) => {
+        if (!cancelled) setTeamViewTab(d.is_team === true);
+      })
+      .catch(() => {
+        // 探测失败保持现状（不误删已呈现的 tab）。
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+  // 插件卸载兜底清理。
+  useEffect(() => () => setTeamViewTab(false), []);
+  return null;
 }
