@@ -15,8 +15,9 @@
   （完成定义 = 全绿；`build` 必须先于 `test`——测试硬性校验构建产物；
   覆盖率基线 70；CI 另有增量门禁——变更行覆盖率 >= 80，
   本地用 `pnpm cov:patch` 复现，需 `pip install diff-cover`）
-- 变异测试: `pnpm mutation`（得分基线 70，增量模式；基线文件
-  `stryker-incremental.json` 入库，跑完有变化须一并提交）
+- 变异测试: `pnpm mutation`（得分基线 70，增量模式；基线 `stryker-incremental.json`
+  由 CI 在 main 合入后自动归档——见 `.github/workflows/baseline.yml` 与 issue #62，
+  本地无需提交）
 - 构建: `pnpm build`
 
 ## 工作流

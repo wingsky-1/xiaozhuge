@@ -28,8 +28,13 @@ pnpm cov                         # 6. 覆盖率门禁（全局四维 >= 70）
 
 ```bash
 pnpm cov:patch    # 增量覆盖率：本次变更行 >= 80%（需 pip install diff-cover），CI 同款门禁
-pnpm mutation     # 变异测试（增量模式，得分基线 70）；跑完若 stryker-incremental.json 有变化须一并提交
+pnpm mutation     # 变异测试（增量模式，得分基线 70）；本地仅调试用，无需提交基线
 ```
+
+> **基线由 CI 自动归档（issue #62）**：main 每次合入源码后，`baseline.yml`
+> 全量重跑变异并自动开「基线快照」PR 合入；PR 的 mutation 门禁只做增量跑 +
+> 分数 ≥70，**不再人工提交 `stryker-incremental.json`**。本地跑出基线 diff
+> 属预期现象，还原即可（`git checkout -- stryker-incremental.json`）。
 
 ## 为什么有这些门槛（一句话版）
 
@@ -39,7 +44,7 @@ pnpm mutation     # 变异测试（增量模式，得分基线 70）；跑完若
 | `build` 先于 `test` | 契约测试对「上次构建的陈旧产物」误报 |
 | `verify-client.mjs`（内嵌于 build） | client bundle 的 loader 注入契约破坏 |
 | `cov` + `cov:patch` | 新代码无测试覆盖 |
-| `mutation` + 基线新鲜度校验 | 断言弱化（变异体存活） |
+| `mutation` 分数门禁 + baseline.yml 归档 | 断言弱化（变异体存活）+ 基线腐化 |
 
 ## 工作方式约定
 
@@ -56,3 +61,4 @@ pnpm mutation     # 变异测试（增量模式，得分基线 70）；跑完若
 | `ENOENT ... dist/client.js` 或 `dist/runtime/kernel/cas-lock.js` | 没 build 就跑 test；按上文顺序重来 |
 | pnpm 报 `Ignored build scripts: esbuild` | `pnpm-workspace.yaml` 的 `allowBuilds.esbuild` 缺失或未置 `true` |
 | CI mutation 失败但本地全绿 | 本地跑过 build 而 CI 沙箱靠 job 步骤保证——确认 workflow 中 build 在 mutation 前 |
+| 本地 `pnpm mutation` 后 `stryker-incremental.json` 出现 diff | 预期现象：基线由 CI 自动归档（issue #62），本地还原即可 |

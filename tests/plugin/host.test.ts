@@ -57,13 +57,15 @@ describe("插件装配", () => {
     expect(inject).toEqual(["tools", "webServer"]);
   });
 
-  it("注册 10 个 team_* 工具且命名规范（team_init 已下线，#51）", () => {
+  it("注册 12 个 team_* 工具且命名规范（team_init 已下线 #51；dispatch/reconcile 为 ADR 0015 原语）", () => {
     const { registered } = makeHost();
     const names = [...registered.keys()].sort();
     expect(names).toEqual([
       "team_ack",
+      "team_dispatch",
       "team_handoff",
       "team_inbox",
+      "team_reconcile",
       "team_send",
       "team_spawn",
       "team_state_get",
@@ -76,7 +78,7 @@ describe("插件装配", () => {
 
   it("卸载 disposer 注销全部工具", () => {
     const { registered, dispose } = makeHost();
-    expect(registered.size).toBe(10);
+    expect(registered.size).toBe(12);
     dispose();
     expect(registered.size).toBe(0);
   });

@@ -1,0 +1,72 @@
+# 变异测试基线自动归档（issue #62，参照 dsh-plugin-hub#225）：
+# main 每次合入源码后全量重跑变异并快照基线，PR 侧只做增量跑 + 分数门禁，
+# 不再要求人工提交基线。防循环：本 workflow 只改基线文件时被 paths-ignore 过滤。
+name: Baseline
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "stryker-incremental.json"
+  workflow_dispatch:
+
+concurrency:
+  group: baseline-${{ github.event_name }}
+  # 连续合入时新触发取代旧全量跑；手动 dispatch 完整执行
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+# GITHUB_TOKEN 默认只读：开基线快照 PR 需要 push 分支（contents）与建 PR（pull-requests）写权限
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Mutation full run (score >= 70)
+        run: pnpm mutation
+      # 规范化基线（剥运行期噪声、稳定键序）——快照 PR 的 diff 只含真实身份变化；
+      # 否则全量重跑的 status/location 漂移会让每次都产生假 diff。
+      - name: Normalize baseline
+        run: node scripts/check-mutation-baseline.mjs --normalize
+      # 语义门控：与 HEAD 基线做身份集合比较，无实质差异则跳过快照 PR。
+      # 复用校验脚本的退出码约定：1 = 存在内容级差异（此处即「需要快照」）。
+      - name: Semantic diff gate
+        id: semantic
+        run: |
+          if node scripts/check-mutation-baseline.mjs; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "基线无实质变化，跳过快照"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "检测到变异体集合变化，进入快照"
+          fi
+      - name: Open baseline snapshot PR if changed
+        id: snapshot
+        if: steps.semantic.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: chore/mutation-baseline
+          title: "chore: mutation baseline snapshot"
+          body: |
+            自动归档：main 全量变异后的增量基线快照（issue #62）。
+            合入后由 `paths-ignore` 防止再次触发全量跑。
+          commit-message: "chore: refresh stryker incremental baseline"
+          add-paths: stryker-incremental.json
+          labels: chore
+      - name: Auto-merge baseline PR (best effort, manual fallback)
+        if: steps.snapshot.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr merge --squash --delete-branch "${{ steps.snapshot.outputs.pull-request-number }}" \
+            || echo "::warning::baseline PR 自动合并失败，请人工处理"

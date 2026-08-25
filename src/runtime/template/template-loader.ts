@@ -138,8 +138,12 @@ async function readFile2(dir: string): Promise<string[]> {
   return readdir(dir);
 }
 
-/** 实例化快照：模板 + 角色 + 来源标记 + digest（写入 TEAM_HOME/team.yaml 的对象）。 */
-export function instantiateSnapshot(loaded: LoadedTemplate, playbookDigest?: string): Record<string, unknown> {
+/** 实例化快照：模板 + 角色 + 来源标记 + digest + 工作区（写入 TEAM_HOME/team.yaml 的对象）。 */
+export function instantiateSnapshot(
+  loaded: LoadedTemplate,
+  playbookDigest?: string,
+  workspace?: string,
+): Record<string, unknown> {
   return {
     name: loaded.template.name,
     version: loaded.template.version,
@@ -147,6 +151,8 @@ export function instantiateSnapshot(loaded: LoadedTemplate, playbookDigest?: str
     digest: loaded.digest,
     // Tier-0 规程摘要（#42）：仅审计字段；旧快照无此字段按缺省容忍（只增不改）。
     playbook_digest: playbookDigest ?? null,
+    // 工作区持久化（ADR 0015）：audit 子命令的扫描根来源；旧快照无此字段为 null。
+    workspace: workspace ?? null,
     tiers: loaded.template.tiers,
     roles: Object.values(loaded.roles).map((r) => ({
       id: r.id,

@@ -6,7 +6,7 @@
  * 一切校验委托 P2a/P2b 纯库；本层只做参数装配与错误文案包装
  * （定稿 G0 边界：确定性操作在工具内部完成，LLM 只做决策）。
  */
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
@@ -40,6 +40,8 @@ import {
   acquireCas,
 } from "../runtime/index.js";
 import { userTemplatesRoot, projectTemplatesRoot } from "./team-home.js";
+import { appendToolManifest } from "./tool-manifest.js";
+import { auditWorkspace } from "./workspace-audit.js";
 
 /** 统一错误形状：{ error: { code, message } }，模型可读可路由。 */
 export class ToolError extends Error {
@@ -69,6 +71,15 @@ function reqStr(args: Record<string, unknown>, key: string): string {
   return v;
 }
 
+/** 必填数字参数校验。 */
+function reqNum(args: Record<string, unknown>, key: string): number {
+  const v = args[key];
+  if (typeof v !== "number" || !Number.isFinite(v)) {
+    throw new ToolError("invalid-arguments", `number field "${key}" is required`);
+  }
+  return v;
+}
+
 function optStr(args: Record<string, unknown>, key: string): string | undefined {
   const v = args[key];
   if (v === undefined) return undefined;
@@ -94,12 +105,56 @@ function optStrArray(args: Record<string, unknown>, key: string): string[] | und
   return v as string[];
 }
 
+/** role_inline 白名单（对齐模板 role schema 的动态字段，ADR 0015：随信封投递不持久化）。 */
+const ROLE_INLINE_FIELDS = ["prompt", "briefing", "dod", "max_hops", "as_judge"] as const;
+
+function optRoleInline(args: Record<string, unknown>): Record<string, unknown> | undefined {
+  const v = args.role_inline;
+  if (v === undefined) return undefined;
+  if (typeof v !== "object" || v === null || Array.isArray(v)) {
+    throw new ToolError("invalid-arguments", 'field "role_inline" must be an object');
+  }
+  const inline = v as Record<string, unknown>;
+  for (const key of Object.keys(inline)) {
+    if (!(ROLE_INLINE_FIELDS as readonly string[]).includes(key)) {
+      throw new ToolError("invalid-arguments", `unknown role_inline field "${key}"`);
+    }
+  }
+  if (
+    inline.prompt !== undefined &&
+    (typeof inline.prompt !== "string" || inline.prompt.length === 0)
+  ) {
+    throw new ToolError("invalid-arguments", 'role_inline.prompt must be a non-empty string');
+  }
+  if (
+    inline.briefing !== undefined &&
+    (typeof inline.briefing !== "string" || inline.briefing.length === 0)
+  ) {
+    throw new ToolError("invalid-arguments", 'role_inline.briefing must be a non-empty string');
+  }
+  if (inline.dod !== undefined) {
+    const probe = { dod: inline.dod };
+    if (optStrArray(probe, "dod") === undefined) {
+      throw new ToolError("invalid-arguments", 'role_inline.dod must be a string array');
+    }
+  }
+  if (inline.max_hops !== undefined && (typeof inline.max_hops !== "number" || !Number.isFinite(inline.max_hops))) {
+    throw new ToolError("invalid-arguments", 'role_inline.max_hops must be a number');
+  }
+  if (inline.as_judge !== undefined && typeof inline.as_judge !== "boolean") {
+    throw new ToolError("invalid-arguments", 'role_inline.as_judge must be a boolean');
+  }
+  return inline;
+}
+
 /** 一个团队实例的 handler 集（绑定到某主会话的 TEAM_HOME）。 */
 export interface Handlers {
   /** team_init：建目录结构 + agents.json 骨架 + room.lock 幂等占位。 */
   init: (args: Record<string, unknown>) => Promise<unknown>;
   /** team_spawn：登记成员 durable id 入 agents.json。 */
   spawn: (args: Record<string, unknown>) => Promise<unknown>;
+  /** team_dispatch（ADR 0015，#67）：spawn → 指派 → 派单复合原语，半事务。 */
+  dispatch: (args: Record<string, unknown>) => Promise<unknown>;
   /** team_send：定向信箱投递（可达性 = 注册表存在性，MVP auto 模式）。 */
   send: (args: Record<string, unknown>) => Promise<unknown>;
   /** team_inbox：读未读 / 认领指定信封。 */
@@ -115,6 +170,8 @@ export interface Handlers {
   stateSet: (args: Record<string, unknown>) => Promise<unknown>;
   /** team_handoff：显式交接（dod 回执核验）。 */
   handoff: (args: Record<string, unknown>) => Promise<unknown>;
+  /** team_reconcile（ADR 0015）：对账全量视图 / scope=audit 旁路 report-only。 */
+  reconcile: (args: Record<string, unknown>) => Promise<unknown>;
 }
 
 export function createHandlers(teamHome: string, sessionId: string): Handlers {
@@ -219,7 +276,8 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
         // 场景 tiers[0].prompt；快照增补 playbook_digest 审计字段。
         const loaded = await loadTemplate(scenarioDir, scenarioSource);
         const playbook = loadTier0Playbook(PACKAGE_ROOT);
-        await writeJsonAtomic(l.teamYaml, instantiateSnapshot(loaded, playbook.digest));
+        // 工作区持久化（ADR 0015）：audit 扫描根的唯一合法来源（不接受调用方传参）。
+        await writeJsonAtomic(l.teamYaml, instantiateSnapshot(loaded, playbook.digest, projectRoot));
         await appendEvent("system", "team/init", { instance_note: args.instance_note ?? null, lock: outcome });
         const tier0PromptPath = (loaded.template.tiers as Array<{ prompt?: string }>)[0]?.prompt ?? "";
         const scenarioPrompt = loaded.prompts[tier0PromptPath] ?? "";
@@ -229,7 +287,9 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
           home: l.teamHome,
           scenario,
           source: scenarioSource,
-          tier0_prompt: assembleTier0Prompt(playbook, scenarioPrompt),
+          // ADR 0015 决策 3：tier0_prompt 尾部追加「框架工具面自述」保留段
+          //（仅 team_* 自述 + 盲区声明；appendToolManifest 保证不双份）。
+          tier0_prompt: appendToolManifest(assembleTier0Prompt(playbook, scenarioPrompt)),
           playbook_digest: playbook.digest,
         };
       } catch (error) {
@@ -255,6 +315,104 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
         });
         await appendEvent("system", "team/spawn", { member, durable_id: durableId, role, tier });
         return { ok: true, member, durable_id: durableId };
+      } catch (error) {
+        wrap(error);
+      }
+    },
+
+    async dispatch(args) {
+      try {
+        const member = reqStr(args, "member");
+        const durableId = reqStr(args, "durable_id");
+        const role = reqStr(args, "role");
+        const tier = reqNum(args, "tier");
+        const parent = optStr(args, "parent");
+        const taskId = reqStr(args, "task_id");
+        const from = optStr(args, "from") ?? "root";
+        const provider = optStr(args, "provider");
+        const model = optStr(args, "model");
+        const inline = optRoleInline(args);
+        const expectRev = optNum(args, "expect_rev");
+
+        // 前置校验（无副作用，不参与半事务）：任务必须在场——账本先行约定。
+        const task = await led().get(taskId);
+        if (task === undefined) {
+          throw new ToolError("task-not-found", `task ${taskId} does not exist`);
+        }
+
+        // 半事务执行：任一步失败即停，已完成步骤随错误留痕（ADR 0015）。
+        const completed: string[] = [];
+        try {
+          // step 1: 注册（幂等 upsert，与 team_spawn 同一落账函数）。
+          await ensureDir(join(l.mailboxDir, member));
+          await reg().upsertMember({
+            member,
+            durableId,
+            tier,
+            status: "spawned",
+            lastSeen: Date.now(),
+          });
+          await appendEvent("system", "team/spawn", {
+            member,
+            durable_id: durableId,
+            role,
+            tier,
+            ...(parent !== undefined ? { parent } : {}),
+            ...(provider !== undefined ? { provider } : {}),
+            ...(model !== undefined ? { model } : {}),
+            ...(inline !== undefined ? { role_inline: inline } : {}),
+          });
+          completed.push("spawn");
+          // step 2: 指派（乐观锁透传，防并发误派）。
+          const updated = await led().update(
+            taskId,
+            { assignee: member },
+            { ...(expectRev !== undefined ? { expectRev } : {}) },
+          );
+          await appendEvent(member, "task/update", {
+            task_id: taskId,
+            status: updated.status,
+            rev: updated.rev,
+          });
+          completed.push("assign");
+          // step 3: 派单信封（role_inline 与模型档位随信封投递给成员）。
+          const envelopeId = await deliver(teamHome, member, {
+            from,
+            type: "task-assign",
+            body: {
+              task_id: taskId,
+              title: task.title,
+              room: task.room,
+              dod: task.dod,
+              role_inline: inline ?? null,
+              provider: provider ?? null,
+              model: model ?? null,
+            },
+          });
+          await appendEvent(from, "mailbox/deliver", {
+            to: member,
+            envelope_id: envelopeId,
+            msg_type: "task-assign",
+          });
+          completed.push("send");
+          return {
+            ok: true,
+            member,
+            durable_id: durableId,
+            task_id: taskId,
+            envelope_id: envelopeId,
+            steps: completed,
+          };
+        } catch (error) {
+          const e = error as { code?: string; message?: string };
+          // 已知稳定错误码原样透传（可路由），其余归并为 dispatch-partial；
+          // 两种形态都携带已完成步骤，供主控决定续跑或回滚。
+          const code = e.code ?? "dispatch-partial";
+          throw new ToolError(
+            code,
+            `dispatch stopped after [${completed.join(", ") || "none"}]: ${e.message ?? String(error)}`,
+          );
+        }
       } catch (error) {
         wrap(error);
       }
@@ -439,5 +597,106 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
         wrap(error);
       }
     },
+    async reconcile(args) {
+      try {
+        const scope = optStr(args, "scope") ?? "overview";
+        if (scope !== "overview" && scope !== "audit") {
+          throw new ToolError("invalid-arguments", 'field "scope" must be "overview" or "audit"');
+        }
+
+        // 实例快照摘要（team.yaml 在场性 = 已初始化判定，与 HTTP status 端点一致）。
+        let snapshot: Record<string, unknown> | null = null;
+        if (existsSync(l.teamYaml)) {
+          try {
+            snapshot = JSON.parse(readFileSync(l.teamYaml, "utf8")) as Record<string, unknown>;
+          } catch {
+            snapshot = null; // 快照损坏：按未摘要化处理，不阻断账本/注册表对账
+          }
+        }
+
+        const { tasks } = await led().list();
+        const registry = await reg().read();
+        const members = Object.values(registry.members ?? {});
+
+        // 成员账本对照：assignee 视角聚合；存活列诚实标注框架不可见（V3）。
+        const byAssignee = new Map<string, string[]>();
+        for (const t of tasks) {
+          if (t.assignee === undefined) continue;
+          byAssignee.set(t.assignee, [...(byAssignee.get(t.assignee) ?? []), t.id]);
+        }
+        const memberLedger = members.map((m) => ({
+          member: m.member,
+          durable_id: m.durableId,
+          tier: m.tier,
+          status: m.status,
+          liveness: "framework-invisible",
+          assigned_task_ids: byAssignee.get(m.member) ?? [],
+        }));
+        // 悬空态检测：账本指派了、但注册表无此成员。
+        const registeredNames = new Set(members.map((m) => m.member));
+        const dangling_assignees = [...byAssignee.keys()].filter((a) => !registeredNames.has(a));
+
+        // 任务账本快照：状态分布 + 明细。
+        const statusCounts: Record<string, number> = {};
+        for (const t of tasks) statusCounts[t.status] = (statusCounts[t.status] ?? 0) + 1;
+        const taskDetails = tasks.map((t) => ({
+          id: t.id,
+          title: t.title,
+          room: t.room,
+          status: t.status,
+          assignee: t.assignee ?? null,
+          rounds: t.rounds,
+          max_rounds: t.maxRounds ?? null,
+          touched_paths: t.touched,
+        }));
+
+        // 事件游标：逐房间独立打开日志读末笔 seq（不经单写者缓存的 log()）。
+        const eventCursors: Array<{ room: string; seq: number }> = [];
+        if (existsSync(l.roomsDir)) {
+          for (const room of readdirSync(l.roomsDir)) {
+            try {
+              const el = new EventLog(join(l.roomsDir, room, "events.jsonl"));
+              await el.init();
+              const { events } = await el.read();
+              const last = events[events.length - 1];
+              eventCursors.push({ room, seq: last?.seq ?? 0 });
+            } catch {
+              // 房间目录存在但事件文件不可读：游标记 0
+              eventCursors.push({ room, seq: 0 });
+            }
+          }
+        }
+
+        const overview = {
+          initialized: snapshot !== null,
+          snapshot: snapshot && {
+            name: snapshot.name ?? null,
+            source: snapshot.source ?? null,
+            digest: snapshot.digest ?? null,
+            playbook_digest: snapshot.playbook_digest ?? null,
+            instantiated_at: snapshot.instantiated_at ?? null,
+          },
+          members: memberLedger,
+          dangling_assignees,
+          task_status_counts: statusCounts,
+          tasks: taskDetails,
+          event_cursors: eventCursors,
+          goal_binding: "framework-invisible; run get_goal to verify",
+          tool_manifest_pointer: "see framework tool manifest section of the boot message",
+        };
+
+        if (scope === "overview") return { ok: true, scope, ...overview };
+
+        // scope=audit：旁路 report-only。扫描根只取快照持久化的工作区。
+        const workspace =
+          snapshot && typeof snapshot.workspace === "string" ? snapshot.workspace : null;
+        const registeredPaths = tasks.flatMap((t) => t.touched ?? []);
+        const report = auditWorkspace(workspace, registeredPaths);
+        return { ok: true, scope, overview, audit: report };
+      } catch (error) {
+        wrap(error);
+      }
+    },
+
   };
 }

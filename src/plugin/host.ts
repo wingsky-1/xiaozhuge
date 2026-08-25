@@ -92,6 +92,7 @@ export function apply(ctx: {
         const args = (rawArgs ?? {}) as Record<string, unknown>;
         const HANDLER_BY_TOOL: Record<string, string> = {
           team_spawn: "spawn",
+          team_dispatch: "dispatch",
           team_send: "send",
           team_inbox: "inbox",
           team_ack: "ack",
@@ -100,6 +101,7 @@ export function apply(ctx: {
           team_task_list: "taskList",
           team_state_get: "stateGet",
           team_state_set: "stateSet",
+          team_reconcile: "reconcile",
           team_handoff: "handoff",
         };
         const handlerKey = HANDLER_BY_TOOL[toolName] ?? toolName.replace(/^team_/, "");
@@ -113,7 +115,6 @@ export function apply(ctx: {
         }
         const value = await handler(args);
         return { ok: true, ...(value as object) };
-        return { ok: true, ...(value as object) };
       },
     };
     disposers.push(ctx.tools.register(definition));
@@ -125,6 +126,12 @@ export function apply(ctx: {
     "Register a spawned subagent into the team registry with its durable subagent id.",
     schemas.spawn,
     (args, agent) => handlersFor(agent).spawn(args),
+  );
+  define(
+    "team_dispatch",
+    "Composite dispatch primitive: register the member, assign the task, deliver the assignment envelope in one call; stops at first failure and reports completed steps.",
+    schemas.dispatch,
+    (args, agent) => handlersFor(agent).dispatch(args),
   );
   define(
     "team_send",
@@ -173,6 +180,12 @@ export function apply(ctx: {
     "Write your blackboard shard; status must be running|blocked|done.",
     schemas.stateSet,
     (args, agent) => handlersFor(agent).stateSet(args),
+  );
+  define(
+    "team_reconcile",
+    "One-call reconciliation view: snapshot summary, member/ledger cross-view (liveness is framework-invisible), task snapshot, event cursors; scope=audit additionally diffs ledger touched_paths against the recorded workspace tree, metadata only.",
+    schemas.reconcile,
+    (args, agent) => handlersFor(agent).reconcile(args),
   );
   define(
     "team_handoff",

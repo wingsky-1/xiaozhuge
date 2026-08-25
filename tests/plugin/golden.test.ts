@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { createHandlers, type Handlers } from "../../src/plugin/handlers.js";
 import { EventLog } from "../../src/runtime/kernel/event-log.js";
 import { layout } from "../../src/runtime/kernel/paths.js";
+import { readUnread } from "../../src/runtime/collab/mailbox.js";
 
 let home: string;
 let handlers: Handlers;
@@ -188,5 +189,79 @@ describe("golden 场景四：参数校验负矩阵", () => {
         touched_paths: ["src/a.ts"],
       }),
     ).rejects.toMatchObject({ code: "mutex-conflict" });
+  });
+});
+
+describe("golden 场景五：team_dispatch 复合派发（ADR 0015）", () => {
+  it("dispatch 一步完成 spawn→assign→send，事件流与信封逐项核对", async () => {
+    await handlers.init({});
+    const created = (await handlers.taskCreate({ title: "派发 X", room: "root" })) as {
+      task_id: string;
+    };
+    const result = (await handlers.dispatch({
+      member: "coder",
+      durable_id: "dur-coder",
+      role: "coder",
+      tier: 1,
+      task_id: created.task_id,
+      model: "strong-model",
+      role_inline: { briefing: "按 dod 执行" },
+    })) as { ok: boolean; steps: string[]; envelope_id: string };
+    expect(result.ok).toBe(true);
+    expect(result.steps).toEqual(["spawn", "assign", "send"]);
+
+    // 成员账本对照：注册表在场 + 任务已指派。
+    const list = (await handlers.taskList({})) as {
+      tasks: Array<{ id: string; assignee?: string }>;
+    };
+    expect(list.tasks[0]?.assignee).toBe("coder");
+
+    // 信封：任务与 inline 定义、模型档位随单投递。
+    const unread = await readUnread(home, "coder");
+    expect(unread).toHaveLength(1);
+    expect(unread[0]).toMatchObject({
+      type: "task-assign",
+      body: {
+        task_id: created.task_id,
+        title: "派发 X",
+        model: "strong-model",
+        role_inline: { briefing: "按 dod 执行" },
+      },
+    });
+    expect(unread[0]!.id).toBe(result.envelope_id);
+
+    // 事件流：三步各一笔。
+    const evs = await readEvents();
+    expect(evs.map((e) => e.type)).toEqual([
+      "team/init",
+      "task/create",
+      "team/spawn",
+      "task/update",
+      "mailbox/deliver",
+    ]);
+  });
+
+  it("半事务：rev 冲突停在 assign 前，spawn 已留痕", async () => {
+    await handlers.init({});
+    const created = (await handlers.taskCreate({ title: "A", room: "root" })) as {
+      task_id: string;
+    };
+    await handlers.taskUpdate({ task_id: created.task_id, rounds: 1 });
+    await expect(
+      handlers.dispatch({
+        member: "qa",
+        durable_id: "dur-qa",
+        role: "qa",
+        tier: 1,
+        task_id: created.task_id,
+        expect_rev: 1,
+      }),
+    ).rejects.toMatchObject({ code: "rev-conflict" });
+    const evs = await readEvents();
+    expect(evs.map((e) => e.type)).toEqual(["team/init", "task/create", "task/update", "team/spawn"]);
+    const list = (await handlers.taskList({})) as {
+      tasks: Array<{ id: string; assignee?: string }>;
+    };
+    expect(list.tasks[0]?.assignee).toBeUndefined();
   });
 });
