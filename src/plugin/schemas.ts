@@ -40,6 +40,41 @@ export const schemas = {
       additionalProperties: false,
     },
   },
+  // team_dispatch（ADR 0015，#67）：注册 → 指派 → 派单的复合原语，
+  // 半事务语义——任一步失败即停，错误消息携带已完成步骤。
+  dispatch: {
+    parameters: {
+      type: "object",
+      properties: {
+        member: str("Logical member name (role id), e.g. 'coder'."),
+        durable_id: str("Durable subagent id returned by the subagent tool."),
+        role: str("Role id; with role_inline this is the inline role's own name."),
+        tier: { type: "number", description: "Hierarchy tier (0 = Tier-0 master)." },
+        task_id: str("Task id returned by team_task_create; ledger-first, created before dispatch."),
+        parent: optStr("Direct parent member name; omit for root members."),
+        from: optStr("Sender member name for the assignment envelope (default 'root')."),
+        provider: optStr("Per-role LLM provider override; omit to inherit the session default."),
+        model: optStr("Per-role model override; omit to inherit the session default."),
+        role_inline: {
+          type: "object",
+          description:
+            "Inline role definition carried on the assignment envelope, not persisted (" +
+            "prompt / briefing strings, dod string array, max_hops number, as_judge boolean).",
+          properties: {
+            prompt: { type: "string" },
+            briefing: { type: "string" },
+            dod: { type: "array", items: { type: "string" } },
+            max_hops: { type: "number" },
+            as_judge: { type: "boolean" },
+          },
+          additionalProperties: false,
+        },
+        expect_rev: num("Optimistic concurrency: expected ledger rev before assignment."),
+      },
+      required: ["member", "durable_id", "role", "tier", "task_id"],
+      additionalProperties: false,
+    },
+  },
   inbox: {
     parameters: {
       type: "object",

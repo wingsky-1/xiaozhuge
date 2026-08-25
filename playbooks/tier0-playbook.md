@@ -67,8 +67,11 @@
 ### 步骤 ④ 并发池内派发
 
 - 数出当前 `running` 任务数（R1 上限内还有多少空位）。
-- 按 `queued` 顺序取任务补位：`team_task_update(status=running, assignee=<角色>)` +
-  `team_send` 派单 + `send_message` 唤醒该角色（仅直接子可唤醒）。
+- 按 `queued` 顺序取任务补位：优先 `team_dispatch`
+  （注册 → 指派 → 派单一步完成；中途失败即停并在错误消息中报告已完成步骤，
+  据此决定续跑或回滚，禁止盲目重放整段）；等效散装三步
+  `team_spawn` + `team_task_update(assignee)` + `team_send` 仍可使用。
+- 派单后 `send_message` 唤醒该角色（仅直接子可唤醒）。
 - 无空位则本轮不派发。
 
 ### 步骤 ⑤ 全 done 收圈
