@@ -589,6 +589,9 @@ const closeButtonStyle: React.CSSProperties = {
   cursor: "pointer",
   color: "var(--dsw-alias-label-tertiary, #6b7280)",
   padding: "2px 6px",
+  // 触控目标下限（WCAG 2.5.8 最小 24×24）。
+  minWidth: 24,
+  minHeight: 24,
 };
 
 function badgeStyle(tone: NodeTone): React.CSSProperties {
