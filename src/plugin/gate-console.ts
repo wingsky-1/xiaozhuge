@@ -1,16 +1,19 @@
 /**
  * Gate Console 与 resolve HTTP 面（P5，按 #2/#3/#9 修正口径）。
  *
- * 安全语义 = MVP 最小集（#2 挂起决定）：
- * - POST 一律要求同源 Origin（CSRF 补丁定性）；缺失/异源拒绝并留审计；
- * - 每次 resolve 写字段级审计事件（who/when/gate id/UA 指纹/结果）入实例根
- *   事件流；README 如实声明「防误触 + 审计追责，不防本机进程」。
- * 反自批中间件 / nonce 下发 / Sec-Fetch-Site 硬校验悬置待安全专项。
+ * 安全语义 = MVP 最小集（#2 挂起决定，#2 评审修订后收口）：
+ * - POST 一律要求同源 Origin（CSRF 补丁定性）+ Sec-Fetch-Site 断言
+ *   （存在且非 same-origin 即拒；缺失放行兼容老设备）——双头互证为跨站
+ *   防御纵深冗余，**不防**具备 HTTP 能力的 agent 自批（残余风险接受 +
+ *   审计检测：UA 指纹 + SFS 归类 + 远端 IP 入审计事件）；
+ * - Console 渲染全量转义 + 每请求 nonce CSP（防放置恶意 gate 触发同源 XSS）。
+ * 反自批中间件 / human-present challenge 待 Gate 能力重设计（#53）。
  *
  * Console 页面由 host 直出内联 HTML（零构建）：直读 gates/*.json 渲染
  * pending 区块（ADR 0003/#3 最终决策），批准后状态自然刷新。
  */
 import { readdir } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { WebRoute } from "@deepseek-ai/dsh-host-webserver";
 import { join } from "node:path";
@@ -59,6 +62,25 @@ function uaFingerprint(req: IncomingMessage): string {
   return `len${ua.length}:${ua.slice(-6)}`;
 }
 
+/**
+ * Fetch Metadata 断言（#2 P0，真值表语义固化）：
+ * - Sec-Fetch-Site 存在且 ≠ same-origin → 拒（明确跨站信号）；
+ * - 头缺失（老内核/非浏览器客户端）→ 放行——兼容 iOS < 16.4 等无此头设备；
+ *   负例放行是刻意选择，勿改为缺失即拒（会砸掉老设备合法用户）。
+ * 定性：跨站防御的纵深冗余（与 Origin 双头互证），**不防**具备 HTTP 能力的
+ * agent 自批——自批属残余风险接受 + 审计检测措施（ADR 0010）。
+ */
+export function fetchSiteAllowed(req: IncomingMessage): boolean {
+  const site = req.headers["sec-fetch-site"];
+  return site === undefined || site === "same-origin";
+}
+
+/** SFS 取值归类（审计标记用）。 */
+function sfsMarker(req: IncomingMessage): string {
+  const site = req.headers["sec-fetch-site"];
+  return site === undefined ? "absent-legacy" : String(site);
+}
+
 export function makeGateRoutes(deps: GateRouteDeps): WebRoute[] {
   return [
     {
@@ -78,6 +100,15 @@ export function makeGateRoutes(deps: GateRouteDeps): WebRoute[] {
         }
         // POST open gate（Tier-0 工具面之外的补充通道，供测试/人工放置）
         if (req.method === "POST") {
+          // 安全最小集：同源 Origin + Fetch Metadata 断言（双头互证）。
+          if (!originAllowed(req)) {
+            writeJson(res, 403, { error: "forbidden: missing or cross-origin Origin header" });
+            return;
+          }
+          if (!fetchSiteAllowed(req)) {
+            writeJson(res, 403, { error: "forbidden: cross-site Sec-Fetch-Site" });
+            return;
+          }
           try {
             const body = JSON.parse(await readBody(req)) as { id?: string; reason?: string; requestedBy?: string };
             if (typeof body.id !== "string" || body.id.length === 0) {
@@ -107,9 +138,14 @@ export function makeGateRoutes(deps: GateRouteDeps): WebRoute[] {
           writeJson(res, 405, { error: "method not allowed" });
           return;
         }
-        // 安全最小集：同源 Origin 校验（CSRF 补丁）。
+        // 安全最小集：同源 Origin + Fetch Metadata 断言（双头互证，CSRF 补丁）。
+        // 定性：不防具备 HTTP 能力的 agent 自批（残余风险接受 + 审计检测）。
         if (!originAllowed(req)) {
           writeJson(res, 403, { error: "forbidden: missing or cross-origin Origin header" });
+          return;
+        }
+        if (!fetchSiteAllowed(req)) {
+          writeJson(res, 403, { error: "forbidden: cross-site Sec-Fetch-Site" });
           return;
         }
         try {
@@ -129,7 +165,7 @@ export function makeGateRoutes(deps: GateRouteDeps): WebRoute[] {
           await ensureDir(l.roomsDir);
           await ensureDir(join(l.roomsDir, "root"));
           const gate = await resolveGate(l.gatesDir, body.gate_id, body.decision, body.by ?? "human-web");
-          // 字段级审计事件（who/when/gate id/UA 指纹/结果）
+          // 字段级审计事件（who/when/gate id/UA 指纹/SFS 归类/远端 IP/结果）
           const log = new EventLog(join(l.roomsDir, "root", "events.jsonl"));
           await log.init();
           await log.append({
@@ -141,6 +177,8 @@ export function makeGateRoutes(deps: GateRouteDeps): WebRoute[] {
               decision: body.decision,
               by: gate.resolvedBy,
               ua_fingerprint: uaFingerprint(req),
+              sec_fetch_site: sfsMarker(req),
+              remote_ip: req.socket.remoteAddress ?? null,
               resolved_at: gate.resolvedAt ?? null,
             },
           });
@@ -153,15 +191,19 @@ export function makeGateRoutes(deps: GateRouteDeps): WebRoute[] {
   ];
 }
 
-/** Console 页面（内联 HTML，直读 API 渲染；375px 可用 + 双主题）。 */
-export function consolePageHtml(): string {
+/**
+ * Console 页面（内联 HTML，直读 API 渲染；375px 可用 + 双主题）。
+ * #2 P0 加固：全部插值经 esc() 转义——gate 内容是外部输入，防同源 XSS；
+ * 事件委托替代内联 onclick；每请求 nonce CSP 见 makeConsoleRoute。
+ */
+export function consolePageHtml(nonce: string): string {
   return `<!doctype html>
 <html lang="zh">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>小诸葛 Gate Console</title>
-<style>
+<style nonce="${nonce}">
   :root { color-scheme: light dark; }
   body { font-family: system-ui, sans-serif; margin: 0; padding: 12px; background: #f6f7f9; color: #1a1a1a; }
   @media (prefers-color-scheme: dark) { body { background: #14161a; color: #e8e8ea; } .card { background: #1e2128 !important; border-color: #33383f !important; } }
@@ -182,33 +224,36 @@ export function consolePageHtml(): string {
 </head>
 <body>
 <h1>Gate 待办</h1>
-<div class="hint">主会话：<input id="session" placeholder="session id"> <button onclick="load()">刷新</button></div>
+<div class="hint">主会话：<input id="session" placeholder="session id"> <button id="refresh">刷新</button></div>
 <div id="list"><div class="empty">填入主会话 id 后刷新。</div></div>
-<script>
+<script nonce="${nonce}">
 const $ = (s) => document.querySelector(s);
+// 全部插值转义：gate 内容是外部输入，防同源 XSS（#2 P0）
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 async function load() {
   const session = $("#session").value.trim();
   if (!session) return;
   const r = await fetch(\`/api/xiaozhuge/gates?session=\${encodeURIComponent(session)}\`);
   const data = await r.json();
-  render(session, data.gates ?? []);
+  render(data.gates ?? []);
 }
-function render(session, gates) {
+function render(gates) {
   const el = $("#list");
   if (gates.length === 0) { el.innerHTML = '<div class="empty">暂无 gate。</div>'; return; }
   el.innerHTML = gates.map((g) => \`
-    <div class="card \${g.status}">
-      <div class="row"><code>\${g.id}</code><strong>\${g.status}</strong></div>
-      <div>\${g.reason ?? ""}</div>
-      <div class="hint">by \${g.requestedBy ?? "?"}</div>
+    <div class="card \${esc(g.status)}">
+      <div class="row"><code>\${esc(g.id)}</code><strong>\${esc(g.status)}</strong></div>
+      <div>\${esc(g.reason)}</div>
+      <div class="hint">by \${esc(g.requestedBy)}</div>
       \${g.status === "pending" ? \`
       <div class="row">
-        <button class="approve" onclick="resolve('\${session}','\${g.id}','approved')">批准</button>
-        <button class="deny" onclick="resolve('\${session}','\${g.id}','denied')">驳回</button>
+        <button class="approve" data-act="approved" data-gid="\${esc(g.id)}">批准</button>
+        <button class="deny" data-act="denied" data-gid="\${esc(g.id)}">驳回</button>
       </div>\` : ""}
     </div>\`).join("");
 }
-async function resolve(session, gateId, decision) {
+async function resolve(gateId, decision) {
+  const session = $("#session").value.trim();
   const r = await fetch("/api/xiaozhuge/gates/resolve", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -217,19 +262,31 @@ async function resolve(session, gateId, decision) {
   if (!r.ok) alert((await r.json()).error ?? "failed");
   await load();
 }
+$("#refresh").addEventListener("click", load);
+$("#list").addEventListener("click", (ev) => {
+  const btn = ev.target.closest("button[data-act]");
+  if (btn) void resolve(btn.dataset.gid, btn.dataset.act);
+});
 </script>
 </body>
 </html>`;
 }
 
-/** Console 页面路由（GET 直出）。 */
+/** Console 页面路由（GET 直出；每请求随机 nonce CSP，#2 P0）。 */
 export function makeConsoleRoute(): WebRoute {
   return {
     kind: "exact",
     path: ROUTES_CONSOLE,
     handler: async (_req, res) => {
-      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-      res.end(consolePageHtml());
+      const nonce = randomUUID();
+      const csp =
+        `default-src 'self'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; ` +
+        `connect-src 'self'; base-uri 'none'; frame-ancestors 'none'`;
+      res.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+        "content-security-policy": csp,
+      });
+      res.end(consolePageHtml(nonce));
     },
   };
 }

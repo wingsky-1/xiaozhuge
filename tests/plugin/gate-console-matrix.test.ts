@@ -86,7 +86,7 @@ describe("gate-console 路由穷举", () => {
   it("POST gates 缺 id → 400 id required", async () => {
     const { res, out } = capture();
     await gatesRoute.handler(
-      mockReq({ method: "POST", url: "/api/xiaozhuge/gates?session=s", body: "{}" }),
+      mockReq({ method: "POST", url: "/api/xiaozhuge/gates?session=s", headers: { origin: "http://h", host: "h" }, body: "{}" }),
       res as never,
     );
     expect(out().status).toBe(400);
@@ -99,7 +99,7 @@ describe("gate-console 路由穷举", () => {
     const r1 = r1cap.res;
     const out1 = r1cap.out;
     await gatesRoute.handler(
-      mockReq({ method: "POST", url: "/api/xiaozhuge/gates?session=dup", body: '{"id":"g","reason":"","requestedBy":"m"}' }),
+      mockReq({ method: "POST", url: "/api/xiaozhuge/gates?session=dup", headers: { origin: "http://h", host: "h" }, body: '{"id":"g","reason":"","requestedBy":"m"}' }),
       r1 as never,
     );
     expect(out1().status).toBe(200);
@@ -107,7 +107,7 @@ describe("gate-console 路由穷举", () => {
     const r2 = r2cap.res;
     const out2 = r2cap.out;
     await gatesRoute.handler(
-      mockReq({ method: "POST", url: "/api/xiaozhuge/gates?session=dup", body: '{"id":"g","reason":"","requestedBy":"m"}' }),
+      mockReq({ method: "POST", url: "/api/xiaozhuge/gates?session=dup", headers: { origin: "http://h", host: "h" }, body: '{"id":"g","reason":"","requestedBy":"m"}' }),
       r2 as never,
     );
     expect(out2().status).toBe(409);
