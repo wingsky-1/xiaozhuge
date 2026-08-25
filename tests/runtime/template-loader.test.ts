@@ -4,11 +4,20 @@
  * 对损坏模板的拒绝语义与来源标记注入。
  */
 import { describe, expect, it, beforeEach } from "vitest";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { builtinScenarioDir, instantiateSnapshot, loadTemplate } from "../../src/index.js";
+import {
+  builtinScenarioDir,
+  instantiateSnapshot,
+  loadTemplate,
+  listScenarios,
+  resolveScenarioDir,
+  resolveBuiltinScenarioDir,
+  listBuiltinScenarios,
+} from "../../src/index.js";
 import { fileURLToPath } from "node:url";
+import type { ScenarioRoot } from "../../src/index.js";
 
 const REPO_ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..");
 const BUILTIN_DIR = join(REPO_ROOT, "templates", "oss-maintenance");
@@ -193,5 +202,218 @@ describe("包内置 research-report 模板（单层，ADR 0008）", () => {
     for (const role of snapshot.roles) {
       expect(role.prompt_inlined).toBeTruthy();
     }
+  });
+});
+
+describe("三级来源解析（ADR 0013）", () => {
+  /** 构造一个可用的场景目录（team.yaml + roles + prompts 最小合法集）。 */
+  function makeScenario(root: string, name: string): void {
+    const dir = join(root, name);
+    mkdirSync(join(dir, "roles"), { recursive: true });
+    mkdirSync(join(dir, "prompts"), { recursive: true });
+    writeFileSync(join(dir, "prompts", "master.md"), `# ${name} master\n`);
+    writeFileSync(join(dir, "prompts", "worker.md"), `# ${name} worker\n`);
+    writeFileSync(
+      join(dir, "team.yaml"),
+      JSON.stringify({
+        name,
+        version: 1,
+        tiers: [
+          { id: "master", prompt: "./prompts/master.md" },
+          { id: "worker", prompt: "./prompts/worker.md" },
+        ],
+        roles: ["master", "worker", "qa"],
+      }),
+    );
+    writeFileSync(
+      join(dir, "roles", "master.role.yaml"),
+      JSON.stringify({ id: "master", prompt: "./prompts/master.md", dod: ["d"] }),
+    );
+    writeFileSync(
+      join(dir, "roles", "worker.role.yaml"),
+      JSON.stringify({ id: "worker", prompt: "./prompts/worker.md", dod: ["d"] }),
+    );
+    writeFileSync(
+      join(dir, "roles", "qa.role.yaml"),
+      JSON.stringify({ id: "qa", prompt: "./prompts/worker.md", as_judge: true, dod: ["d"] }),
+    );
+  }
+
+  let userRoot: string;
+  let projRoot: string;
+  let roots: ScenarioRoot[];
+  beforeEach(() => {
+    userRoot = join(scratch, "user");
+    projRoot = join(scratch, "project");
+    mkdirSync(userRoot, { recursive: true });
+    mkdirSync(projRoot, { recursive: true });
+    roots = [
+      { source: "builtin", dir: join(REPO_ROOT, "templates") },
+      { source: "user", dir: userRoot },
+      { source: "project", dir: projRoot },
+    ];
+  });
+
+  it("枚举：三级实时扫描、同名多行并存、builtin→user→project 固定序", () => {
+    makeScenario(userRoot, "alpha");
+    makeScenario(userRoot, "oss-maintenance"); // 与 builtin 同名
+    makeScenario(projRoot, "oss-maintenance"); // 三级同名
+    makeScenario(projRoot, "zeta");
+    // 非目录/无 team.yaml 不入列
+    mkdirSync(join(userRoot, "bad-dir"), { recursive: true });
+    writeFileSync(join(userRoot, "file.txt"), "x");
+
+    const entries = listScenarios(roots);
+    const oss = entries.filter((e) => e.name === "oss-maintenance").map((e) => e.source);
+    expect(oss).toEqual(["builtin", "user", "project"]);
+    const names = entries.map((e) => `${e.source}:${e.name}`);
+    // 固定序：builtin 层两场景前、user 层次之、project 层最后；同源内字典序
+    expect(names).toEqual([
+      "builtin:oss-maintenance",
+      "builtin:research-report",
+      "user:alpha",
+      "user:oss-maintenance",
+      "project:oss-maintenance",
+      "project:zeta",
+    ]);
+  });
+
+  it("唯一场景：resolveScenarioDir 直接命中，标记正确来源", () => {
+    makeScenario(userRoot, "alpha");
+    const { dir, source } = resolveScenarioDir(roots, "alpha");
+    expect(source).toBe("user");
+    expect(dir).toBe(join(userRoot, "alpha"));
+  });
+
+  it("同名未指定 source → ambiguous-scenario（绝不静默择一）", () => {
+    makeScenario(userRoot, "dup");
+    makeScenario(projRoot, "dup");
+    expect(() => resolveScenarioDir(roots, "dup")).toThrow(/ambiguous-scenario: "dup"/);
+  });
+
+  it("指定 source 消歧：命中该层；该层缺失 → unknown-scenario", () => {
+    makeScenario(userRoot, "dup");
+    makeScenario(projRoot, "dup");
+    const userHit = resolveScenarioDir(roots, "dup", "user");
+    expect(userHit.source).toBe("user");
+    const projHit = resolveScenarioDir(roots, "dup", "project");
+    expect(projHit.source).toBe("project");
+    expect(() => resolveScenarioDir(roots, "dup", "builtin")).toThrow(/unknown-scenario/);
+  });
+
+  it("场景名白名单三级统一执行：非法名即拒（含穿越形态）", () => {
+    makeScenario(userRoot, "ok");
+    for (const bad of ["../escape", "a/b", "OSS", "a b", "a;b"]) {
+      expect(() => resolveScenarioDir(roots, bad), bad).toThrow(/unknown-scenario/);
+    }
+  });
+
+  it("不存在的场景 → unknown-scenario", () => {
+    expect(() => resolveScenarioDir(roots, "ghost")).toThrow(/unknown-scenario/);
+  });
+
+  it("prompt 相对路径穿越场景目录即拒（realpath 收敛）", async () => {
+    const dir = join(userRoot, "escape");
+    mkdirSync(join(dir, "roles"), { recursive: true });
+    // team.yaml 引用 ../secret.md（越界）；secret.md 存在于 userRoot 下
+    writeFileSync(join(userRoot, "secret.md"), "TOP SECRET");
+    writeFileSync(
+      join(dir, "team.yaml"),
+      JSON.stringify({
+        name: "escape",
+        version: 1,
+        tiers: [{ id: "master", prompt: "../secret.md" }],
+        roles: ["master", "qa"],
+      }),
+    );
+    writeFileSync(
+      join(dir, "roles", "master.role.yaml"),
+      JSON.stringify({ id: "master", prompt: "../secret.md", dod: ["d"] }),
+    );
+    writeFileSync(
+      join(dir, "roles", "qa.role.yaml"),
+      JSON.stringify({ id: "qa", prompt: "../secret.md", as_judge: true, dod: ["d"] }),
+    );
+    await expect(loadTemplate(dir, "user")).rejects.toThrow(/reference.*escape|prompt path escapes/);
+  });
+
+  it("prompt symlink 逃逸场景目录即拒", async () => {
+    const dir = join(userRoot, "symlink-escape");
+    mkdirSync(join(dir, "roles"), { recursive: true });
+    mkdirSync(join(dir, "prompts"), { recursive: true });
+    // 外部机密文件
+    writeFileSync(join(userRoot, "external-secret.md"), "SECRET");
+    // prompts/master.md 是指向外部文件的 symlink
+    symlinkSync(join(userRoot, "external-secret.md"), join(dir, "prompts", "master.md"));
+    writeFileSync(
+      join(dir, "team.yaml"),
+      JSON.stringify({
+        name: "symlink-escape",
+        version: 1,
+        tiers: [{ id: "master", prompt: "./prompts/master.md" }],
+        roles: ["master", "qa"],
+      }),
+    );
+    writeFileSync(
+      join(dir, "roles", "master.role.yaml"),
+      JSON.stringify({ id: "master", prompt: "./prompts/master.md", dod: ["d"] }),
+    );
+    writeFileSync(
+      join(dir, "roles", "qa.role.yaml"),
+      JSON.stringify({ id: "qa", prompt: "./prompts/master.md", as_judge: true, dod: ["d"] }),
+    );
+    await expect(loadTemplate(dir, "user")).rejects.toThrow(/prompt path escapes/);
+  });
+
+  it("场景目录本身 symlink（用户 link 模板进来）允许，prompt 收敛其内", async () => {
+    // 外部真实模板目录（不含 symlink）
+    const external = join(scratch, "external-tpl");
+    mkdirSync(join(external, "roles"), { recursive: true });
+    mkdirSync(join(external, "prompts"), { recursive: true });
+    writeFileSync(join(external, "prompts", "master.md"), "# linked master\n");
+    writeFileSync(join(external, "prompts", "worker.md"), "# linked worker\n");
+    writeFileSync(
+      join(external, "team.yaml"),
+      JSON.stringify({
+        name: "linked",
+        version: 1,
+        tiers: [
+          { id: "master", prompt: "./prompts/master.md" },
+          { id: "worker", prompt: "./prompts/worker.md" },
+        ],
+        roles: ["master", "worker", "qa"],
+      }),
+    );
+    writeFileSync(
+      join(external, "roles", "master.role.yaml"),
+      JSON.stringify({ id: "master", prompt: "./prompts/master.md", dod: ["d"] }),
+    );
+    writeFileSync(
+      join(external, "roles", "worker.role.yaml"),
+      JSON.stringify({ id: "worker", prompt: "./prompts/worker.md", dod: ["d"] }),
+    );
+    writeFileSync(
+      join(external, "roles", "qa.role.yaml"),
+      JSON.stringify({ id: "qa", prompt: "./prompts/worker.md", as_judge: true, dod: ["d"] }),
+    );
+    // user 层只有 symlink 指向外部目录
+    symlinkSync(external, join(userRoot, "linked"));
+
+    const loaded = await loadTemplate(join(userRoot, "linked"), "user");
+    expect(loaded.template.name).toBe("linked");
+    expect(loaded.source).toBe("user");
+  });
+});
+
+describe("向后兼容性（resolveBuiltinScenarioDir / listBuiltinScenarios）", () => {
+  it("resolveBuiltinScenarioDir 仍可解析 builtin 场景", () => {
+    const dir = resolveBuiltinScenarioDir(REPO_ROOT, "oss-maintenance");
+    expect(dir).toBe(join(REPO_ROOT, "templates", "oss-maintenance"));
+  });
+
+  it("listBuiltinScenarios 仍可枚举 builtin 场景名", () => {
+    const names = listBuiltinScenarios(REPO_ROOT);
+    expect(names).toContain("oss-maintenance");
+    expect(names).toContain("research-report");
   });
 });

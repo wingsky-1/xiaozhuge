@@ -11,11 +11,12 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { join } from "node:path";
 import type { IndexInjection, WebRoute } from "@deepseek-ai/dsh-host-webserver";
-import { resolveTeamHome } from "../team-home.js";
+import { resolveTeamHome, userTemplatesRoot, projectTemplatesRoot } from "../team-home.js";
 import { createHandlers, PACKAGE_ROOT } from "./handlers.js";
 import { layout } from "../runtime/paths.js";
-import { listBuiltinScenarios } from "../runtime/template-loader.js";
+import { listScenarios } from "../runtime/template-loader.js";
 import { fetchSiteAllowed, originAllowed } from "./gate-console.js";
 
 /** 独立入口页路径。 */
@@ -133,8 +134,18 @@ export function makeLaunchRoutes(): WebRoute[] {
     {
       kind: "exact",
       path: "/api/xiaozhuge/team/scenarios",
-      handler: async (_req, res) => {
-        writeJson(res, 200, { scenarios: listBuiltinScenarios(PACKAGE_ROOT) });
+      handler: async (req, res) => {
+        const url = new URL(req.url ?? "/", "http://localhost");
+        const workspace = url.searchParams.get("workspace") || undefined;
+        // 三级来源根组装（project 层可选，需 workspace 参数）
+        const roots: Array<{ source: "builtin" | "user" | "project"; dir: string }> = [
+          { source: "builtin", dir: join(PACKAGE_ROOT, "templates") },
+          { source: "user", dir: userTemplatesRoot() },
+        ];
+        if (workspace) {
+          roots.push({ source: "project", dir: projectTemplatesRoot(workspace) });
+        }
+        writeJson(res, 200, { scenarios: listScenarios(roots) });
       },
     },
     {
@@ -189,22 +200,27 @@ export function makeLaunchRoutes(): WebRoute[] {
           const body = JSON.parse(await readBody(req)) as {
             session?: string;
             scenario?: string;
+            source?: string;
+            workspace?: string;
             instance_note?: string;
           };
           if (typeof body.session !== "string" || body.session.length === 0) {
             writeJson(res, 400, { error: "session required" });
             return;
           }
-          // handler 层负责 scenario 校验（unknown-scenario 稳定错误码）。
+          // handler 层负责 scenario 校验（unknown-scenario / ambiguous-scenario 稳定错误码）。
           const handlers = createHandlers(resolveTeamHome(body.session), body.session);
           const value = (await handlers.init({
             scenario: body.scenario,
+            source: body.source,
+            project_root: body.workspace,
             instance_note: body.instance_note,
           })) as Record<string, unknown>;
           writeJson(res, 200, value);
         } catch (error) {
           const e = error as { code?: string; message?: string };
-          writeJson(res, e.code === "unknown-scenario" ? 400 : 409, {
+          const status = e.code === "unknown-scenario" || e.code === "ambiguous-scenario" ? 400 : 409;
+          writeJson(res, status, {
             error: { code: e.code ?? "internal-error", message: e.message ?? String(error) },
           });
         }
@@ -281,8 +297,8 @@ async function jfetch(method, path, body) {
   const list = (await jfetch("GET", "/api/xiaozhuge/team/scenarios")).scenarios;
   for (const s of list) {
     const o = document.createElement("option");
-    o.value = s;
-    o.textContent = s;
+    o.value = s.name + "|" + s.source;
+    o.textContent = s.name + " (" + s.source + ")";
     sel.appendChild(o);
   }
 })();
@@ -302,9 +318,15 @@ $("#go").addEventListener("click", async () => {
     });
     const sessionId = sess.sessionId;
     log("session: " + sessionId);
+    const selVal = $("#scenario").value;
+    const pipe = selVal.indexOf("|");
+    const scenario = pipe >= 0 ? selVal.slice(0, pipe) : selVal;
+    const source = pipe >= 0 ? selVal.slice(pipe + 1) : undefined;
     const created = await jfetch("POST", "/api/xiaozhuge/team/create", {
       session: sessionId,
-      scenario: $("#scenario").value,
+      scenario: scenario,
+      source: source,
+      workspace: wsPath,
       instance_note: $("#note").value.trim() || null,
     });
     log("team initialized: " + created.home);

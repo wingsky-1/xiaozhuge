@@ -4,7 +4,7 @@
  * 入口页直出、注入行生成。node:http 真实监听回环端口驱动 WebRoute。
  */
 import { describe, expect, it, beforeEach } from "vitest";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { createServer } from "node:http";
@@ -22,6 +22,44 @@ beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), "xzg-launch-"));
   process.env.DSH_HOME = join(home, "dsh-home");
 });
+
+/** 构造一个可通过加载校验的最小场景模板（team.yaml + roles + prompts）。 */
+function makeScenario(root: string, name: string): void {
+  const dir = join(root, name);
+  mkdirSync(join(dir, "roles"), { recursive: true });
+  mkdirSync(join(dir, "prompts"), { recursive: true });
+  writeFileSync(join(dir, "prompts", "master.md"), `# ${name} master\n`);
+  writeFileSync(join(dir, "prompts", "worker.md"), `# ${name} worker\n`);
+  writeFileSync(
+    join(dir, "team.yaml"),
+    JSON.stringify({
+      name,
+      version: 1,
+      tiers: [
+        { id: "master", prompt: "./prompts/master.md" },
+        { id: "worker", prompt: "./prompts/worker.md" },
+      ],
+      roles: ["master", "worker", "qa"],
+    }),
+  );
+  writeFileSync(
+    join(dir, "roles", "master.role.yaml"),
+    JSON.stringify({ id: "master", prompt: "./prompts/master.md", dod: ["d"] }),
+  );
+  writeFileSync(
+    join(dir, "roles", "worker.role.yaml"),
+    JSON.stringify({ id: "worker", prompt: "./prompts/worker.md", dod: ["d"] }),
+  );
+  writeFileSync(
+    join(dir, "roles", "qa.role.yaml"),
+    JSON.stringify({ id: "qa", prompt: "./prompts/worker.md", as_judge: true, dod: ["d"] }),
+  );
+}
+
+/** user 层模板根（DSH_HOME 在 beforeEach 隔离）。 */
+function userTplRoot(): string {
+  return join(home, "dsh-home", "xiaozhuge", "templates");
+}
 
 async function listen(): Promise<string> {
   const routes = makeLaunchRoutes();
@@ -58,11 +96,23 @@ async function post(
 }
 
 describe("场景枚举", () => {
-  it("列出全部 builtin 场景（oss-maintenance + research-report）", async () => {
+  it("列出全部 builtin 场景（oss-maintenance + research-report）带 source 标记", async () => {
     const base = await listen();
     const r = await fetch(`${base}/api/xiaozhuge/team/scenarios`);
-    const data = (await r.json()) as { scenarios: string[] };
-    expect(data.scenarios).toEqual(["oss-maintenance", "research-report"]);
+    const data = (await r.json()) as { scenarios: Array<{ name: string; source: string }> };
+    expect(data.scenarios).toEqual([
+      { name: "oss-maintenance", source: "builtin" },
+      { name: "research-report", source: "builtin" },
+    ]);
+  });
+
+  it("scenarios 端点接受 workspace 参数（包含 project 层）", async () => {
+    const base = await listen();
+    // 带 workspace 参数但无 project 模板 → 仍只有 builtin
+    const r = await fetch(`${base}/api/xiaozhuge/team/scenarios?workspace=${encodeURIComponent(home)}`);
+    const data = (await r.json()) as { scenarios: Array<{ name: string; source: string }> };
+    const builtin = data.scenarios.filter((s) => s.source === "builtin").length;
+    expect(builtin).toBeGreaterThan(0);
   });
 });
 
@@ -125,6 +175,56 @@ describe("team/create 一键建团", () => {
     expect(again.json.lock).toBe("reentered");
     const other = await post(base, { session: "s-other" });
     expect(other.json.home).not.toBe(first.json.home);
+  });
+
+  it("user 层模板经 source=user 实例化，返回携带 source 标记", async () => {
+    makeScenario(userTplRoot(), "my-scenario");
+    const base = await listen();
+    const { status, json } = await post(base, { session: "s-user", scenario: "my-scenario", source: "user" });
+    expect(status).toBe(200);
+    expect(json.source).toBe("user");
+    expect(json.scenario).toBe("my-scenario");
+  });
+
+  it("user 层唯一场景（无同名）可不指定 source 正常命中", async () => {
+    makeScenario(userTplRoot(), "unique-scenario");
+    const base = await listen();
+    const { status, json } = await post(base, { session: "s-unique", scenario: "unique-scenario" });
+    expect(status).toBe(200);
+    expect(json.source).toBe("user");
+    expect(json.scenario).toBe("unique-scenario");
+  });
+
+  it("同名场景（user+project）未指定 source → ambiguous-scenario（HTTP 400）", async () => {
+    makeScenario(userTplRoot(), "dup");
+    const projectRoot = join(home, "project-repo");
+    mkdirSync(join(projectRoot, ".xiaozhuge", "templates"), { recursive: true });
+    makeScenario(join(projectRoot, ".xiaozhuge", "templates"), "dup");
+    const base = await listen();
+    const { status, json } = await post(base, {
+      session: "s-amb",
+      scenario: "dup",
+      workspace: projectRoot,
+    });
+    expect(status).toBe(400);
+    expect(json.error.code).toBe("ambiguous-scenario");
+  });
+
+  it("同名场景指定 source 消歧：project 层命中", async () => {
+    makeScenario(userTplRoot(), "dup");
+    const projectRoot = join(home, "project-repo2");
+    mkdirSync(join(projectRoot, ".xiaozhuge", "templates"), { recursive: true });
+    makeScenario(join(projectRoot, ".xiaozhuge", "templates"), "dup");
+    const base = await listen();
+    const { status, json } = await post(base, {
+      session: "s-proj",
+      scenario: "dup",
+      source: "project",
+      workspace: projectRoot,
+    });
+    expect(status).toBe(200);
+    expect(json.source).toBe("project");
+    expect(json.scenario).toBe("dup");
   });
 });
 

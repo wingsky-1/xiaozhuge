@@ -8,10 +8,10 @@
  * 来源三级：builtin（包内只读）/ user / project——同名不跨级覆盖，
  * 加载时标记来源即可区分（#13 冻结口径）。
  */
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { TemplateSource } from "./types.js";
 import { validateTeamTemplate, validateRoleSet } from "./template.js";
@@ -101,6 +101,9 @@ export async function loadTemplate(
   }
 
   // prompt 内联：读 prompts/ 下被引用的文本（缺失即抛——实例化完整性硬约束）。
+  // 安全口径（ADR 0013 §3.2）：场景目录 realpath 解析一次，每个引用路径
+  // realpath 后必须收敛在场景目录内——防相对路径穿越与 symlink 逃逸读取。
+  const scenarioReal = realpathSync(scenarioDir);
   const prompts: Record<string, string> = {};
   const referenced = new Set<string>();
   for (const tier of (template.tiers as Array<{ prompt?: string }>) ?? []) {
@@ -114,6 +117,10 @@ export async function loadTemplate(
     const promptPath = join(scenarioDir, rel);
     if (!existsSync(promptPath)) {
       throw new Error(`referenced prompt missing: ${rel}`);
+    }
+    const promptReal = realpathSync(promptPath);
+    if (promptReal !== scenarioReal && !promptReal.startsWith(scenarioReal + sep)) {
+      throw new Error(`prompt path escapes scenario directory: ${rel}`);
     }
     prompts[rel] = await readFile(promptPath, "utf8");
   }
@@ -194,26 +201,100 @@ export const DEFAULT_SCENARIO = "oss-maintenance";
 export const SCENARIO_PATTERN = /^[a-z0-9-]+$/;
 
 /**
- * 解析并校验 builtin 场景目录。两道闸：名字形态 + team.yaml 存在；
- * 不通过抛 message 以 unknown-scenario 前缀标识稳定语义
- * （handler 层翻译为同名错误码）。
+ * 三级来源根（ADR 0013）：builtin（包内只读）/ user / project。
+ * 调用方（宿主绑定层）负责解析各根的实际落点；本模块只按 source 排序。
  */
-export function resolveBuiltinScenarioDir(packageRoot: string, scenario: string): string {
+export interface ScenarioRoot {
+  source: TemplateSource;
+  dir: string;
+}
+
+/** 枚举项：场景名 + 来源标记（同名场景多行并存，UI 供人显式选择）。 */
+export interface ScenarioEntry {
+  name: string;
+  source: TemplateSource;
+}
+
+/** 三级固定枚举顺序：builtin → user → project（同源内再按名称字典序）。 */
+const SOURCE_ORDER: Record<TemplateSource, number> = { builtin: 0, user: 1, project: 2 };
+
+/**
+ * 解析场景目录（ADR 0013 同名不遮蔽口径）。
+ * @param roots 三级来源根数组（顺序即优先展示序，不用于静默遮蔽）。
+ * @param scenario 场景名（白名单正则三级统一执行）。
+ * @param requestedSource 可选消歧：同名且未指定时抛 ambiguous-scenario；
+ *   指定后只在该层查找，缺层即 unknown-scenario。
+ * @returns 匹配的场景目录 + 来源标记。
+ * @throws Error message 以稳定前缀标识语义：`unknown-scenario:` / `ambiguous-scenario:`。
+ */
+export function resolveScenarioDir(
+  roots: ScenarioRoot[],
+  scenario: string,
+  requestedSource?: TemplateSource,
+): { dir: string; source: TemplateSource } {
   if (!SCENARIO_PATTERN.test(scenario)) {
     throw new Error(`unknown-scenario: invalid scenario name "${scenario}"`);
   }
-  const dir = join(builtinTemplatesRoot(packageRoot), scenario);
-  if (!existsSync(join(dir, TEAM_FILE))) {
-    throw new Error(`unknown-scenario: no builtin template "${scenario}"`);
+  const matches: Array<{ dir: string; source: TemplateSource }> = [];
+  for (const root of roots) {
+    if (requestedSource !== undefined && root.source !== requestedSource) continue;
+    if (existsSync(join(root.dir, scenario, TEAM_FILE))) {
+      matches.push({ dir: join(root.dir, scenario), source: root.source });
+    }
   }
-  return dir;
+  if (requestedSource !== undefined) {
+    if (matches.length === 0) {
+      throw new Error(`unknown-scenario: no ${requestedSource} template "${scenario}"`);
+    }
+    return matches[0]!;
+  }
+  if (matches.length === 0) {
+    throw new Error(`unknown-scenario: no template "${scenario}"`);
+  }
+  if (matches.length > 1) {
+    const sources = matches.map((m) => m.source).join(",");
+    throw new Error(`ambiguous-scenario: "${scenario}" exists in multiple sources (${sources})`);
+  }
+  return matches[0]!;
+}
+
+/**
+ * 枚举三级场景（ADR 0013）：全部实时扫描、无缓存；同名场景多行并存，
+ * 各带 source 供 UI 角标；排序 = 三级固定序 + 同源名称字典序。
+ */
+export function listScenarios(roots: ScenarioRoot[]): ScenarioEntry[] {
+  const entries: ScenarioEntry[] = [];
+  for (const root of roots) {
+    if (!existsSync(root.dir)) continue;
+    for (const entry of readdirSync(root.dir)) {
+      if (!SCENARIO_PATTERN.test(entry)) continue;
+      if (!existsSync(join(root.dir, entry, TEAM_FILE))) continue;
+      entries.push({ name: entry, source: root.source });
+    }
+  }
+  return entries.sort(
+    (a, b) =>
+      (SOURCE_ORDER[a.source] ?? 99) - (SOURCE_ORDER[b.source] ?? 99) ||
+      a.name.localeCompare(b.name),
+  );
+}
+
+/**
+ * 解析并校验 builtin 场景目录。两道闸：名字形态 + team.yaml 存在；
+ * 不通过抛 message 以 unknown-scenario 前缀标识稳定语义
+ * （handler 层翻译为同名错误码）。
+ * @deprecated 迁移至 {@link resolveScenarioDir}（三级入口）；保留兼容性封装。
+ */
+export function resolveBuiltinScenarioDir(packageRoot: string, scenario: string): string {
+  return resolveScenarioDir(
+    [{ source: "builtin", dir: builtinTemplatesRoot(packageRoot) }],
+    scenario,
+  ).dir;
 }
 
 /** 枚举包内全部合法场景名（有 team.yaml 的一级子目录，实时扫描无缓存）。 */
 export function listBuiltinScenarios(packageRoot: string): string[] {
-  const root = builtinTemplatesRoot(packageRoot);
-  if (!existsSync(root)) return [];
-  return readdirSync(root)
-    .filter((entry) => SCENARIO_PATTERN.test(entry) && existsSync(join(root, entry, TEAM_FILE)))
-    .sort();
+  return listScenarios([{ source: "builtin", dir: builtinTemplatesRoot(packageRoot) }]).map(
+    (e) => e.name,
+  );
 }
