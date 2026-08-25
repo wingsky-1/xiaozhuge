@@ -33,6 +33,7 @@ describe("golden 场景一：init → spawn → task 全链路", () => {
     expect(await handlers.init({})).toMatchObject({ ok: true, lock: "acquired" });
     expect(existsSync(layout(home).agentsJson)).toBe(true);
     expect(existsSync(layout(home).gatesDir)).toBe(true);
+    expect(existsSync(layout(home).teamYaml)).toBe(true);
 
     // 2. spawn coder 与 qa（coder → qa 拓扑，保证 handoff 有对象）
     expect(
