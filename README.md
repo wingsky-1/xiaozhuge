@@ -41,6 +41,7 @@
 - [ADR 0007](docs/adr/0007-cas-lock-proper-lockfile.md) — CAS 锁切换 proper-lockfile
 - [ADR 0008](docs/adr/0008-single-tier-template-and-dynamic-orchestration.md) — 单层模板放宽（tiers 下限 1）与主控动态编排
 - [ADR 0009](docs/adr/0009-framework-scenario-layering-and-tier0-assembly.md) — 框架/场景提示词分层与 Tier-0 规程组装（#42）
+- [ADR 0010](docs/adr/0010-gate-console-hardening.md) — Gate Console 安全加固与自批风险定性（#2）
 
 ## 内置模板（templates/）
 

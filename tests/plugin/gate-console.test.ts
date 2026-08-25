@@ -7,7 +7,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createServer } from "node:http";
 import { join } from "node:path";
-import { makeGateRoutes, makeConsoleRoute, originAllowed } from "../../src/plugin/gate-console.js";
+import { fetchSiteAllowed, makeGateRoutes, makeConsoleRoute, originAllowed } from "../../src/plugin/gate-console.js";
 import { EventLog } from "../../src/runtime/event-log.js";
 
 const SESSION = "session-gate-test";
@@ -187,5 +187,99 @@ describe("Console 页面", () => {
     expect(html).toContain("Gate 待办");
     expect(html).toContain("prefers-color-scheme"); // 双主题
     expect(html).toContain('name="viewport"'); // 375px 视口适配
+  });
+});
+
+describe("Fetch Metadata 断言（#2 P0）", () => {
+  it("Sec-Fetch-Site 跨站拒绝", () => {
+    expect(
+      fetchSiteAllowed({ headers: { "sec-fetch-site": "cross-site" } } as never),
+    ).toBe(false);
+    expect(
+      fetchSiteAllowed({ headers: { "sec-fetch-site": "same-site" } } as never),
+    ).toBe(false);
+  });
+  it("same-origin 与缺失（老设备兼容负例放行）均放行", () => {
+    expect(fetchSiteAllowed({ headers: { "sec-fetch-site": "same-origin" } } as never)).toBe(true);
+    expect(fetchSiteAllowed({ headers: {} } as never)).toBe(true);
+  });
+
+  it("跨站 SFS 的 resolve POST 被拒且无副作用", async () => {
+    baseUrl = await listen();
+    await fetch(`${baseUrl}/api/xiaozhuge/gates?session=${SESSION}`, {
+      method: "POST",
+      headers: { origin: baseUrl, "sec-fetch-site": "same-origin" },
+      body: JSON.stringify({ id: "g-sfs", reason: "", requestedBy: "m" }),
+    });
+    const denied = await fetch(`${baseUrl}/api/xiaozhuge/gates/resolve`, {
+      method: "POST",
+      headers: { origin: baseUrl, "sec-fetch-site": "cross-site" },
+      body: JSON.stringify({ session: SESSION, gate_id: "g-sfs", decision: "approved" }),
+    });
+    expect(denied.status).toBe(403);
+    const list = (await (await fetch(`${baseUrl}/api/xiaozhuge/gates?session=${SESSION}`)).json()) as {
+      gates: Array<{ status: string }>;
+    };
+    expect(list.gates[0]?.status).toBe("pending");
+  });
+
+  it("SFS 缺失（legacy）放行且审计记录 absent-legacy 标记与远端 IP", async () => {
+    baseUrl = await listen();
+    await fetch(`${baseUrl}/api/xiaozhuge/gates?session=${SESSION}`, {
+      method: "POST",
+      headers: { origin: baseUrl },
+      body: JSON.stringify({ id: "g-legacy", reason: "", requestedBy: "m" }),
+    });
+    const ok = await fetch(`${baseUrl}/api/xiaozhuge/gates/resolve`, {
+      method: "POST",
+      headers: { origin: baseUrl }, // 无 SFS 头
+      body: JSON.stringify({ session: SESSION, gate_id: "g-legacy", decision: "approved" }),
+    });
+    expect(ok.status).toBe(200);
+    const log = new EventLog(join(home, "dsh-home", "xiaozhuge", "sessions", SESSION, "rooms", "root", "events.jsonl"));
+    await log.init();
+    const { events } = await log.read();
+    const audit = events.find((e) => e.type === "gate/resolve")!;
+    expect((audit.payload as { sec_fetch_site?: string }).sec_fetch_site).toBe("absent-legacy");
+    expect((audit.payload as { remote_ip?: string | null }).remote_ip).toBeTruthy();
+  });
+});
+
+describe("Console 加固（#2 P0）", () => {
+  it("响应携带 nonce CSP，脚本带 nonce，无内联事件处理器", async () => {
+    baseUrl = await listen();
+    const r = await fetch(`${baseUrl}/xiaozhuge/console`);
+    const csp = r.headers.get("content-security-policy") ?? "";
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toMatch(/script-src 'nonce-[0-9a-f-]+'/);
+    expect(csp).toContain("connect-src 'self'");
+    const html = await r.text();
+    expect(html).toMatch(/<script nonce="/);
+    expect(html).not.toContain("onclick=");
+    // XSS 转义函数在渲染路径上
+    expect(html).toContain("esc(g.reason)");
+    expect(html).toContain("esc(g.id)");
+  });
+});
+
+describe("open gate 端点双头断言（#2 P0）", () => {
+  it("无 Origin 的放置被拒", async () => {
+    baseUrl = await listen();
+    const denied = await fetch(`${baseUrl}/api/xiaozhuge/gates?session=${SESSION}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "g", reason: "", requestedBy: "m" }),
+    });
+    expect(denied.status).toBe(403);
+  });
+
+  it("跨站 SFS 的放置被拒", async () => {
+    baseUrl = await listen();
+    const denied = await fetch(`${baseUrl}/api/xiaozhuge/gates?session=${SESSION}`, {
+      method: "POST",
+      headers: { origin: baseUrl, "sec-fetch-site": "cross-site" },
+      body: JSON.stringify({ id: "g", reason: "", requestedBy: "m" }),
+    });
+    expect(denied.status).toBe(403);
   });
 });
