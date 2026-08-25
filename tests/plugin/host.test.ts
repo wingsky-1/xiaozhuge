@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { apply, name, inject } from "../../src/plugin/host.js";
 import { schemas } from "../../src/plugin/schemas.js";
-import { resolveTeamHome } from "../../src/team-home.js";
+import { resolveTeamHome } from "../../src/plugin/team-home.js";
 import { createHandlers } from "../../src/plugin/handlers.js";
 
 interface RegisteredTool {
@@ -84,7 +84,7 @@ describe("插件装配", () => {
   it("webServer 在场时注册 Console/入口路由并订阅页面注入（#51）", () => {
     const registered = new Map<string, unknown>();
     const routes: Array<{ path: string }> = [];
-    let injectListener: ((table: unknown[]) => void) | undefined;
+    let injectCalled = false;
     const ctx = {
       tools: { register: (d: { name: string }) => {
         const disposer = () => registered.delete(d.name);
@@ -100,20 +100,15 @@ describe("插件装配", () => {
       } },
       logger: { info: () => {}, warn: () => {} },
       get: () => undefined,
-      on: (event: "webserver/index-inject", listener: (table: unknown[]) => void) => {
-        if (event === "webserver/index-inject") injectListener = listener;
-      },
+      on: () => { injectCalled = true; },
     };
     const dispose = apply(ctx as never);
     const paths = routes.map((r) => r.path);
     expect(paths).toContain("/xiaozhuge/console");
     expect(paths).toContain("/xiaozhuge/launch");
     expect(paths).toContain("/api/xiaozhuge/team/create");
-    // 注入监听器被订阅且产出 script 行
-    expect(typeof injectListener).toBe("function");
-    const table: unknown[] = [];
-    injectListener?.(table);
-    expect(table).toHaveLength(1);
+    // 页面注入已移交客户端插件（ADR 0014）：服务端不再订阅 index-inject。
+    expect(injectCalled).toBe(false);
     dispose();
     expect(registered.size).toBe(0);
     expect(routes).toHaveLength(0);

@@ -21,7 +21,7 @@ const skipUnderMutation = process.env.STRYKER_MUTATOR_ACTIVE === "true";
 // beforeAll 兜底触发一次 tsc 编译）。
 function distEntry(): string {
   const require = createRequire(import.meta.url);
-  return require.resolve("../../dist/runtime/cas-lock.js");
+  return require.resolve("../../dist/runtime/kernel/cas-lock.js");
 }
 
 interface WorkerResult {

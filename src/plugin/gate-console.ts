@@ -17,10 +17,14 @@ import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { WebRoute } from "@deepseek-ai/dsh-host-webserver";
 import { join } from "node:path";
-import { listGates, openGate, resolveGate } from "../runtime/gates.js";
-import { EventLog } from "../runtime/event-log.js";
-import { ensureDir } from "../runtime/fs-utils.js";
-import { layout } from "../runtime/paths.js";
+import {
+  listGates,
+  openGate,
+  resolveGate,
+  EventLog,
+  ensureDir,
+  layout,
+} from "../runtime/index.js";
 
 /** 路由前缀。 */
 export const ROUTES_PREFIX = "/api/xiaozhuge";

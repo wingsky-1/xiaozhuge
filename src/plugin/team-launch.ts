@@ -1,111 +1,30 @@
 /**
- * Team 拉起入口 HTTP 面（#51，ADR 0011）：
- * 一键链路 = 入口页客户端编排同源调用——
- *   ① POST /api/workspace.create（宿主）→ ② POST /api/session.create（宿主）
- *   → ③ POST /api/xiaozhuge/team/create（本文件：服务端跑 init 持久化）
- *   → ④ POST /api/session.prompt 投递 tier0_prompt 首条消息。
+ * Team 拉起入口 HTTP 面（#51，ADR 0011；#51 修订：入口收敛进会话内）。
+ *
+ * 一键链路（浏览器端 client 插件在输入框内完成，不再打开独立页）：
+ *   ① session.list 推导当前会话（blank 首轮判定 + cwd 工作区推导）
+ *   → ② POST /api/xiaozhuge/team/create（本文件：服务端跑 init 持久化）
+ *   → ③ POST /api/session.prompt 投递 tier0_prompt 首条消息
+ *     （输入框草稿作为首条用户任务，空则只投递规程）。
  *
  * init 由此从 LLM 工具面移到 HTTP 面：team_init 工具下线，handler 逻辑
  * 保留复用。安全语义沿 Gate Console 先例：POST 同源 Origin + Fetch
  * Metadata 双头断言；scenario 运行时校验 builtin 白名单。
+ *
+ * 输入框内「创建团队」按钮与场景浮层由客户端插件（src/client/）经
+ * conversation.input.right 官方插槽渲染（ADR 0014）。
  */
 import { existsSync, readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
-import type { IndexInjection, WebRoute } from "@deepseek-ai/dsh-host-webserver";
-import { resolveTeamHome, userTemplatesRoot, projectTemplatesRoot } from "../team-home.js";
+import type { WebRoute } from "@deepseek-ai/dsh-host-webserver";
+import { resolveTeamHome, userTemplatesRoot, projectTemplatesRoot } from "./team-home.js";
 import { createHandlers, PACKAGE_ROOT } from "./handlers.js";
-import { layout } from "../runtime/paths.js";
-import { listScenarios } from "../runtime/template-loader.js";
+import { layout, listScenarios } from "../runtime/index.js";
 import { fetchSiteAllowed, originAllowed } from "./gate-console.js";
 
-/** 独立入口页路径。 */
+/** 独立入口页路径（保留为兜底；client 插件不再跳转此页）。 */
 export const ROUTES_LAUNCH = "/xiaozhuge/launch";
-
-/**
- * 宿主页面结构化注入（#51）：浮动入口 + 发送框旁快捷按钮 + 团队会话
- * 「团队」tab。DOM 定位依赖宿主前端结构，属已知脆弱点——独立页兜底。
- */
-export function makeIndexInjections(): IndexInjection[] {
-  return [{ kind: "script", placement: "body", text: INDEX_SCRIPT }];
-}
-
-const INDEX_SCRIPT = String.raw`
-(function () {
-  if (window.__XZG_INJECTED__) return;
-  window.__XZG_INJECTED__ = true;
-  var fab = document.createElement("a");
-  fab.href = "/xiaozhuge/launch";
-  fab.target = "_blank";
-  fab.textContent = "创建团队";
-  fab.style.cssText = "position:fixed;right:16px;bottom:16px;z-index:99999;background:#2da44e;color:#fff;padding:8px 14px;border-radius:20px;font-size:13px;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,.25)";
-  document.body.appendChild(fab);
-  var tries = 0;
-  var timer = setInterval(function () {
-    if (++tries > 30) { clearInterval(timer); return; }
-    var box = document.querySelector("textarea, [contenteditable='true']");
-    if (!box) return;
-    var form = box.closest("form") || box.parentElement;
-    if (!form || form.querySelector(".xzg-team-btn")) { clearInterval(timer); return; }
-    var btn = document.createElement("a");
-    btn.className = "xzg-team-btn";
-    btn.href = "/xiaozhuge/launch";
-    btn.target = "_blank";
-    btn.textContent = "创建团队";
-    btn.style.cssText = "white-space:nowrap;margin-left:6px;font-size:12px;padding:4px 10px;border-radius:14px;background:#2da44e;color:#fff;text-decoration:none;display:inline-block";
-    form.appendChild(btn);
-    clearInterval(timer);
-  }, 1000);
-  var currentSession = null;
-  setInterval(function () {
-    var m = (location.pathname + location.search).match(/sessions?[\/=]([A-Za-z0-9_-]{6,})/);
-    var sid = m ? m[1] : null;
-    if (!sid || sid === currentSession) return;
-    currentSession = sid;
-    fetch("/api/xiaozhuge/team/status?session=" + encodeURIComponent(sid))
-      .then(function (r) { return r.json(); })
-      .then(function (d) { injectTeamTab(sid, d.is_team === true); })
-      .catch(function () {});
-  }, 2000);
-  function injectTeamTab(sid, isTeam) {
-    var existing = document.getElementById("xzg-team-tab");
-    var panel = document.getElementById("xzg-team-panel");
-    if (!isTeam) {
-      if (existing) existing.remove();
-      if (panel) panel.remove();
-      return;
-    }
-    if (existing && panel) return;
-    if (!panel) {
-      panel = document.createElement("div");
-      panel.id = "xzg-team-panel";
-      panel.style.cssText = "display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:99998;";
-      panel.innerHTML = '<div style="position:absolute;top:5%;left:5%;width:90%;height:90%;background:#fff;border-radius:10px;overflow:hidden"><iframe src="/xiaozhuge/console?session=' + encodeURIComponent(sid) + '" style="width:100%;height:100%;border:none"></iframe></div>';
-      panel.addEventListener("click", function (ev) { if (ev.target === panel) panel.style.display = "none"; });
-      document.body.appendChild(panel);
-    }
-    if (existing) return;
-    var tabs = Array.prototype.slice.call(document.querySelectorAll("button,[role='tab'],a")).filter(function (el) {
-      return /^(对话|聊天|轨迹|历史)$/.test((el.textContent || "").trim());
-    });
-    var last = tabs[tabs.length - 1];
-    if (last && last.parentElement) {
-      var tab = document.createElement(last.tagName === "A" ? "a" : "button");
-      tab.id = "xzg-team-tab";
-      tab.textContent = "团队";
-      tab.addEventListener("click", function () { panel.style.display = "block"; });
-      last.parentElement.insertBefore(tab, last.nextSibling);
-    } else {
-      var floatBtn = document.createElement("button");
-      floatBtn.id = "xzg-team-tab";
-      floatBtn.textContent = "团队视图";
-      floatBtn.style.cssText = "position:fixed;left:16px;bottom:16px;z-index:99997;padding:6px 12px;border-radius:16px;border:none;background:#57606a;color:#fff;font-size:12px;cursor:pointer";
-      floatBtn.addEventListener("click", function () { panel.style.display = "block"; });
-      document.body.appendChild(floatBtn);
-    }
-  }
-})();
-`;
 
 function writeJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });

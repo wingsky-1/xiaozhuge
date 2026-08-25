@@ -9,11 +9,11 @@
 import type { Agent } from "@deepseek-ai/dsh-agent";
 import type { ToolDefinition, ToolRunContext } from "@deepseek-ai/dsh-tools";
 import type { WebRoute } from "@deepseek-ai/dsh-host-webserver";
-import { resolveTeamHome } from "../team-home.js";
+import { resolveTeamHome } from "./team-home.js";
 import { createHandlers, type Handlers } from "./handlers.js";
 import { schemas } from "./schemas.js";
 import { makeGateRoutes, makeConsoleRoute } from "./gate-console.js";
-import { makeLaunchRoutes, makeIndexInjections } from "./team-launch.js";
+import { makeLaunchRoutes } from "./team-launch.js";
 
 /** 稳定的 cordis 插件名。 */
 export const name = "xiaozhuge-team";
@@ -188,11 +188,8 @@ export function apply(ctx: {
       disposers.push(ws.register(route));
     }
     ctx.logger.info("[xiaozhuge] gate console + team launch routes registered");
-    // 宿主页面结构化注入（#51）：「创建团队」快捷按钮 + 团队会话「团队」tab。
-    // DOM 定位依赖宿主前端结构，属已知脆弱点——独立页 /xiaozhuge/launch 兜底。
-    ctx.on?.("webserver/index-inject", (table) => {
-      table.push(...makeIndexInjections());
-    });
+    // 输入框内「创建团队」按钮由客户端插件（dsh.client，src/client/）经
+    // conversation.input.right 官方插槽渲染——不再做宿主页面 DOM 注入。
   }
 
   ctx.logger.info("[xiaozhuge] all team_* tools registered");

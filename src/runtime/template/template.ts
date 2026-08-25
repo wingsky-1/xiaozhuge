@@ -11,7 +11,7 @@
  * 对外输出的 {code,path,message} 与手写版逐字段兼容（穷举负矩阵测试为裁判）。
  */
 import { z } from "zod";
-import { RESERVED_STAGES, TEMPLATE_SOURCES } from "./types.js";
+import { RESERVED_STAGES, TEMPLATE_SOURCES } from "../kernel/types.js";
 
 export interface ValidationError {
   code: string;

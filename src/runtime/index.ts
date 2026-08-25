@@ -1,6 +1,11 @@
 /**
- * 小诸葛 runtime 数据内核导出面（P2a，issue #5）。
+ * 小诸葛 runtime 导出面（P2a 数据内核 + P2b 协作语义，issue #5）。
  * 平台无关纯库：零 harness 依赖、零运行时第三方依赖。
+ *
+ * 物理分层（仅归类，导出符号与对外 API 不变）：
+ * - kernel/   数据内核：类型、路径、原子写、CAS 锁、账本、事件流、门禁、恢复；
+ * - collab/   协作语义：信箱三段式、黑板分片；
+ * - template/ 模板系统：Team/Role Spec 校验与三级模板加载。
  */
 export type {
   TaskRecord,
@@ -11,7 +16,8 @@ export type {
   LockInfo,
   MemberRecord,
   TeamRegistry,
-} from "./types.js";
+  TemplateSource,
+} from "./kernel/types.js";
 export {
   TASK_STATUSES,
   TASK_TRANSITIONS,
@@ -20,9 +26,9 @@ export {
   TEMPLATE_SOURCES,
   canTransition,
   isReservedStage,
-} from "./types.js";
-export { layout, roomLayout, memberMailboxDir } from "./paths.js";
-export type { Layout, RoomLayout } from "./paths.js";
+} from "./kernel/types.js";
+export { layout, roomLayout, memberMailboxDir } from "./kernel/paths.js";
+export type { Layout, RoomLayout } from "./kernel/paths.js";
 export {
   ensureDir,
   linkNoReplace,
@@ -31,43 +37,43 @@ export {
   sweepTmp,
   confineToRoot,
   TMP_PREFIX,
-} from "./fs-utils.js";
+} from "./kernel/fs-utils.js";
 export {
   acquireCas,
   releaseCas,
   withCasLock,
   peekLock,
   LockConflictError,
-} from "./cas-lock.js";
-export { Ledger, findConflicts } from "./ledger.js";
-export type { NewTask, TaskPatch, UpdateOptions } from "./ledger.js";
-export { EventLog, WRITER_LOCK_SUFFIX } from "./event-log.js";
-export type { AppendInput, ReadResult } from "./event-log.js";
-export { Registry } from "./registry.js";
-export { openGate, resolveGate, readGate, listGates } from "./gates.js";
+} from "./kernel/cas-lock.js";
+export { Ledger, findConflicts } from "./kernel/ledger.js";
+export type { NewTask, TaskPatch, UpdateOptions } from "./kernel/ledger.js";
+export { EventLog, WRITER_LOCK_SUFFIX } from "./kernel/event-log.js";
+export type { AppendInput, ReadResult } from "./kernel/event-log.js";
+export { Registry } from "./kernel/registry.js";
+export { openGate, resolveGate, readGate, listGates } from "./kernel/gates.js";
 export {
   recoverDeliveries,
   discardRunningSentinels,
   DEFAULT_DELIVERING_TTL_MS,
-} from "./recovery.js";
-export type { DeliveryRecovery, SentinelRecovery } from "./recovery.js";
-export { RuntimeError, LedgerError, LockError, GateError } from "./errors.js";
-export * from "./mailbox.js";
-export type { Envelope } from "./mailbox.js";
-export * from "./blackboard.js";
-export type { Shard } from "./blackboard.js";
+} from "./kernel/recovery.js";
+export type { DeliveryRecovery, SentinelRecovery } from "./kernel/recovery.js";
+export { RuntimeError, LedgerError, LockError, GateError } from "./kernel/errors.js";
+export {
+  MAILBOX_SEGMENTS,
+  DELIVERY_WAKEUP_MATRIX,
+  GATE_FLOW,
+} from "./kernel/protocol.js";
+export * from "./collab/mailbox.js";
+export type { Envelope } from "./collab/mailbox.js";
+export * from "./collab/blackboard.js";
+export type { Shard } from "./collab/blackboard.js";
 export {
   validateTeamTemplate,
   validateRoleSpec,
   validateRoleSet,
   SECTIONS_REQUIRED_ENUM,
-} from "./template.js";
-export type { ValidationError, ValidationResult } from "./template.js";
-export {
-  MAILBOX_SEGMENTS,
-  DELIVERY_WAKEUP_MATRIX,
-  GATE_FLOW,
-} from "./protocol.js";
+} from "./template/template.js";
+export type { ValidationError, ValidationResult } from "./template/template.js";
 export {
   loadTemplate,
   instantiateSnapshot,
@@ -87,5 +93,10 @@ export {
   builtinTemplatesRoot,
   resolveScenarioDir,
   listScenarios,
-} from "./template-loader.js";
-export type { LoadedTemplate, Tier0Playbook, ScenarioRoot, ScenarioEntry } from "./template-loader.js";
+} from "./template/template-loader.js";
+export type {
+  LoadedTemplate,
+  Tier0Playbook,
+  ScenarioRoot,
+  ScenarioEntry,
+} from "./template/template-loader.js";

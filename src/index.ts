@@ -5,7 +5,7 @@
 
 export const VERSION = "0.0.0-dev" as const;
 
-export { RESERVED_STAGES as STAGES, isReservedStage as isStage } from "./runtime/types.js";
+export { RESERVED_STAGES as STAGES, isReservedStage as isStage } from "./runtime/kernel/types.js";
 
 export * from "./runtime/index.js";
 

@@ -8,8 +8,8 @@ import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHandlers, type Handlers } from "../../src/plugin/handlers.js";
-import { EventLog } from "../../src/runtime/event-log.js";
-import { layout } from "../../src/runtime/paths.js";
+import { EventLog } from "../../src/runtime/kernel/event-log.js";
+import { layout } from "../../src/runtime/kernel/paths.js";
 
 let home: string;
 let handlers: Handlers;

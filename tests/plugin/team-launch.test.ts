@@ -1,10 +1,10 @@
 /**
  * Team 拉起入口 HTTP 面测试（#51）：scenarios 枚举、create 一键建团
  * （默认/指定场景、unknown-scenario 稳定错误码、双头断言）、status 探测、
- * 入口页直出、注入行生成。node:http 真实监听回环端口驱动 WebRoute。
+ * 入口页直出。node:http 真实监听回环端口驱动 WebRoute。
  */
 import { describe, expect, it, beforeEach } from "vitest";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { createServer } from "node:http";
@@ -12,7 +12,6 @@ import { join } from "node:path";
 import {
   bootMessage,
   launchPageHtml,
-  makeIndexInjections,
   makeLaunchRoutes,
 } from "../../src/plugin/team-launch.js";
 
@@ -271,13 +270,46 @@ describe("入口页与启动消息", () => {
   });
 });
 
-describe("宿主页面注入行", () => {
-  it("单个 script 行（body 位），含浮动入口与团队 tab 逻辑", () => {
-    const rows = makeIndexInjections();
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.kind).toBe("script");
-    expect(rows[0]?.placement).toBe("body");
-    expect(rows[0]?.text).toContain("/xiaozhuge/launch");
-    expect(rows[0]?.text).toContain("injectTeamTab");
+describe("客户端插件构建产物", () => {
+  it("dist/client.js 契约完整：load id=包名、apply/inject 装配、React 走 external", () => {
+    const bundle = readFileSync(join(process.cwd(), "dist", "client.js"), "utf8");
+    // load id = 完整包名（浏览器端模块注册契约）
+    expect(bundle).toContain('id: "@wingsky-1/dsh-xiaozhuge"');
+    // 契约外壳：factory(require) 注入 external 依赖
+    expect(bundle).toContain("__ModuleLoader__.load");
+    expect(bundle).toContain("factory: function (require)");
+    // 装配 apply/inject（esbuild cjs 经 __export 表装配到 module.exports）
+    expect(bundle).toContain("module.exports = __toCommonJS(index_exports)");
+    expect(bundle).toContain("apply: () => apply");
+    expect(bundle).toContain("inject: () => inject");
+    // React 等宿主注入依赖不打进 bundle（require 注入）
+    expect(bundle).toContain('require("react")');
+    expect(bundle).toContain('require("react/jsx-runtime")');
+  });
+
+  it("client 源码含官方 slots 注册（conversation.input.right）与首轮判定（blank）", () => {
+    const src = readFileSync(join(process.cwd(), "src", "client", "index.tsx"), "utf8");
+    expect(src).toContain('"conversation.input.right"');
+    expect(src).toContain("session.blank");
+    expect(src).toContain('"/api/xiaozhuge/team/create"');
+    expect(src).toContain("/api/xiaozhuge/team/scenarios");
+    // 官方 typed 客户端投递（IApiClient.sessions.prompt），非手写 fetch 信封
+    expect(src).toContain("apiClient.sessions.prompt");
+    expect(src).toContain("apiClient.sessions.list");
+    // 不再依赖服务端 DOM 注入
+    expect(src).not.toContain("MutationObserver");
+  });
+
+  it("服务端不再做 index-inject 页面注入", () => {
+    const host = readFileSync(join(process.cwd(), "src", "plugin", "host.ts"), "utf8");
+    expect(host).not.toContain("makeIndexInjections");
+  });
+
+  it("client 与服务端 BOOT_MESSAGE_HEAD 文案一致（bundle 隔离，须手动同步）", async () => {
+    const serverHead = (await import("../../src/plugin/team-launch.js")).BOOT_MESSAGE_HEAD;
+    const clientSrc = readFileSync(join(process.cwd(), "src", "client", "index.tsx"), "utf8");
+    const m = clientSrc.match(/BOOT_MESSAGE_HEAD\s*=\s*"([^"]+)"\s*\+\s*\n\s*"([^"]+)"/);
+    expect(m).not.toBeNull();
+    expect(`${m![1]}${m![2]}`).toBe(serverHead);
   });
 });
