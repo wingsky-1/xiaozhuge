@@ -60,9 +60,13 @@
 
 ## 开发
 
+**提交前必做动作（安装 → lint → typecheck → build → test 的顺序与原因、
+常见坑）见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**——尤其注意
+`pnpm build` 必须先于 `pnpm test`（测试硬性校验构建产物）。命令速览：
+
 ```bash
-pnpm install
-pnpm build && pnpm test && pnpm lint && pnpm typecheck   # 质量门禁 = 全绿
+pnpm install --frozen-lockfile
+pnpm lint && pnpm typecheck && pnpm build && pnpm test   # 质量门禁 = 全绿
 pnpm cov        # 覆盖率（全局四维 >= 70 + 产出 cobertura 报告）
 pnpm cov:patch  # 增量覆盖率门禁：变更行 >= 80%（需 pip install diff-cover）
 pnpm mutation   # 变异测试（增量模式，得分基线 70；基线文件 stryker-incremental.json 入库）

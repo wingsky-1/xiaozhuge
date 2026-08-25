@@ -4,7 +4,7 @@
  * 入口页直出。node:http 真实监听回环端口驱动 WebRoute。
  */
 import { describe, expect, it, beforeEach } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { createServer } from "node:http";
@@ -271,13 +271,8 @@ describe("入口页与启动消息", () => {
 });
 
 describe("客户端插件构建产物", () => {
-  // 构建产物仅在 pnpm build 后存在；mutation 沙箱不构建（无 dist），条件跳过——
-  // 契约校验由 gauntlet job 的 build + test 全流程兜底。
-  const clientBundle = join(process.cwd(), "dist", "client.js");
-  it.runIf(existsSync(clientBundle))(
-    "dist/client.js 契约完整：load id=包名、apply/inject 装配、React 走 external",
-    () => {
-      const bundle = readFileSync(clientBundle, "utf8");
+  it("dist/client.js 契约完整：load id=包名、apply/inject 装配、React 走 external", () => {
+    const bundle = readFileSync(join(process.cwd(), "dist", "client.js"), "utf8");
     // load id = 完整包名（浏览器端模块注册契约）
     expect(bundle).toContain('id: "@wingsky-1/dsh-xiaozhuge"');
     // 契约外壳：factory(require) 注入 external 依赖
