@@ -8,9 +8,11 @@
  */
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { TaskRecord, TaskStatus } from "../runtime/types.js";
-import { ensureDir } from "../runtime/fs-utils.js";
+import { ensureDir, writeJsonAtomic } from "../runtime/fs-utils.js";
 import { layout } from "../runtime/paths.js";
+import { builtinScenarioDir, instantiateSnapshot, loadTemplate } from "../runtime/template-loader.js";
 import { Ledger, findConflicts } from "../runtime/ledger.js";
 import { EventLog } from "../runtime/event-log.js";
 import { Registry } from "../runtime/registry.js";
@@ -27,6 +29,9 @@ export class ToolError extends Error {
     this.code = code;
   }
 }
+
+/** 包根目录（dist 与 src 双形态均回溯到仓根），builtin 模板定位用。 */
+const PACKAGE_ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..");
 
 function wrap(error: unknown): never {
   if (error instanceof ToolError) throw error;
@@ -156,8 +161,13 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
         // room.lock CAS 幂等：同会话重入成功，异会话重复实例化拒绝。
         const outcome = await acquireCas(l.roomLock, sessionId);
         await reg().write(await reg().read());
+        // 模板快照落盘 + Tier-0 规程内联（#11 缺口闭合）：fresh 会话无需
+        // 仓库其余文件即可获得完整巡场规程。
+        const loaded = await loadTemplate(builtinScenarioDir(PACKAGE_ROOT), "builtin");
+        await writeJsonAtomic(l.teamYaml, instantiateSnapshot(loaded));
         await appendEvent("system", "team/init", { instance_note: args.instance_note ?? null, lock: outcome });
-        return { ok: true, lock: outcome, home: l.teamHome };
+        const tier0PromptPath = (loaded.template.tiers as Array<{ prompt?: string }>)[0]?.prompt ?? "";
+        return { ok: true, lock: outcome, home: l.teamHome, tier0_prompt: loaded.prompts[tier0PromptPath] ?? null };
       } catch (error) {
         wrap(error);
       }

@@ -95,9 +95,14 @@ describe("execute 路由与输出包装", () => {
     const result = (await init.execute({}, { agent: { id: "session-h1" } })) as {
       ok: boolean;
       lock: string;
+      tier0_prompt: string | null;
     };
     expect(result.ok).toBe(true);
     expect(["acquired", "reentered"]).toContain(result.lock);
+    // #11 缺口闭合：返回值内联携带 Tier-0 规程全文（自包含，hub worktree 可用）
+    expect(typeof result.tier0_prompt).toBe("string");
+    expect(result.tier0_prompt).toContain("巡场");
+    expect(result.tier0_prompt).toContain("资源防护三项");
     // 渲染投影是 JSON 文本块
     const blocks = init.output.render({}, result) as Array<{ type: string; text: string }>;
     expect(blocks[0]?.type).toBe("text");
