@@ -48,7 +48,7 @@ function runWorker(lockPath: string, instanceId: string): WorkerResult {
 describe.skipIf(skipUnderMutation)("双进程 CAS 竞争契约", () => {
   it("两进程同时争抢：恰一 acquired，另一 conflict", async () => {
     const dir = mkdtempSync(join(tmpdir(), "xzg-dual-"));
-    const lock = join(dir, "room.lock");
+    const lock = join(dir, "room"); // 资源基路径（锁形态 room.lock 目录）
 
     const start = (id: string) =>
       new Promise<WorkerResult>((resolve) => {
@@ -77,7 +77,7 @@ describe.skipIf(skipUnderMutation)("双进程 CAS 竞争契约", () => {
 
   it("持锁进程 kill -9 后：锁残留、异实例拒、同实例重入", async () => {
     const dir = mkdtempSync(join(tmpdir(), "xzg-dual-"));
-    const lock = join(dir, "room.lock");
+    const lock = join(dir, "room"); // 资源基路径（锁形态 room.lock 目录）
     const script = `
       const { acquireCas } = await import(${JSON.stringify(distEntry())});
       await acquireCas(${JSON.stringify(lock)}, ${JSON.stringify("victim")});
