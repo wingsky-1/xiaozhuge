@@ -13,6 +13,7 @@ import { resolveTeamHome } from "../team-home.js";
 import { createHandlers, type Handlers } from "./handlers.js";
 import { schemas } from "./schemas.js";
 import { makeGateRoutes, makeConsoleRoute } from "./gate-console.js";
+import { makeLaunchRoutes, makeIndexInjections } from "./team-launch.js";
 
 /** 稳定的 cordis 插件名。 */
 export const name = "xiaozhuge-team";
@@ -34,6 +35,8 @@ export function apply(ctx: {
   webServer?: { register: (route: WebRoute) => () => void } | null;
   logger: { info: (msg: string) => void; warn: (msg: string) => void };
   get(key: string): unknown;
+  /** cordis 事件订阅（webserver/index-inject 用）；缺省形态可无此方法。 */
+  on?: (event: "webserver/index-inject", listener: (table: unknown[]) => void) => void;
 }): () => void {
   void ctx.get;
   const disposers: Array<() => void> = [];
@@ -87,7 +90,6 @@ export function apply(ctx: {
       async execute(rawArgs: unknown, exec: ToolRunContext) {
         const args = (rawArgs ?? {}) as Record<string, unknown>;
         const HANDLER_BY_TOOL: Record<string, string> = {
-          team_init: "init",
           team_spawn: "spawn",
           team_send: "send",
           team_inbox: "inbox",
@@ -117,12 +119,6 @@ export function apply(ctx: {
     ctx.logger.info(`[xiaozhuge] ${toolName} registered`);
   }
 
-  define(
-    "team_init",
-    "Initialize this team instance: create the directory skeleton and take the instance lock. Call once before any other team_* tool.",
-    schemas.init,
-    (args, agent) => handlersFor(agent).init(args),
-  );
   define(
     "team_spawn",
     "Register a spawned subagent into the team registry with its durable subagent id.",
@@ -184,14 +180,19 @@ export function apply(ctx: {
     (args, agent) => handlersFor(agent).handoff(args),
   );
 
-  // Gate Console + resolve 端点（webServer 可选注入：headless 形态无此服务）。
+  // Gate Console + Team 拉起入口路由（webServer 可选注入：headless 形态无此服务）。
   const ws = ctx.webServer;
   if (typeof ws === "object" && ws !== null) {
     const teamHomeFor = (sessionId: string) => resolveTeamHome(sessionId);
-    for (const route of [...makeGateRoutes({ teamHomeFor }), makeConsoleRoute()]) {
+    for (const route of [...makeGateRoutes({ teamHomeFor }), makeConsoleRoute(), ...makeLaunchRoutes()]) {
       disposers.push(ws.register(route));
     }
-    ctx.logger.info("[xiaozhuge] gate console routes registered");
+    ctx.logger.info("[xiaozhuge] gate console + team launch routes registered");
+    // 宿主页面结构化注入（#51）：「创建团队」快捷按钮 + 团队会话「团队」tab。
+    // DOM 定位依赖宿主前端结构，属已知脆弱点——独立页 /xiaozhuge/launch 兜底。
+    ctx.on?.("webserver/index-inject", (table) => {
+      table.push(...makeIndexInjections());
+    });
   }
 
   ctx.logger.info("[xiaozhuge] all team_* tools registered");

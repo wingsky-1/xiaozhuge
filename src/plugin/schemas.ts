@@ -25,15 +25,7 @@ export const arrayOfStr = (description: string) => ({
 });
 
 export const schemas = {
-  init: {
-    parameters: {
-      type: "object",
-      properties: {
-        instance_note: optStr("Optional human-readable note for this team instance."),
-      },
-      additionalProperties: false,
-    },
-  },
+  // team_init 已下线（#51）：实例化移至 HTTP 面 /api/xiaozhuge/team/create。
   spawn: {
     parameters: {
       type: "object",

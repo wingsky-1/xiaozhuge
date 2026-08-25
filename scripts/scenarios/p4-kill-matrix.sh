@@ -60,6 +60,22 @@ json_text() {
   python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"
 }
 
+# team_create <session-id> [scenario]：HTTP 面建团（#51 起工具面无 team_init）
+team_create() {
+  curl -s --max-time 20 -X POST "http://127.0.0.1:$PORT/api/xiaozhuge/team/create" \
+    -H 'content-type: application/json' \
+    -H "origin: http://127.0.0.1:$PORT" \
+    -d "{\"session\":\"$1\",\"scenario\":\"${2:-oss-maintenance}\"}" \
+    | python3 -c '
+import json, sys
+d = json.loads(sys.stdin.read())
+if not d.get("ok"):
+    print("TEAM_CREATE_ERROR:", json.dumps(d), file=sys.stderr)
+    sys.exit(1)
+print("ok digest=" + str(d.get("playbook_digest")))
+'
+}
+
 start_instance() {
   "$DSH_BIN" --profile web --no-open --port "$PORT" >>"$LOG_DIR/web.out" 2>&1 &
   WEB_PID=$!
@@ -127,10 +143,12 @@ WS_ID="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["workspace"]
 SESSION_A="$(create_session)" || exit 1
 echo "gen-1 session=$SESSION_A"
 
+# HTTP 面建团（#51）：实例化不再经 LLM 工具
+team_create "$SESSION_A" || exit 1
 
 # -----------------------------------------------------------------------------
 echo "== [2] 档 A：空闲态 kill —— 先建立团队态"
-prompt "$SESSION_A" "Execute these tool calls in order and nothing else: 1) team_init; 2) team_spawn with member 'coder', durable_id 'dur-coder-a', role 'coder', tier 1; 3) team_task_create with title 'T1', room 'root', max_rounds 3. Then end your turn."
+prompt "$SESSION_A" "Execute these tool calls in order and nothing else: 1) team_spawn with member 'coder', durable_id 'dur-coder-a', role 'coder', tier 1; 3) team_task_create with title 'T1', room 'root', max_rounds 3. Then end your turn."
 wait_events "$SESSION_A" "lines.count('task/create') >= 1" 240 \
   || { echo "FAIL: 团队态未建立"; exit 1; }
 sleep 12  # 等待本轮收尾进入 idle（空闲态）
@@ -155,7 +173,7 @@ wait_events "$SESSION_B" "'$SESSION_B' in lines and 'task/update' in lines and l
 # -----------------------------------------------------------------------------
 echo "== [4] 档 B：满载态 kill —— 多成员多 running 任务"
 # 回到 gen-1 会话继续（其 TEAM_HOME 独立）；先重建团队态至双 running
-TASK_D="$(json_text "Call team_init. Then call team_spawn twice: member 'coder' durable_id 'dur-b-coder' role 'coder' tier 1; member 'qa' durable_id 'dur-b-qa' role 'qa' tier 1. Then call team_task_create twice: first title 'B1' room 'root' touched_paths ['src/b1.ts'] mutex_groups ['g-b1'] max_rounds 3; second title 'B2' room 'root' touched_paths ['src/b2.ts'] mutex_groups ['g-b2'] max_rounds 3. Then set both tasks running via two team_task_update calls (status running). Then end your turn.")"
+TASK_D="$(json_text "The team is already initialized. Call team_spawn twice: member 'coder' durable_id 'dur-b-coder' role 'coder' tier 1; member 'qa' durable_id 'dur-b-qa' role 'qa' tier 1. Then call team_task_create twice: first title 'B1' room 'root' touched_paths ['src/b1.ts'] mutex_groups ['g-b1'] max_rounds 3; second title 'B2' room 'root' touched_paths ['src/b2.ts'] mutex_groups ['g-b2'] max_rounds 3. Then set both tasks running via two team_task_update calls (status running). Then end your turn.")"
 prompt "$SESSION_A" "$TASK_D" || exit 1
 wait_events "$SESSION_A" "len([l for l in lines.splitlines() if '\"type\":\"task/update\"' in l]) >= 2" 300 \
   || { echo "FAIL: 满载态未达到双 running"; exit 1; }

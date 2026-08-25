@@ -8,7 +8,7 @@
  * 来源三级：builtin（包内只读）/ user / project——同名不跨级覆盖，
  * 加载时标记来源即可区分（#13 冻结口径）。
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
@@ -181,4 +181,39 @@ export function loadTier0Playbook(packageRoot: string): Tier0Playbook {
  */
 export function assembleTier0Prompt(playbook: Tier0Playbook, scenarioPrompt: string): string {
   return playbook.text + TIER0_PLAYBOOK_SEPARATOR + scenarioPrompt;
+}
+
+/** 包内模板根目录（builtin 场景白名单根，#51 入口承载场景选择）。 */
+export function builtinTemplatesRoot(packageRoot: string): string {
+  return join(packageRoot, "templates");
+}
+
+/** 缺省场景名（入口/工具未指定时）。 */
+export const DEFAULT_SCENARIO = "oss-maintenance";
+/** 场景名安全形态：防路径拼接；目录存在性另行校验。 */
+export const SCENARIO_PATTERN = /^[a-z0-9-]+$/;
+
+/**
+ * 解析并校验 builtin 场景目录。两道闸：名字形态 + team.yaml 存在；
+ * 不通过抛 message 以 unknown-scenario 前缀标识稳定语义
+ * （handler 层翻译为同名错误码）。
+ */
+export function resolveBuiltinScenarioDir(packageRoot: string, scenario: string): string {
+  if (!SCENARIO_PATTERN.test(scenario)) {
+    throw new Error(`unknown-scenario: invalid scenario name "${scenario}"`);
+  }
+  const dir = join(builtinTemplatesRoot(packageRoot), scenario);
+  if (!existsSync(join(dir, TEAM_FILE))) {
+    throw new Error(`unknown-scenario: no builtin template "${scenario}"`);
+  }
+  return dir;
+}
+
+/** 枚举包内全部合法场景名（有 team.yaml 的一级子目录，实时扫描无缓存）。 */
+export function listBuiltinScenarios(packageRoot: string): string[] {
+  const root = builtinTemplatesRoot(packageRoot);
+  if (!existsSync(root)) return [];
+  return readdirSync(root)
+    .filter((entry) => SCENARIO_PATTERN.test(entry) && existsSync(join(root, entry, TEAM_FILE)))
+    .sort();
 }

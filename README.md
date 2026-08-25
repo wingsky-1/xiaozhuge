@@ -42,6 +42,7 @@
 - [ADR 0008](docs/adr/0008-single-tier-template-and-dynamic-orchestration.md) — 单层模板放宽（tiers 下限 1）与主控动态编排
 - [ADR 0009](docs/adr/0009-framework-scenario-layering-and-tier0-assembly.md) — 框架/场景提示词分层与 Tier-0 规程组装（#42）
 - [ADR 0010](docs/adr/0010-gate-console-hardening.md) — Gate Console 安全加固与自批风险定性（#2）
+- [ADR 0011](docs/adr/0011-team-launch-entry.md) — Team 拉起入口与 team_init 工具面下线（#51）
 
 ## 内置模板（templates/）
 
@@ -52,7 +53,7 @@
 ## 框架规程（playbooks/）
 
 - `playbooks/tier0-playbook.md` — Tier-0 巡场规程唯一事实源：来源仅 builtin
-  （不进模板三级体系），由 `team_init` 以「规程全文 + 固定分隔符 + 场景段」
+  （不进模板三级体系），由 Team 拉起入口以「规程全文 + 固定分隔符 + 场景段」
   组装为 `tier0_prompt` 返回（ADR 0009）。
 
 ## 开发

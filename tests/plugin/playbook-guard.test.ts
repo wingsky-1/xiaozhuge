@@ -3,7 +3,8 @@
  *
  * 三道闸：
  * 1. 分隔符格式锁定——分隔符是显式协议常量，改动即协议变更；
- * 2. 正向组装——team_init 返回值 = 规程全文 + 分隔符 + 场景 tiers[0].prompt，
+ * 2. 正向组装——init 返回值（HTTP 面经 /api/xiaozhuge/team/create，工具面已下线）
+ *    = 规程全文 + 分隔符 + 场景 tiers[0].prompt，
  *   对任意场景成立（含单层 research-report，#39 依赖方）；
  * 3. 反向守门——内置模板场景 prompt 不得复制规程特征句，防双副本漂移复发。
  */
@@ -72,7 +73,7 @@ describe("正向组装：tier0_prompt = 规程全文 + 分隔符 + 场景段", (
     handlers = createHandlers(home, "session-playbook-1");
   });
 
-  it("team_init 组装结果逐字节等于公式，快照记录 playbook_digest", async () => {
+  it("init 组装结果逐字节等于公式，快照记录 playbook_digest", async () => {
     const result = (await handlers.init({})) as {
       tier0_prompt: string;
       playbook_digest: string;

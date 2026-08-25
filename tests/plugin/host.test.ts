@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { apply, name, inject } from "../../src/plugin/host.js";
 import { schemas } from "../../src/plugin/schemas.js";
 import { resolveTeamHome } from "../../src/team-home.js";
+import { createHandlers } from "../../src/plugin/handlers.js";
 
 interface RegisteredTool {
   name: string;
@@ -56,14 +57,13 @@ describe("插件装配", () => {
     expect(inject).toEqual(["tools", "webServer"]);
   });
 
-  it("注册 11 个 team_* 工具且命名规范", () => {
+  it("注册 10 个 team_* 工具且命名规范（team_init 已下线，#51）", () => {
     const { registered } = makeHost();
     const names = [...registered.keys()].sort();
     expect(names).toEqual([
       "team_ack",
       "team_handoff",
       "team_inbox",
-      "team_init",
       "team_send",
       "team_spawn",
       "team_state_get",
@@ -76,9 +76,47 @@ describe("插件装配", () => {
 
   it("卸载 disposer 注销全部工具", () => {
     const { registered, dispose } = makeHost();
-    expect(registered.size).toBe(11);
+    expect(registered.size).toBe(10);
     dispose();
     expect(registered.size).toBe(0);
+  });
+
+  it("webServer 在场时注册 Console/入口路由并订阅页面注入（#51）", () => {
+    const registered = new Map<string, unknown>();
+    const routes: Array<{ path: string }> = [];
+    let injectListener: ((table: unknown[]) => void) | undefined;
+    const ctx = {
+      tools: { register: (d: { name: string }) => {
+        const disposer = () => registered.delete(d.name);
+        registered.set(d.name, d);
+        return disposer;
+      } },
+      webServer: { register: (route: { path: string }) => {
+        routes.push(route);
+        return () => {
+          const i = routes.indexOf(route);
+          if (i >= 0) routes.splice(i, 1);
+        };
+      } },
+      logger: { info: () => {}, warn: () => {} },
+      get: () => undefined,
+      on: (event: "webserver/index-inject", listener: (table: unknown[]) => void) => {
+        if (event === "webserver/index-inject") injectListener = listener;
+      },
+    };
+    const dispose = apply(ctx as never);
+    const paths = routes.map((r) => r.path);
+    expect(paths).toContain("/xiaozhuge/console");
+    expect(paths).toContain("/xiaozhuge/launch");
+    expect(paths).toContain("/api/xiaozhuge/team/create");
+    // 注入监听器被订阅且产出 script 行
+    expect(typeof injectListener).toBe("function");
+    const table: unknown[] = [];
+    injectListener?.(table);
+    expect(table).toHaveLength(1);
+    dispose();
+    expect(registered.size).toBe(0);
+    expect(routes).toHaveLength(0);
   });
 
   it("TEAM_HOME 绑定到主会话 id（ADR 0005 宿主绑定层）", () => {
@@ -89,54 +127,28 @@ describe("插件装配", () => {
 });
 
 describe("execute 路由与输出包装", () => {
-  it("team_init 经 execute 走到 handler 并包装 ok 输出", async () => {
+  it("team_spawn 经 execute 走到 handler 并包装 ok 输出", async () => {
     const { registered } = makeHost();
-    const init = registered.get("team_init")!;
-    const result = (await init.execute({}, { agent: { id: "session-h1" } })) as {
+    const spawn = registered.get("team_spawn")!;
+    const result = (await spawn.execute(
+      { member: "qa", durable_id: "d-q", role: "qa", tier: 1 },
+      { agent: { id: "session-h1" } },
+    )) as {
       ok: boolean;
-      lock: string;
-      tier0_prompt: string | null;
-      playbook_digest?: string;
+      member: string;
+      durable_id: string;
     };
     expect(result.ok).toBe(true);
-    expect(["acquired", "reentered"]).toContain(result.lock);
-    // #42 分层组装：返回值 = 规程全文 + 固定分隔符 + 场景段，附 playbook 审计摘要
-    expect(typeof result.tier0_prompt).toBe("string");
-    expect(result.tier0_prompt).toContain("巡场");
-    expect(result.tier0_prompt).toContain("资源防护三项");
-    expect(result.tier0_prompt).toContain("tier0 playbook / scenario prompt boundary");
-    expect(result.tier0_prompt).toContain("一级主控场景编排");
-    expect(result.playbook_digest).toMatch(/^[0-9a-f]{16}$/);
+    expect(result.member).toBe("qa");
     // 渲染投影是 JSON 文本块
-    const blocks = init.output.render({}, result) as Array<{ type: string; text: string }>;
+    const blocks = spawn.output.render({}, result) as Array<{ type: string; text: string }>;
     expect(blocks[0]?.type).toBe("text");
     expect(JSON.parse(blocks[0]!.text)).toMatchObject({ ok: true });
   });
 
-  it("同会话复用同一实例根：init 重入 reentered", async () => {
+  it("team_init 已下线（#51）：实例化走 HTTP 面而非 LLM 工具", () => {
     const { registered } = makeHost();
-    await registered.get("team_init")!.execute({}, { agent: { id: "session-h2" } });
-    const again = (await registered
-      .get("team_init")!
-      .execute({}, { agent: { id: "session-h2" } })) as { lock: string };
-    expect(again.lock).toBe("reentered");
-  });
-
-  it("不同主会话各自独立实例根", async () => {
-    const { registered } = makeHost();
-    const a = (await registered
-      .get("team_init")!
-      .execute({}, { agent: { id: "session-a" } })) as { home: string };
-    const b = (await registered
-      .get("team_init")!
-      .execute({}, { agent: { id: "session-b" } })) as { home: string };
-    expect(a.home).not.toBe(b.home);
-  });
-
-  it("无 agent 上下文时回退占位会话不炸", async () => {
-    const { registered } = makeHost();
-    const r = (await registered.get("team_init")!.execute({})) as { ok: boolean };
-    expect(r.ok).toBe(true);
+    expect(registered.get("team_init")).toBeUndefined();
   });
 
   it("参数缺失给 invalid-arguments（S1 结论：自行校验）", async () => {
@@ -149,7 +161,8 @@ describe("execute 路由与输出包装", () => {
   it("spawn 后 send 可达（路由到同一实例根）", async () => {
     const { registered } = makeHost();
     const exec = { agent: { id: "session-route" } };
-    await registered.get("team_init")!.execute({}, exec);
+    // 实例化经 HTTP 面（#51）；此处直接驱动 handler 建团队态。
+    await createHandlers(resolveTeamHome("session-route"), "session-route").init({});
     await registered.get("team_spawn")!.execute(
       { member: "qa", durable_id: "d-q", role: "qa", tier: 1 },
       exec,

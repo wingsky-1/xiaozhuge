@@ -14,10 +14,11 @@ import { ensureDir, writeJsonAtomic } from "../runtime/fs-utils.js";
 import { layout } from "../runtime/paths.js";
 import {
   assembleTier0Prompt,
-  builtinScenarioDir,
   instantiateSnapshot,
   loadTemplate,
   loadTier0Playbook,
+  resolveBuiltinScenarioDir,
+  DEFAULT_SCENARIO,
 } from "../runtime/template-loader.js";
 import { Ledger, findConflicts } from "../runtime/ledger.js";
 import { EventLog } from "../runtime/event-log.js";
@@ -37,7 +38,7 @@ export class ToolError extends Error {
 }
 
 /** 包根目录（dist 与 src 双形态均回溯到仓根），builtin 模板定位用。 */
-const PACKAGE_ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..");
+export const PACKAGE_ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..");
 
 function wrap(error: unknown): never {
   if (error instanceof ToolError) throw error;
@@ -167,10 +168,21 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
         // room.lock CAS 幂等：同会话重入成功，异会话重复实例化拒绝。
         const outcome = await acquireCas(l.roomLock, sessionId);
         await reg().write(await reg().read());
+        // 场景选择（#51 入口承载）：scenario 运行时校验 builtin 白名单，
+        // 非法即稳定错误码 unknown-scenario；缺省 oss-maintenance。
+        const scenario = typeof args.scenario === "string" && args.scenario.length > 0
+          ? args.scenario
+          : DEFAULT_SCENARIO;
+        let scenarioDir: string;
+        try {
+          scenarioDir = resolveBuiltinScenarioDir(PACKAGE_ROOT, scenario);
+        } catch (error) {
+          throw new ToolError("unknown-scenario", (error as Error).message);
+        }
         // 模板快照落盘 + Tier-0 组装（#42 分层定稿）：tier0_prompt =
         // 规程全文（playbooks/tier0-playbook.md，唯一事实源）+ 固定分隔符 +
         // 场景 tiers[0].prompt；快照增补 playbook_digest 审计字段。
-        const loaded = await loadTemplate(builtinScenarioDir(PACKAGE_ROOT), "builtin");
+        const loaded = await loadTemplate(scenarioDir, "builtin");
         const playbook = loadTier0Playbook(PACKAGE_ROOT);
         await writeJsonAtomic(l.teamYaml, instantiateSnapshot(loaded, playbook.digest));
         await appendEvent("system", "team/init", { instance_note: args.instance_note ?? null, lock: outcome });
@@ -180,6 +192,7 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
           ok: true,
           lock: outcome,
           home: l.teamHome,
+          scenario,
           tier0_prompt: assembleTier0Prompt(playbook, scenarioPrompt),
           playbook_digest: playbook.digest,
         };
