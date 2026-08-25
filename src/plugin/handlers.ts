@@ -69,6 +69,15 @@ function reqStr(args: Record<string, unknown>, key: string): string {
   return v;
 }
 
+/** 必填数字参数校验。 */
+function reqNum(args: Record<string, unknown>, key: string): number {
+  const v = args[key];
+  if (typeof v !== "number" || !Number.isFinite(v)) {
+    throw new ToolError("invalid-arguments", `number field "${key}" is required`);
+  }
+  return v;
+}
+
 function optStr(args: Record<string, unknown>, key: string): string | undefined {
   const v = args[key];
   if (v === undefined) return undefined;
@@ -94,12 +103,56 @@ function optStrArray(args: Record<string, unknown>, key: string): string[] | und
   return v as string[];
 }
 
+/** role_inline 白名单（对齐模板 role schema 的动态字段，ADR 0015：随信封投递不持久化）。 */
+const ROLE_INLINE_FIELDS = ["prompt", "briefing", "dod", "max_hops", "as_judge"] as const;
+
+function optRoleInline(args: Record<string, unknown>): Record<string, unknown> | undefined {
+  const v = args.role_inline;
+  if (v === undefined) return undefined;
+  if (typeof v !== "object" || v === null || Array.isArray(v)) {
+    throw new ToolError("invalid-arguments", 'field "role_inline" must be an object');
+  }
+  const inline = v as Record<string, unknown>;
+  for (const key of Object.keys(inline)) {
+    if (!(ROLE_INLINE_FIELDS as readonly string[]).includes(key)) {
+      throw new ToolError("invalid-arguments", `unknown role_inline field "${key}"`);
+    }
+  }
+  if (
+    inline.prompt !== undefined &&
+    (typeof inline.prompt !== "string" || inline.prompt.length === 0)
+  ) {
+    throw new ToolError("invalid-arguments", 'role_inline.prompt must be a non-empty string');
+  }
+  if (
+    inline.briefing !== undefined &&
+    (typeof inline.briefing !== "string" || inline.briefing.length === 0)
+  ) {
+    throw new ToolError("invalid-arguments", 'role_inline.briefing must be a non-empty string');
+  }
+  if (inline.dod !== undefined) {
+    const probe = { dod: inline.dod };
+    if (optStrArray(probe, "dod") === undefined) {
+      throw new ToolError("invalid-arguments", 'role_inline.dod must be a string array');
+    }
+  }
+  if (inline.max_hops !== undefined && (typeof inline.max_hops !== "number" || !Number.isFinite(inline.max_hops))) {
+    throw new ToolError("invalid-arguments", 'role_inline.max_hops must be a number');
+  }
+  if (inline.as_judge !== undefined && typeof inline.as_judge !== "boolean") {
+    throw new ToolError("invalid-arguments", 'role_inline.as_judge must be a boolean');
+  }
+  return inline;
+}
+
 /** 一个团队实例的 handler 集（绑定到某主会话的 TEAM_HOME）。 */
 export interface Handlers {
   /** team_init：建目录结构 + agents.json 骨架 + room.lock 幂等占位。 */
   init: (args: Record<string, unknown>) => Promise<unknown>;
   /** team_spawn：登记成员 durable id 入 agents.json。 */
   spawn: (args: Record<string, unknown>) => Promise<unknown>;
+  /** team_dispatch（ADR 0015，#67）：spawn → 指派 → 派单复合原语，半事务。 */
+  dispatch: (args: Record<string, unknown>) => Promise<unknown>;
   /** team_send：定向信箱投递（可达性 = 注册表存在性，MVP auto 模式）。 */
   send: (args: Record<string, unknown>) => Promise<unknown>;
   /** team_inbox：读未读 / 认领指定信封。 */
@@ -255,6 +308,104 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
         });
         await appendEvent("system", "team/spawn", { member, durable_id: durableId, role, tier });
         return { ok: true, member, durable_id: durableId };
+      } catch (error) {
+        wrap(error);
+      }
+    },
+
+    async dispatch(args) {
+      try {
+        const member = reqStr(args, "member");
+        const durableId = reqStr(args, "durable_id");
+        const role = reqStr(args, "role");
+        const tier = reqNum(args, "tier");
+        const parent = optStr(args, "parent");
+        const taskId = reqStr(args, "task_id");
+        const from = optStr(args, "from") ?? "root";
+        const provider = optStr(args, "provider");
+        const model = optStr(args, "model");
+        const inline = optRoleInline(args);
+        const expectRev = optNum(args, "expect_rev");
+
+        // 前置校验（无副作用，不参与半事务）：任务必须在场——账本先行约定。
+        const task = await led().get(taskId);
+        if (task === undefined) {
+          throw new ToolError("task-not-found", `task ${taskId} does not exist`);
+        }
+
+        // 半事务执行：任一步失败即停，已完成步骤随错误留痕（ADR 0015）。
+        const completed: string[] = [];
+        try {
+          // step 1: 注册（幂等 upsert，与 team_spawn 同一落账函数）。
+          await ensureDir(join(l.mailboxDir, member));
+          await reg().upsertMember({
+            member,
+            durableId,
+            tier,
+            status: "spawned",
+            lastSeen: Date.now(),
+          });
+          await appendEvent("system", "team/spawn", {
+            member,
+            durable_id: durableId,
+            role,
+            tier,
+            ...(parent !== undefined ? { parent } : {}),
+            ...(provider !== undefined ? { provider } : {}),
+            ...(model !== undefined ? { model } : {}),
+            ...(inline !== undefined ? { role_inline: inline } : {}),
+          });
+          completed.push("spawn");
+          // step 2: 指派（乐观锁透传，防并发误派）。
+          const updated = await led().update(
+            taskId,
+            { assignee: member },
+            { ...(expectRev !== undefined ? { expectRev } : {}) },
+          );
+          await appendEvent(member, "task/update", {
+            task_id: taskId,
+            status: updated.status,
+            rev: updated.rev,
+          });
+          completed.push("assign");
+          // step 3: 派单信封（role_inline 与模型档位随信封投递给成员）。
+          const envelopeId = await deliver(teamHome, member, {
+            from,
+            type: "task-assign",
+            body: {
+              task_id: taskId,
+              title: task.title,
+              room: task.room,
+              dod: task.dod,
+              role_inline: inline ?? null,
+              provider: provider ?? null,
+              model: model ?? null,
+            },
+          });
+          await appendEvent(from, "mailbox/deliver", {
+            to: member,
+            envelope_id: envelopeId,
+            msg_type: "task-assign",
+          });
+          completed.push("send");
+          return {
+            ok: true,
+            member,
+            durable_id: durableId,
+            task_id: taskId,
+            envelope_id: envelopeId,
+            steps: completed,
+          };
+        } catch (error) {
+          const e = error as { code?: string; message?: string };
+          // 已知稳定错误码原样透传（可路由），其余归并为 dispatch-partial；
+          // 两种形态都携带已完成步骤，供主控决定续跑或回滚。
+          const code = e.code ?? "dispatch-partial";
+          throw new ToolError(
+            code,
+            `dispatch stopped after [${completed.join(", ") || "none"}]: ${e.message ?? String(error)}`,
+          );
+        }
       } catch (error) {
         wrap(error);
       }

@@ -91,6 +91,7 @@ export function apply(ctx: {
         const args = (rawArgs ?? {}) as Record<string, unknown>;
         const HANDLER_BY_TOOL: Record<string, string> = {
           team_spawn: "spawn",
+          team_dispatch: "dispatch",
           team_send: "send",
           team_inbox: "inbox",
           team_ack: "ack",
@@ -112,7 +113,6 @@ export function apply(ctx: {
         }
         const value = await handler(args);
         return { ok: true, ...(value as object) };
-        return { ok: true, ...(value as object) };
       },
     };
     disposers.push(ctx.tools.register(definition));
@@ -124,6 +124,12 @@ export function apply(ctx: {
     "Register a spawned subagent into the team registry with its durable subagent id.",
     schemas.spawn,
     (args, agent) => handlersFor(agent).spawn(args),
+  );
+  define(
+    "team_dispatch",
+    "Composite dispatch primitive: register the member, assign the task, deliver the assignment envelope in one call; stops at first failure and reports completed steps.",
+    schemas.dispatch,
+    (args, agent) => handlersFor(agent).dispatch(args),
   );
   define(
     "team_send",
