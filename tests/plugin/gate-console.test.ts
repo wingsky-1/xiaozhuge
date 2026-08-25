@@ -261,3 +261,25 @@ describe("Console 加固（#2 P0）", () => {
     expect(html).toContain("esc(g.id)");
   });
 });
+
+describe("open gate 端点双头断言（#2 P0）", () => {
+  it("无 Origin 的放置被拒", async () => {
+    baseUrl = await listen();
+    const denied = await fetch(`${baseUrl}/api/xiaozhuge/gates?session=${SESSION}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "g", reason: "", requestedBy: "m" }),
+    });
+    expect(denied.status).toBe(403);
+  });
+
+  it("跨站 SFS 的放置被拒", async () => {
+    baseUrl = await listen();
+    const denied = await fetch(`${baseUrl}/api/xiaozhuge/gates?session=${SESSION}`, {
+      method: "POST",
+      headers: { origin: baseUrl, "sec-fetch-site": "cross-site" },
+      body: JSON.stringify({ id: "g", reason: "", requestedBy: "m" }),
+    });
+    expect(denied.status).toBe(403);
+  });
+});
