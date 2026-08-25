@@ -77,7 +77,15 @@ export async function acquireCas(
 ): Promise<AcquireResult> {
   const lockDir = lockDirOf(resourcePath);
   if (existsSync(lockDir)) {
-    const owner = await readOwner(lockDir);
+    let owner = await readOwner(lockDir);
+    if (owner === undefined) {
+      // mkdir 与 owner 写入之间的启动竞态窗口：短暂轮询等待持有者落位，
+      // 仍无有效 owner 才判孤儿（崩溃残留是持久的，不会在轮询内消失）。
+      for (let i = 0; i < 10 && owner === undefined; i += 1) {
+        await new Promise((r) => setTimeout(r, 20));
+        owner = await readOwner(lockDir);
+      }
+    }
     if (owner === undefined) {
       if (!opts.takeoverOrphan) {
         throw new LockError(
