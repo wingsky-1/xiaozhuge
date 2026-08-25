@@ -3,8 +3,13 @@
  * 校验 stryker-incremental.json 与提交基线是否内容一致。
  * 两层规范化后比较：
  * 1. 对象键递归排序（Stryker 键序不稳定）；
- * 2. 每个文件的 mutants 列表按多重集合语义比较——剥离 id / killedBy /
- *    testsCompleted（跨运行非确定），其余字段构成签名后排序。
+ * 2. 每个文件的 mutants 列表按「身份集合」语义比较——只保留稳定身份指纹
+ *    （mutatorName / replacement / static / location.start），剥离一切跨
+ *    运行非确定字段：id / killedBy / testsCompleted / coveredBy /
+ *    statusReason（测试执行顺序与 id 编号漂移）、status（增量模式
+ *    NoCoverage/Killed/Survived 会翻转，变异分数由 thresholds.break 门禁
+ *    保障，基线校验只管 mutant 集合是否一致）、location.end（增量产物
+ *    列宽漂移）。
  */
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -24,11 +29,18 @@ function sortDeep(value) {
   return value;
 }
 
-/** 单个 mutant 的运行无关签名：剥掉跨运行非确定的字段。 */
+/**
+ * 单个 mutant 的运行无关身份签名：
+ * - 剥离跨运行非确定字段（id/killedBy/testsCompleted/coveredBy/statusReason）；
+ * - 剥离 status/statusReason——增量模式结果会翻转，score 由 Stryker 门禁保障；
+ * - location 只保留 start（end 是运行期列宽，增量产物会漂移）；
+ * - 保留 mutatorName / replacement / static / location.start 作为稳定身份。
+ */
 function mutantSignature(mutant) {
-  const { id, killedBy, testsCompleted, coveredBy, statusReason, ...rest } = mutant;
-  void id; void killedBy; void testsCompleted; void coveredBy; void statusReason;
-  return JSON.stringify(sortDeep(rest));
+  const { id, killedBy, testsCompleted, coveredBy, statusReason, status, location, ...rest } = mutant;
+  void id; void killedBy; void testsCompleted; void coveredBy; void statusReason; void status;
+  const stableLocation = location ? { start: location.start } : undefined;
+  return JSON.stringify(sortDeep({ ...rest, location: stableLocation }));
 }
 
 function canonical(text) {

@@ -9,17 +9,20 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { TaskRecord, TaskStatus } from "../runtime/types.js";
+import type { TaskRecord, TaskStatus, TemplateSource } from "../runtime/types.js";
 import { ensureDir, writeJsonAtomic } from "../runtime/fs-utils.js";
 import { layout } from "../runtime/paths.js";
 import {
   assembleTier0Prompt,
+  builtinTemplatesRoot,
   instantiateSnapshot,
   loadTemplate,
   loadTier0Playbook,
-  resolveBuiltinScenarioDir,
+  resolveScenarioDir,
   DEFAULT_SCENARIO,
 } from "../runtime/template-loader.js";
+import type { ScenarioRoot } from "../runtime/template-loader.js";
+import { userTemplatesRoot, projectTemplatesRoot } from "../team-home.js";
 import { Ledger, findConflicts } from "../runtime/ledger.js";
 import { EventLog } from "../runtime/event-log.js";
 import { Registry } from "../runtime/registry.js";
@@ -168,21 +171,42 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
         // room.lock CAS 幂等：同会话重入成功，异会话重复实例化拒绝。
         const outcome = await acquireCas(l.roomLock, sessionId);
         await reg().write(await reg().read());
-        // 场景选择（#51 入口承载）：scenario 运行时校验 builtin 白名单，
-        // 非法即稳定错误码 unknown-scenario；缺省 oss-maintenance。
+        // 场景选择（#47 三级来源解析）：scenario 必选或缺省，source 可选消歧，
+        // project_root 控制 project 层参与。同名未指定 source → ambiguous-scenario。
         const scenario = typeof args.scenario === "string" && args.scenario.length > 0
           ? args.scenario
           : DEFAULT_SCENARIO;
+        const requestedSource = typeof args.source === "string" && args.source.length > 0
+          ? (args.source as TemplateSource)
+          : undefined;
+        const projectRoot = typeof args.project_root === "string" && args.project_root.length > 0
+          ? args.project_root
+          : undefined;
+        // 三级来源根组装（builtin + user + 可选 project）
+        const roots: ScenarioRoot[] = [
+          { source: "builtin", dir: builtinTemplatesRoot(PACKAGE_ROOT) },
+          { source: "user", dir: userTemplatesRoot() },
+        ];
+        if (projectRoot !== undefined) {
+          roots.push({ source: "project", dir: projectTemplatesRoot(projectRoot) });
+        }
         let scenarioDir: string;
+        let scenarioSource: TemplateSource;
         try {
-          scenarioDir = resolveBuiltinScenarioDir(PACKAGE_ROOT, scenario);
+          const resolved = resolveScenarioDir(roots, scenario, requestedSource);
+          scenarioDir = resolved.dir;
+          scenarioSource = resolved.source;
         } catch (error) {
-          throw new ToolError("unknown-scenario", (error as Error).message);
+          const msg = (error as Error).message;
+          if (msg.startsWith("ambiguous-scenario:")) {
+            throw new ToolError("ambiguous-scenario", msg);
+          }
+          throw new ToolError("unknown-scenario", msg);
         }
         // 模板快照落盘 + Tier-0 组装（#42 分层定稿）：tier0_prompt =
         // 规程全文（playbooks/tier0-playbook.md，唯一事实源）+ 固定分隔符 +
         // 场景 tiers[0].prompt；快照增补 playbook_digest 审计字段。
-        const loaded = await loadTemplate(scenarioDir, "builtin");
+        const loaded = await loadTemplate(scenarioDir, scenarioSource);
         const playbook = loadTier0Playbook(PACKAGE_ROOT);
         await writeJsonAtomic(l.teamYaml, instantiateSnapshot(loaded, playbook.digest));
         await appendEvent("system", "team/init", { instance_note: args.instance_note ?? null, lock: outcome });
@@ -193,6 +217,7 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
           lock: outcome,
           home: l.teamHome,
           scenario,
+          source: scenarioSource,
           tier0_prompt: assembleTier0Prompt(playbook, scenarioPrompt),
           playbook_digest: playbook.digest,
         };

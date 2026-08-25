@@ -80,5 +80,12 @@ export {
   TIER0_PLAYBOOK_SEPARATOR,
   loadTier0Playbook,
   assembleTier0Prompt,
+  SCENARIO_PATTERN,
+  DEFAULT_SCENARIO,
+  resolveBuiltinScenarioDir,
+  listBuiltinScenarios,
+  builtinTemplatesRoot,
+  resolveScenarioDir,
+  listScenarios,
 } from "./template-loader.js";
-export type { LoadedTemplate, Tier0Playbook } from "./template-loader.js";
+export type { LoadedTemplate, Tier0Playbook, ScenarioRoot, ScenarioEntry } from "./template-loader.js";
