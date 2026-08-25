@@ -40,6 +40,7 @@ import {
   acquireCas,
 } from "../runtime/index.js";
 import { userTemplatesRoot, projectTemplatesRoot } from "./team-home.js";
+import { appendToolManifest } from "./tool-manifest.js";
 
 /** 统一错误形状：{ error: { code, message } }，模型可读可路由。 */
 export class ToolError extends Error {
@@ -282,7 +283,9 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
           home: l.teamHome,
           scenario,
           source: scenarioSource,
-          tier0_prompt: assembleTier0Prompt(playbook, scenarioPrompt),
+          // ADR 0015 决策 3：tier0_prompt 尾部追加「框架工具面自述」保留段
+          //（仅 team_* 自述 + 盲区声明；appendToolManifest 保证不双份）。
+          tier0_prompt: appendToolManifest(assembleTier0Prompt(playbook, scenarioPrompt)),
           playbook_digest: playbook.digest,
         };
       } catch (error) {

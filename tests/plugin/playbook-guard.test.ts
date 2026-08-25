@@ -25,6 +25,7 @@ import {
   TIER0_PLAYBOOK_SEPARATOR,
 } from "../../src/index.js";
 import { createHandlers, type Handlers } from "../../src/plugin/handlers.js";
+import { appendToolManifest, TOOL_MANIFEST_SEPARATOR } from "../../src/plugin/tool-manifest.js";
 
 const REPO_ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..");
 const OSS_DIR = join(REPO_ROOT, "templates", "oss-maintenance");
@@ -73,16 +74,21 @@ describe("正向组装：tier0_prompt = 规程全文 + 分隔符 + 场景段", (
     handlers = createHandlers(home, "session-playbook-1");
   });
 
-  it("init 组装结果逐字节等于公式，快照记录 playbook_digest", async () => {
+  it("init 组装结果逐字节等于公式（ADR 0015：尾部追加工具面自述保留段），快照记录 playbook_digest", async () => {
     const result = (await handlers.init({})) as {
       tier0_prompt: string;
       playbook_digest: string;
     };
     const playbook = loadTier0Playbook(REPO_ROOT);
     const scenarioPrompt = readFileSync(join(OSS_DIR, "prompts", "master.md"), "utf8");
-    expect(result.tier0_prompt).toBe(assembleTier0Prompt(playbook, scenarioPrompt));
-    // 规程全文完整在场（#11 缺口不回潮）
+    expect(result.tier0_prompt).toBe(
+      appendToolManifest(assembleTier0Prompt(playbook, scenarioPrompt)),
+    );
+    // 规程全文完整在场（#11 缺口不回潮）；保留段在规程与场景段之后
     expect(result.tier0_prompt).toContain(playbook.text);
+    expect(result.tier0_prompt.indexOf(TOOL_MANIFEST_SEPARATOR)).toBeGreaterThan(
+      result.tier0_prompt.indexOf(TIER0_PLAYBOOK_SEPARATOR),
+    );
     expect(result.playbook_digest).toBe(playbook.digest);
     // 快照审计字段
     const snapshot = JSON.parse(await readFile(join(home, "team.yaml"), "utf8")) as {
