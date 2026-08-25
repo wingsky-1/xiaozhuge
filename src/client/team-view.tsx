@@ -15,6 +15,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
+  Handle,
+  Position,
   ReactFlow,
   type Edge,
   type Node,
@@ -156,6 +158,7 @@ export function layoutTree(roots: readonly TreeMember[]): { nodes: Node[]; edges
     });
     for (const child of member.children) {
       g.setEdge(member.member, child.member);
+      edges.push({ id: `e-${member.member}-${child.member}`, source: member.member, target: child.member });
       walk(child, depth + 1);
     }
   };
@@ -214,6 +217,9 @@ function MemberNodeCard({ data }: NodeProps): React.ReactNode {
       <div style={{ opacity: 0.75, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {m.currentActivity ?? "—"}
       </div>
+      {/* 边锚点：父→子连线必需（隐藏视觉，仅提供拓扑连接位） */}
+      <Handle type="target" position={Position.Top} style={{ opacity: 0 }} isConnectable={false} />
+      <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} isConnectable={false} />
     </div>
   );
 }
