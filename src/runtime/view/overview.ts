@@ -7,12 +7,18 @@
  *
  * 只读保证：零写路径、零 IO；payload 不出投影面（浏览器侧纯文本渲染，
  * 最小暴露原则）。
+ *
+ * 着色语义（对抗性评审修订：liveness 优先于活动态——黑板可能是死者遗留的
+ * 陈旧数据，注册表终局态一票否决）：
+ *   lost（dead 成员） > 黑板 running/blocked/done > idle（spawned/stopped/
+ *   无分片等静默态）。stopped 不并入运行类着色（明确不是排队）；lastSeen
+ *   陈旧横切不做——协议无心跳间隔定义，任意阈值都会把长任务静默期误标。
  */
 import type { EventRecord, MemberRecord, TeamRegistry } from "../kernel/types.js";
 import type { Shard } from "../collab/blackboard.js";
 
-/** 节点四色着色语义（运行中/阻塞/已完成/排队）。 */
-export type NodeTone = "running" | "blocked" | "done" | "queued";
+/** 节点着色语义（运行中/阻塞/已完成/静默/失联）+ 图例文案。 */
+export type NodeTone = "running" | "blocked" | "done" | "idle" | "lost";
 
 /** 单个房间归约输入：调用方已读取并截断的事件尾部窗口 + 黑板分片。 */
 export interface OverviewRoomInput {
@@ -60,19 +66,18 @@ export interface TeamOverview {
 }
 
 /**
- * 从黑板分片推导成员着色（确定性优先级 = 分片保留态三元组，其余一律
- * queued 灰态）。分片是巡场归约的唯一权威状态源；agents.json 注册态只作
- * 徽标展示，不参与着色——避免两源打架。
+ * 从黑板分片推导活动着色（仅三分支：blocked/running/done，其余一律 idle）。
+ * 注意：结果会被 reduceOverview 的 liveness 一票否决覆盖（dead → lost）。
  */
-export function toneOfShard(shard: Shard | undefined): NodeTone {
-  if (shard === undefined) return "queued";
+export function toneOfShard(shard: Shard | undefined): Exclude<NodeTone, "lost"> {
+  if (shard === undefined) return "idle";
   if (shard.status === "blocked") return "blocked";
   if (shard.status === "running") return "running";
   if (shard.status === "done") return "done";
-  return "queued";
+  return "idle";
 }
 
-/** 从分片 ext 提取 current_activity（非空字符串才认可）。 */
+/** 从分片 ext 提取 current_activity（非空字符串才认可；机械取值零生成）。 */
 function activityFromExt(ext: unknown): string | null {
   if (ext !== null && typeof ext === "object") {
     const v = (ext as { current_activity?: unknown }).current_activity;
@@ -83,7 +88,8 @@ function activityFromExt(ext: unknown): string | null {
 
 /**
  * 成员当前活动摘要：优先黑板 ext.current_activity，其次该成员在事件尾部
- * 窗口内最近一条事件的 type，两者皆无则 null。
+ * 窗口内最近一条事件的 type（机械取 type 原文，不做语言生成），两者皆无则
+ * null。
  */
 export function currentActivityOf(
   member: string,
@@ -101,7 +107,7 @@ export function currentActivityOf(
 
 /** 单房间计数与事件摘要投影。events 为空/缺文件时返回空态（断网降级同理）。 */
 export function reduceRoom(input: OverviewRoomInput): RoomView {
-  const counts: Record<NodeTone, number> = { running: 0, blocked: 0, done: 0, queued: 0 };
+  const counts: Record<NodeTone, number> = { running: 0, blocked: 0, done: 0, idle: 0, lost: 0 };
   for (const shard of input.shards) counts[toneOfShard(shard)] += 1;
   return {
     room: input.room,
@@ -114,11 +120,12 @@ export function reduceRoom(input: OverviewRoomInput): RoomView {
  * 总览归约：注册表成员逐个投影（含未在任何房间写过黑板的成员——灰态可见，
  * 保证 L1 一屏可见全团队），房间逐个投影。registry.members 为空即视为
  * 非团队实例（isTeam=false，路由层据此短路）。
+ *
+ * 着色优先级：registryStatus=dead → lost（一票否决）；其余取分片活动态
+ * （缺失 → idle）。多房间同角色分片并存时取字典序首个房间的分片，确定性可测。
  */
 export function reduceOverview(input: OverviewInput): TeamOverview {
   const memberNames = Object.keys(input.registry.members).sort();
-  // 成员→分片的查找表：任意房间内有该角色分片即取（MVP 单房间活跃假设，
-  // 多房间同角色分片并存时取字典序首个房间的分片，确定性可测）。
   const shardIndex = new Map<string, Shard>();
   const eventsByActor = new Map<string, readonly EventRecord[]>();
   for (const room of input.rooms) {
@@ -139,7 +146,7 @@ export function reduceOverview(input: OverviewInput): TeamOverview {
       parent: record.parent ?? null,
       durableId: record.durableId,
       registryStatus: record.status,
-      tone: toneOfShard(shard),
+      tone: record.status === "dead" ? ("lost" as const) : toneOfShard(shard),
       currentActivity: currentActivityOf(name, shard, eventsByActor.get(name) ?? []),
       lastSeen: Number.isFinite(record.lastSeen) ? record.lastSeen : null,
     };

@@ -57,12 +57,17 @@ async function withServer(teamHome: string | null, run: (port: number) => Promis
 }
 
 describe("GET /api/xiaozhuge/team/overview", () => {
-  it("缺 session 参数返回 400；非 GET 返回 405", async () => {
+  it("缺 session 参数返回 400；非 GET 返回 405；非法字符 session 拒绝", async () => {
     await withServer(makeTeamHome(), async (port) => {
       const missing = await fetch(`http://127.0.0.1:${port}/api/xiaozhuge/team/overview`);
       expect(missing.status).toBe(400);
       const bad = await fetch(`http://127.0.0.1:${port}/api/xiaozhuge/team/overview?session=s`, { method: "POST" });
       expect(bad.status).toBe(405);
+      // 路径拼接逃逸防御：白名单外字符一律 400。
+      const evil = await fetch(
+        `http://127.0.0.1:${port}/api/xiaozhuge/team/overview?session=${encodeURIComponent("../../etc")}`,
+      );
+      expect(evil.status).toBe(400);
     });
   });
 
@@ -93,6 +98,35 @@ describe("GET /api/xiaozhuge/team/overview", () => {
       expect(JSON.stringify(body)).not.toContain('"payload"');
       // teamHome 参数确实被使用（防 stub 漂移）。
       expect(home).toBeTruthy();
+    });
+  });
+
+  it("stat 快路径 + ETag/304 + single-flight：输入未变时重复轮询返回一致投影与 304", async () => {
+    const home = makeTeamHome();
+    await withServer(home, async (port) => {
+      const url = `http://127.0.0.1:${port}/api/xiaozhuge/team/overview?session=s0`;
+      // 并发首轮（single-flight 合并为一次归约解析）。
+      const [a, b] = await Promise.all([fetch(url), fetch(url)]);
+      expect(a.status).toBe(200);
+      expect(b.status).toBe(200);
+      const etag = a.headers.get("etag");
+      expect(etag).toBeTruthy();
+      // 输入文件未变：If-None-Match 命中 → 304 空体。
+      const cached = await fetch(url, { headers: { "if-none-match": etag! } });
+      expect(cached.status).toBe(304);
+      // 未带条件的普通轮询仍回完整投影（快路径缓存）。
+      const again = await fetch(url);
+      expect(again.status).toBe(200);
+      expect(await again.json()).toEqual(await a.clone().json());
+      // 追加事件 → 指纹翻转 → 新投影可见。
+      const { appendFileSync } = await import("node:fs");
+      appendFileSync(
+        join(layout(home).roomsDir, "root", "events.jsonl"),
+        JSON.stringify({ seq: 3, ts: 13, session_id: "s", actor: "master", type: "task/create", payload: null }) + "\n",
+      );
+      const refreshed = await fetch(url);
+      const body = (await refreshed.json()) as { rooms: Array<{ recentEvents: Array<{ type: string }> }> };
+      expect(body.rooms[0]?.recentEvents.at(-1)?.type).toBe("task/create");
     });
   });
 });

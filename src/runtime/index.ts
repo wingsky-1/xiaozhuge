@@ -73,9 +73,6 @@ export type {
   NodeTone,
   OverviewRoomInput,
   OverviewInput,
-  MemberNodeView,
-  RoomView,
-  TeamOverview,
 } from "./view/overview.js";
 export {
   validateTeamTemplate,

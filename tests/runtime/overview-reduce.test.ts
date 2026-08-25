@@ -19,14 +19,14 @@ function event(seq: number, actor: string, type: string): EventRecord {
   return { seq, ts: 1000 + seq, session_id: "s0", actor, type, payload: { secret: true } };
 }
 
-describe("toneOfShard：分片保留态 → 四色着色", () => {
-  it("blocked/running/done 一一映射，无分片与其余值一律 queued", () => {
+describe("toneOfShard：分片保留态 → 活动着色", () => {
+  it("blocked/running/done 一一映射，无分片与其余值一律 idle", () => {
     expect(toneOfShard(shard("a", "blocked"))).toBe("blocked");
     expect(toneOfShard(shard("a", "running"))).toBe("running");
     expect(toneOfShard(shard("a", "done"))).toBe("done");
-    expect(toneOfShard(undefined)).toBe("queued");
-    // 非保留态脏值（历史残留/外部写入）不炸归约，落灰态。
-    expect(toneOfShard(shard("a", "weird"))).toBe("queued");
+    expect(toneOfShard(undefined)).toBe("idle");
+    // 非保留态脏值（历史残留/外部写入）不炸归约，落静默灰态。
+    expect(toneOfShard(shard("a", "weird"))).toBe("idle");
   });
 });
 
@@ -62,7 +62,7 @@ describe("reduceRoom：计数与事件摘要投影", () => {
       shards: [shard("coder", "running"), shard("qa", "blocked"), shard("judge", "done")],
     });
     expect(view.room).toBe("root");
-    expect(view.counts).toEqual({ running: 1, blocked: 1, done: 1, queued: 0 });
+    expect(view.counts).toEqual({ running: 1, blocked: 1, done: 1, idle: 0, lost: 0 });
     expect(view.recentEvents).toEqual([
       { seq: 1, ts: 1001, actor: "system", type: "team/init" },
       { seq: 2, ts: 1002, actor: "coder", type: "blackboard/set" },
@@ -73,7 +73,7 @@ describe("reduceRoom：计数与事件摘要投影", () => {
 
   it("空房间返回空态", () => {
     const view = reduceRoom({ room: "r2", events: [], shards: [] });
-    expect(view.counts).toEqual({ running: 0, blocked: 0, done: 0, queued: 0 });
+    expect(view.counts).toEqual({ running: 0, blocked: 0, done: 0, idle: 0, lost: 0 });
     expect(view.recentEvents).toEqual([]);
   });
 });
@@ -112,7 +112,29 @@ describe("reduceOverview：成员表与 isTeam 判定", () => {
       currentActivity: "blackboard/set",
       lastSeen: 7,
     });
-    expect(byName["master"]?.tone).toBe("queued");
+    expect(byName["master"]?.tone).toBe("idle");
+  });
+
+  it("dead 成员一票否决为 lost（liveness 优先于黑板遗留活动态）", () => {
+    const overview = reduceOverview({
+      registry: {
+        members: {
+          ghost: { member: "ghost", durableId: "d-g", tier: 1, status: "dead", lastSeen: 3 },
+        },
+      },
+      rooms: [{ room: "root", events: [], shards: [shard("ghost", "running")] }],
+    });
+    expect(overview.members[0]).toMatchObject({ tone: "lost", registryStatus: "dead" });
+    // stopped 是明确的静默而非排队：无分片 → idle。
+    const stopped = reduceOverview({
+      registry: {
+        members: {
+          paused: { member: "paused", durableId: "d-p", tier: 1, status: "stopped", lastSeen: 4 },
+        },
+      },
+      rooms: [],
+    });
+    expect(stopped.members[0]?.tone).toBe("idle");
   });
 
   it("未写过黑板的成员仍可见（灰态），保证 L1 一屏可见全团队；lastSeen 非有限数兜底 null", () => {
@@ -126,7 +148,7 @@ describe("reduceOverview：成员表与 isTeam 判定", () => {
     });
     expect(overview.members[0]).toMatchObject({
       member: "idle",
-      tone: "queued",
+      tone: "idle",
       currentActivity: null,
       lastSeen: null,
     });
