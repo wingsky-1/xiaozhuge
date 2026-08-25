@@ -1,18 +1,18 @@
 /**
  * 模板加载原语（P6a，ADR 0005/#13 三级来源口径）。
  *
- * MVP 解析决策（issue #10 已留痕）：模板内容采用 **YAML 1.2 JSON 兼容子集**
- * （即合法 JSON 文本），由 Node 内置 JSON.parse 读取——零第三方依赖、零自写
- * parser；完整 YAML 特性（锚点/块标量/注释）待引入成熟解析器的 approved
- * 流程后再启用。
+ * 解析决策（#29 第 B 项）：模板内容为完整 YAML 1.2，由成熟解析器
+ * `yaml`（eemeli，零传递依赖）读取——注释/块标量/锚点全量可用；
+ * 此前的 JSON 兼容子集（issue #10 MVP 留痕）已被该 approved 决策取代。
  *
  * 来源三级：builtin（包内只读）/ user / project——同名不跨级覆盖，
  * 加载时标记来源即可区分（#13 冻结口径）。
  */
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
+import { parse as parseYaml } from "yaml";
 import type { TemplateSource } from "./types.js";
 import { validateTeamTemplate, validateRoleSet } from "./template.js";
 
@@ -40,7 +40,7 @@ export interface LoadedTemplate {
 
 /**
  * 从场景目录加载并校验模板。
- * @throws Error 目录缺失 / JSON 解析失败 / 校验不通过。
+ * @throws Error 目录缺失 / YAML 解析失败 / 校验不通过。
  */
 export async function loadTemplate(
   scenarioDir: string,
@@ -53,11 +53,13 @@ export async function loadTemplate(
   const teamRaw = await readFile(teamPath, "utf8");
   let template: Record<string, unknown> & { name: string; version: number; source?: TemplateSource };
   try {
-    template = JSON.parse(teamRaw);
+    const parsed = parseYaml(teamRaw) as unknown;
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw new Error("document must be a mapping");
+    }
+    template = parsed as typeof template;
   } catch (error) {
-    throw new Error(
-      `template ${teamPath} is not valid JSON-compatible YAML (MVP subset): ${(error as Error).message}`,
-    );
+    throw new Error(`template ${teamPath} is not valid YAML: ${(error as Error).message}`);
   }
 
   // 强制注入来源标记（覆盖模板自带值——来源由加载位置决定，不由文件内容决定）。
@@ -69,7 +71,7 @@ export async function loadTemplate(
   if (existsSync(rolesDir)) {
     for (const entry of (await readFile2(rolesDir)).sort()) {
       if (!entry.endsWith(".role.yaml")) continue;
-      const spec = JSON.parse(await readFile(join(rolesDir, entry), "utf8")) as Record<string, unknown>;
+      const spec = parseYaml(await readFile(join(rolesDir, entry), "utf8")) as Record<string, unknown>;
       specs.push(spec);
       roles[String(spec.id)] = spec;
     }
@@ -116,7 +118,6 @@ export async function loadTemplate(
 }
 
 async function readFile2(dir: string): Promise<string[]> {
-  const { readdir } = await import("node:fs/promises");
   return readdir(dir);
 }
 
