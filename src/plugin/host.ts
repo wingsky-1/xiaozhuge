@@ -100,6 +100,7 @@ export function apply(ctx: {
           team_task_list: "taskList",
           team_state_get: "stateGet",
           team_state_set: "stateSet",
+          team_reconcile: "reconcile",
           team_handoff: "handoff",
         };
         const handlerKey = HANDLER_BY_TOOL[toolName] ?? toolName.replace(/^team_/, "");
@@ -178,6 +179,12 @@ export function apply(ctx: {
     "Write your blackboard shard; status must be running|blocked|done.",
     schemas.stateSet,
     (args, agent) => handlersFor(agent).stateSet(args),
+  );
+  define(
+    "team_reconcile",
+    "One-call reconciliation view: snapshot summary, member/ledger cross-view (liveness is framework-invisible), task snapshot, event cursors; scope=audit additionally diffs ledger touched_paths against the recorded workspace tree, metadata only.",
+    schemas.reconcile,
+    (args, agent) => handlersFor(agent).reconcile(args),
   );
   define(
     "team_handoff",
