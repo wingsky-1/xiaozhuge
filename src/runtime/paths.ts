@@ -21,6 +21,7 @@ export interface Layout {
   teamHome: string;
   teamYaml: string;
   agentsJson: string;
+  /** CAS 锁资源基路径（不含 .lock 后缀）；锁形态为 room.lock 目录（proper-lockfile）。 */
   roomLock: string;
   ledgerTasksDir: string;
   roomsDir: string;
@@ -35,7 +36,7 @@ export function layout(teamHome: string): Layout {
     teamHome,
     teamYaml: join(teamHome, "team.yaml"),
     agentsJson: join(teamHome, "agents.json"),
-    roomLock: join(teamHome, "room.lock"),
+    roomLock: join(teamHome, "room"),
     ledgerTasksDir: join(teamHome, "ledger", "tasks"),
     roomsDir: join(teamHome, "rooms"),
     mailboxDir: join(teamHome, "mailbox"),

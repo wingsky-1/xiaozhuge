@@ -10,6 +10,7 @@ import {
   ensureDir,
   findConflicts,
   layout,
+  peekLock,
   Ledger,
   LedgerError,
   listGates,
@@ -89,14 +90,17 @@ describe("fs-utils 原子写", () => {
 
 describe("CAS 锁", () => {
   it("首次获取 acquired，同实例重入 reentered", async () => {
-    const lock = join(tmpHome(), "room.lock");
+    const home = tmpHome();
+    const lock = join(home, "room");
     expect(await acquireCas(lock, "sess-1")).toBe("acquired");
     expect(await acquireCas(lock, "sess-1")).toBe("reentered");
+    expect(existsSync(join(home, "room.lock"))).toBe(true); // 锁形态：目录
   });
 
-  it("异实例持有冲突，错误携带当前 holder", async () => {
-    const lock = join(tmpHome(), "room.lock");
+  it("异实例持有冲突，错误携带当前 holder；peekLock 可诊断", async () => {
+    const lock = join(tmpHome(), "room");
     await acquireCas(lock, "sess-A");
+    expect(await peekLock(lock)).toMatchObject({ holder: "sess-A" });
     try {
       await acquireCas(lock, "sess-B");
       expect.unreachable("should throw");
@@ -111,7 +115,7 @@ describe("CAS 锁", () => {
   });
 
   it("release 后可被他人获取；幂等清理不抛", async () => {
-    const lock = join(tmpHome(), "room.lock");
+    const lock = join(tmpHome(), "room");
     await acquireCas(lock, "sess-A");
     await releaseCas(lock, "sess-A");
     expect(await acquireCas(lock, "sess-B")).toBe("acquired");
@@ -119,22 +123,23 @@ describe("CAS 锁", () => {
     await releaseCas(lock, "sess-B"); // 幂等：已不存在
   });
 
-  it("孤儿锁默认拒绝、显式 takeover 接管", async () => {
+  it("孤儿锁（无有效 owner）默认拒绝、显式 takeover 接管", async () => {
     const dir = tmpHome();
-    const lock = join(dir, "room.lock");
-    writeFileSync(lock, ""); // 空锁文件 = acquire 后崩溃的产物
+    // mkdir 后 owner 写入前崩溃的产物：有锁目录、无/坏 owner.json
+    mkdirSync(join(dir, "room.lock"), { recursive: true });
     try {
-      await acquireCas(lock, "sess-A");
+      await acquireCas(join(dir, "room"), "sess-A");
       expect.unreachable("should throw");
     } catch (error) {
       expect((error as Error).message).toMatch(/orphan/);
     }
-    expect(await acquireCas(lock, "sess-A", { takeoverOrphan: true })).toBe("acquired");
+    expect(await acquireCas(join(dir, "room"), "sess-A", { takeoverOrphan: true })).toBe("acquired");
 
     const corrupt = join(dir, "corrupt.lock");
-    writeFileSync(corrupt, "{not json");
+    mkdirSync(corrupt, { recursive: true });
+    writeFileSync(join(corrupt, "owner.json"), "{not json");
     try {
-      await acquireCas(corrupt, "sess-A");
+      await acquireCas(join(dir, "corrupt"), "sess-A");
       expect.unreachable("should throw");
     } catch (error) {
       expect((error as Error).message).toMatch(/orphan/);
@@ -142,7 +147,7 @@ describe("CAS 锁", () => {
   });
 
   it("withCasLock 异常路径也释放", async () => {
-    const lock = join(tmpHome(), "room.lock");
+    const lock = join(tmpHome(), "room");
     await expect(withCasLock(lock, "s1", async () => {
       throw new Error("boom");
     })).rejects.toThrow("boom");
@@ -356,7 +361,7 @@ describe("恢复原语", () => {
 describe("layout 路径协议", () => {
   it("顶层与房间布局符合定稿 §3", () => {
     const l = layout("/team/home");
-    expect(l.roomLock).toBe("/team/home/room.lock");
+    expect(l.roomLock).toBe("/team/home/room"); // 资源基路径；锁目录为 room.lock
     expect(l.ledgerTasksDir).toBe("/team/home/ledger/tasks");
     expect(l.gatesDir).toBe("/team/home/gates");
     const r = roomLayout("/team/home", "root");
