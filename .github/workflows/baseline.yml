@@ -15,6 +15,11 @@ concurrency:
   # 连续合入时新触发取代旧全量跑；手动 dispatch 完整执行
   cancel-in-progress: ${{ github.event_name == 'push' }}
 
+# GITHUB_TOKEN 默认只读：开基线快照 PR 需要 push 分支（contents）与建 PR（pull-requests）写权限
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   archive:
     runs-on: ubuntu-latest
