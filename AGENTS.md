@@ -37,6 +37,17 @@
     叙述的里程碑（一项验证、一份产出、一次方案转折），立即在对应 issue 追加
     评论留痕（数据、结论、文件路径），不等到全部完成——防止会话异常中断丢失
     上下文；最终结论仍以 docs/adr/ 报告与 PR 为准。
+11. 出方案与实现前先调研：任何方案设计与动手实现前，须调研是否已有业界最佳
+    实践（成熟项目、主流写法、社区共识），并在方案中给出参照来源；确需自写时
+    说明「为何不自写」。涉及 dsh 插件面（loader/bundle patch、client 注入、
+    tools/webServer 注册等）时，还须对照本机 dsh 版本的 `@deepseek-ai/*`
+    官方类型包与官方示例验证是否符合官方推荐形态，有偏差须写明理由。
+12. 一切修改优先走独立 `git worktree`：先 `git fetch` 同步远端最新代码，再基于
+    `origin/main` 新建分支开 worktree（`git worktree add ../<repo>-<topic>
+    -b <type>/<topic> origin/main`）；在 worktree 内完成改动、跑全量门禁并
+    小步提交。仅当改动极微小且主工作区干净时，才允许就地主工作区直接修改；
+    主工作区存在未提交的进行中改动时严禁就地混改——避免半成品互相污染。
+    worktree 用完即删（`git worktree remove`）。
 
 ## 输入安全
 
