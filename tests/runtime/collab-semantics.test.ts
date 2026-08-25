@@ -162,7 +162,13 @@ describe("Team Template 校验", () => {
     const bad = {
       name: "",
       version: 0,
-      tiers: [{ id: "only", prompt: "" }],
+      // 4 层触发上限（下限已放宽至 1，见 ADR 0008）；首层空 prompt 仍触发必填
+      tiers: [
+        { id: "t0", prompt: "" },
+        { id: "t1", prompt: "p" },
+        { id: "t2", prompt: "p" },
+        { id: "t3", prompt: "p" },
+      ],
       roles: [],
       comm_mode: "weird",
       archives: [{ id: "a", target: "../escape" }, { id: "u", type: "url" }],
@@ -176,7 +182,7 @@ describe("Team Template 校验", () => {
     // 逐码断言 path 与 message 原文（StringLiteral/路径拼接突变全数杀伤）
     expect(byCode("name-required")).toEqual([{ path: "name", message: "template name is required" }]);
     expect(byCode("version-invalid")).toHaveLength(1);
-    expect(byCode("tiers-length")).toEqual([{ path: "tiers", message: "template requires 2 to 3 tiers" }]);
+    expect(byCode("tiers-length")).toEqual([{ path: "tiers", message: "template requires 1 to 3 tiers" }]);
     expect(byCode("tier-prompt-required")).toEqual([
       { path: "tiers[0].prompt", message: "tier prompt is required" },
     ]);

@@ -147,3 +147,43 @@ describe("加载器拒绝语义", () => {
     expect(builtinScenarioDir("/pkg/root")).toBe("/pkg/root/templates/oss-maintenance");
   });
 });
+
+describe("包内置 research-report 模板（单层，ADR 0008）", () => {
+  const RR_DIR = join(REPO_ROOT, "templates", "research-report");
+
+  it("单层 master + 五角色加载双校验全绿", async () => {
+    const loaded = await loadTemplate(RR_DIR, "builtin");
+    expect(loaded.template.name).toBe("research-report");
+    expect(loaded.template.source).toBe("builtin");
+    // 单层：tiers 恰为 [master]（下限放宽后的正例边界）
+    expect(loaded.template.tiers).toHaveLength(1);
+    expect(Object.keys(loaded.roles).sort()).toEqual([
+      "organizer",
+      "researcher",
+      "reviewer",
+      "verifier",
+      "writer",
+    ]);
+    // reviewer 是唯一 judge
+    expect((loaded.roles.reviewer as { as_judge?: boolean }).as_judge).toBe(true);
+    // master + 五角色 prompt 全部内联读入
+    expect(Object.keys(loaded.prompts)).toHaveLength(6);
+    expect(Object.keys(loaded.prompts)).toContain("./prompts/master.md");
+    expect(loaded.digest).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  it("实例化快照：五个角色 prompt 全部内联且携带 digest", async () => {
+    const loaded = await loadTemplate(RR_DIR, "builtin");
+    const snapshot = instantiateSnapshot(loaded) as {
+      source: string;
+      digest: string;
+      roles: Array<{ id: string; prompt_inlined: string | null }>;
+    };
+    expect(snapshot.source).toBe("builtin");
+    expect(snapshot.digest).toBe(loaded.digest);
+    expect(snapshot.roles).toHaveLength(5);
+    for (const role of snapshot.roles) {
+      expect(role.prompt_inlined).toBeTruthy();
+    }
+  });
+});

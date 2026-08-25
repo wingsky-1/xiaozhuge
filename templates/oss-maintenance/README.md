@@ -9,7 +9,7 @@
 ```yaml
 name: oss-maintenance          # 必填，非空
 version: 1                     # 必填，正整数
-tiers:                         # 必填，2~3 层，id 唯一
+tiers:                         # 必填，1~3 层（单层见 ADR 0008），id 唯一
   - id: master                 # 层 id（gates.at 引用它）
     prompt: ./prompts/master.md   # 规程文本相对路径（缺失即拒载）
 roles:                         # 必填，至少一个；引用 roles/ 下定义

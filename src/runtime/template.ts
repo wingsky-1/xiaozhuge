@@ -46,7 +46,7 @@ const CODE_BY_MESSAGE: Record<string, string> = {
   "template name is required": "name-required",
   "version must be a positive integer": "version-invalid",
   "tiers array is required": "tiers-required",
-  "template requires 2 to 3 tiers": "tiers-length",
+  "template requires 1 to 3 tiers": "tiers-length",
   "tier id is required": "tier-id-required",
   "tier prompt is required": "tier-prompt-required",
   "at least one role is required": "roles-required",
@@ -225,8 +225,8 @@ export function validateTeamTemplate(tpl: unknown): ValidationResult {
             .loose(),
           { error: "tiers array is required" },
         )
-        .min(2, { message: "template requires 2 to 3 tiers" })
-        .max(3, { message: "template requires 2 to 3 tiers" }),
+        .min(1, { message: "template requires 1 to 3 tiers" })
+        .max(3, { message: "template requires 1 to 3 tiers" }),
       roles: z
         .array(z.unknown(), { error: "at least one role is required" })
         .min(1, { message: "at least one role is required" }),
