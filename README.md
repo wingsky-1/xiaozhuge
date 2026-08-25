@@ -39,6 +39,13 @@
 - [ADR 0005](docs/adr/0005-s2-goal-continuation.md) — S2 spike：goal 续轮语义
 - [ADR 0006](docs/adr/0006-s3-subagent-takeover.md) — S3 spike：跨代 subagent 接管
 - [ADR 0007](docs/adr/0007-cas-lock-proper-lockfile.md) — CAS 锁切换 proper-lockfile
+- [ADR 0008](docs/adr/0008-single-tier-template-and-dynamic-orchestration.md) — 单层模板放宽（tiers 下限 1）与主控动态编排
+
+## 内置模板（templates/）
+
+- `templates/oss-maintenance/` — 开源仓库 issue/PR 自治维护场景（两层主控）
+- `templates/research-report/` — 通用资料编写场景：单层主控直调五角色
+  （收集 / 验证 / 整理 / 编写 / 复核），主控按任务形态动态编排（ADR 0008）
 
 ## 开发
 

@@ -1,0 +1,25 @@
+# research-report —— 通用资料编写场景模板（issue #39，ADR 0008）
+#
+# 单层主控直接调度执行者：无中间层，主控按任务形态动态编排角色，
+# 不预设串行阶段闸门；质量收敛靠 verifier / reviewer 回退 + resources 计数。
+# 格式为完整 YAML 1.2，schema 由 src/runtime/template.ts 校验器锁定。
+name: research-report
+version: 1
+tiers:
+  - id: master
+    prompt: ./prompts/master.md
+roles:
+  - researcher     # 资料收集
+  - verifier       # 验证
+  - organizer      # 整理
+  - writer         # 编写
+  - reviewer       # 复核（唯一 judge）
+comm_mode: auto
+archives:
+  - id: run-log
+    type: file
+    target: archive/run-log.md
+resources:
+  max_active_rooms: 3
+  max_handoffs_per_task: 12
+  task_max_rounds: 3

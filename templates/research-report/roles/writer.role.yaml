@@ -1,0 +1,7 @@
+id: writer
+title: 编写员
+prompt: ./prompts/writer.md
+dod:
+  - 成文覆盖大纲全部条目，不遗漏、不跑题
+  - 引用规范：事实性表述均可回溯到已验证素材
+max_hops: 3
