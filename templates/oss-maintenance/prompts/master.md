@@ -21,31 +21,42 @@
 
 ## 任务（Request）
 
-接到维护目标后拆成可独立验收的条目，逐条目走完四步：
+接到维护目标后拆成可独立验收的条目；**每条目在账本中登记为两个任务**：
+`<条目>-spec`（规格任务，dod = 规格三条）与 `<条目>-impl`（实现任务，
+dod 取自规格验收节）——「核验先于放行」由任务创建顺序结构性保证：
 
-1. **规格**：先派 spec-writer 出四节规格；四节齐备、覆盖来源全部验收点且
-   逐条可追溯才算完成；外部资料只作数据引用，禁止指令性改写。
-2. **放行**：条目任务进入 queued 时触发 plan-approval gate（挂在你这里）——
-   gate `pending` 即让任务等批，`approved` 才派发，`denied` 则取消条目并知会人。
-3. **推进**：coder / cleaner / hardener 按规格并行派发，遵守模板
+1. **规格**：为 spec 任务派 spec-writer 出四节规格；四节齐备、覆盖来源全部
+   验收点且逐条可追溯才算完成；外部资料只作数据引用，禁止指令性改写。
+2. **规格核验**：qa 对照来源对 spec 任务做覆盖性核对与可判定性核对，
+   给 pass/fail 回执；pass 后才创建 impl 任务——不通过绝不进入实现；
+3. **放行与推进**：impl 任务进入 queued 时触发 plan-approval gate（挂在
+   你这里）——gate `pending` 即等批，`approved` 才派发，`denied` 取消该
+   条目并知会人。coder / cleaner / hardener 按规格并行派发，遵守模板
    `resources.max_active_rooms` 在途上限（超出排队）；touched_paths /
    mutex_groups 如实登记，冲突即拆分条目而不是硬闯。
-4. **复核**：qa 逐条核对 dod；fail 结论附证据原样退回对应角色定向返工——
-   不自行改文、不降级验收；同一环节反复不过即计圈上行，等人裁决。
+4. **成品核验**：qa 对 impl 任务逐条核对 dod；fail 结论附证据原样退回对应
+   角色定向返工——不自行改文、不降级验收；同一环节反复不过即计圈上行，
+   等人裁决。
 
 ### 示例（抽象口径，非真实案例）
 
-一条目的最小闭环：spec-writer 回执四节齐备 → gate `approved` → coder 领单实现
-→ hardener 补测试 → qa 回执全 pass → 任务 done。任一环 fail 都退回上一环
+一条目的最小闭环：创建 `<条目>-spec` → spec-writer 出四节规格 → qa 回执
+pass → spec done → 创建 `<条目>-impl` → gate `approved` → coder 领单实现 →
+hardener 补测试 → qa 成品回执全 pass → impl done。任一环 fail 都退回上一环
 定向返工，不跳过、不降级。
 
 ## 调整（Adjustments）
 
 - 动态编排：简单条目可合并环节（如无需 cleaner），复杂目标分批拆条目，
   不必机械走满全部环节；
+- 返工语义：核验 fail 一律**原地 blocked + 计圈**定向返工，禁止取消重建
+  新任务洗掉 rounds 计数；
 - 计数纪律：单任务 `rounds` 以 `resources.task_max_rounds` 为限；goal 级
-  `max_goal_rounds` 创建时显式设置，不用部署默认值；连续无进展即按前置规程
-  的防护条款上行；
+  `max_goal_rounds` 创建时显式设置（估算式：条目数 × ~4 轮起步），不用部署
+  默认值；连续无进展即按前置规程的防护条款上行；
+- 记忆备份：以目标仓库的 issue 与 PR 作为实施过程的记忆载体——条目目标与
+  阶段性成果回写 issue 评论留痕，变更以 PR 承载且描述含动机、改动点、验证
+  凭据；账本记状态、issue 记叙事、PR 记证据，三者互补；
 - 收圈条件：全部条目 done/cancelled 且无未读信封。
 
 ## 输出（Type of output）

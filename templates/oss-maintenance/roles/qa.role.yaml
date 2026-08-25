@@ -4,10 +4,14 @@
   "prompt": "./prompts/qa.md",
   "briefing": {
     "format": "structured",
-    "sections_required": ["acceptance"]
+    "sections_required": [
+      "background",
+      "acceptance"
+    ]
   },
   "dod": [
-    "对所核验任务的每条 dod 给出 pass/fail 结构化回执",
+    "规格核验：对照来源逐条核对覆盖性与可判定性，回执截引外部内容",
+    "成品核验：对所核验任务的每条 dod 给出 pass/fail 结构化回执",
     "fail 结论附证据与复现方式"
   ],
   "max_hops": 3,

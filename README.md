@@ -43,6 +43,7 @@
 - [ADR 0009](docs/adr/0009-framework-scenario-layering-and-tier0-assembly.md) — 框架/场景提示词分层与 Tier-0 规程组装（#42）
 - [ADR 0010](docs/adr/0010-gate-console-hardening.md) — Gate Console 安全加固与自批风险定性（#2）
 - [ADR 0011](docs/adr/0011-team-launch-entry.md) — Team 拉起入口与 team_init 工具面下线（#51）
+- [ADR 0012](docs/adr/0012-two-stage-review.md) — oss-maintenance 两阶段核验（规格/成品双任务拆分，#46）
 
 ## 内置模板（templates/）
 
