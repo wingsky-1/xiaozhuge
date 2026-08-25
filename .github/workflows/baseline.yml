@@ -34,8 +34,25 @@ jobs:
       - run: pnpm build
       - name: Mutation full run (score >= 70)
         run: pnpm mutation
+      # 规范化基线（剥运行期噪声、稳定键序）——快照 PR 的 diff 只含真实身份变化；
+      # 否则全量重跑的 status/location 漂移会让每次都产生假 diff。
+      - name: Normalize baseline
+        run: node scripts/check-mutation-baseline.mjs --normalize
+      # 语义门控：与 HEAD 基线做身份集合比较，无实质差异则跳过快照 PR。
+      # 复用校验脚本的退出码约定：1 = 存在内容级差异（此处即「需要快照」）。
+      - name: Semantic diff gate
+        id: semantic
+        run: |
+          if node scripts/check-mutation-baseline.mjs; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "基线无实质变化，跳过快照"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "检测到变异体集合变化，进入快照"
+          fi
       - name: Open baseline snapshot PR if changed
         id: snapshot
+        if: steps.semantic.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v7
         with:
           branch: chore/mutation-baseline
