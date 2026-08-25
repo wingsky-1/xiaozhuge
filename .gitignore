@@ -3,6 +3,7 @@ node_modules/
 dist/
 coverage/
 reports/
+!docs/reports/
 .stryker-tmp/
 
 # 环境与日志
