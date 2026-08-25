@@ -267,6 +267,9 @@ $("#list").addEventListener("click", (ev) => {
   const btn = ev.target.closest("button[data-act]");
   if (btn) void resolve(btn.dataset.gid, btn.dataset.act);
 });
+// 团队 tab 内嵌（#51）：URL 带 ?session= 时自动预填并加载
+const qsSession = new URLSearchParams(location.search).get("session");
+if (qsSession) { $("#session").value = qsSession; load(); }
 </script>
 </body>
 </html>`;
