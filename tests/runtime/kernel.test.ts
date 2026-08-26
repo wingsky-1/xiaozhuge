@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { describe, expect, it, vi } from "vitest";
+// 将 node:fs/promises 导出替换为透传 spy（可 mockRejectedValueOnce 注入单次
+// 失败），不改真实行为；仅本次测试使用。
+vi.mock("node:fs/promises", { spy: true });
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -277,6 +280,49 @@ describe("事件流", () => {
     const log = new EventLog(file);
     await log.init();
     expect(await log.count()).toBe(0);
+  });
+
+  it("同路径多实例并发 append 10 次 → seq 单调不重复（Wave 1a 多写者护栏）", async () => {
+    const file = join(tmpHome(), "events.jsonl");
+    const logA = new EventLog(file);
+    const logB = new EventLog(file);
+    await logA.init();
+    await logB.init();
+    const seqs: number[] = [];
+    const results = await Promise.all(
+      Array.from({ length: 10 }, (_, i) =>
+        (i % 2 === 0 ? logA : logB).append({ session_id: "s", actor: "a", type: `e${i}` }),
+      ),
+    );
+    for (const r of results) seqs.push(r.seq);
+    // seq 全序唯一（严格递增排序后等于 1..10），无重复无缺口。
+    expect([...seqs].sort((x, y) => x - y)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    // 文件落盘行数一致，回放 seq 亦单调。
+    const logC = new EventLog(file);
+    await logC.init();
+    const { events } = await logC.read();
+    expect(events.map((e) => e.seq).sort((x, y) => x - y)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  });
+
+  it("append 失败不阻断后继 append，且失败不推进 seq 游标", async () => {
+    const file = join(tmpHome(), "events.jsonl");
+    const log = new EventLog(file);
+    await log.init();
+    const fsMod = await import("node:fs/promises");
+    const spy = vi
+      .spyOn(fsMod, "writeFile")
+      .mockRejectedValueOnce(new Error("disk full"));
+    try {
+      // 首个 append 写文件失败 → reject；游标不推进。
+      await expect(
+        log.append({ session_id: "s", actor: "a", type: "boom" }),
+      ).rejects.toThrow("disk full");
+      // 后继 append 正常执行，链未被失败任务卡死；失败未推进游标 → seq=1。
+      const first = await log.append({ session_id: "s", actor: "a", type: "ok" });
+      expect(first.seq).toBe(1);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 
