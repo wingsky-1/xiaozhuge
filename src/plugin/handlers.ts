@@ -37,6 +37,7 @@ import {
   claim,
   deliver,
   readUnread,
+  PROGRESS_CONTRACT,
   acquireCas,
 } from "../runtime/index.js";
 import { userTemplatesRoot, projectTemplatesRoot } from "./team-home.js";
@@ -406,7 +407,8 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
             rev: updated.rev,
           });
           completed.push("assign");
-          // step 3: 派单信封（role_inline 与模型档位随信封投递给成员）。
+          // step 3: 派单信封（role_inline 与模型档位随信封投递给成员；
+          // 进度契约为框架注入的固定段——开工/里程碑/完成回执不靠成员自觉）。
           const envelopeId = await deliver(teamHome, member, {
             from,
             type: "task-assign",
@@ -418,12 +420,14 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
               role_inline: inline ?? null,
               provider: provider ?? null,
               model: model ?? null,
+              progress_contract: PROGRESS_CONTRACT,
             },
           });
           await appendEvent(from, "mailbox/deliver", {
             to: member,
             envelope_id: envelopeId,
             msg_type: "task-assign",
+            task_id: taskId,
           });
           completed.push("send");
           return {
@@ -459,7 +463,19 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
           throw new ToolError("unknown-member", `recipient ${to} is not registered`);
         }
         const envelopeId = await deliver(teamHome, to, { from, type, body });
-        await appendEvent(from, "mailbox/deliver", { to, envelope_id: envelopeId, msg_type: type });
+        // 计账增补 task_id（若 body 为对象且携带）：对账时「哪封信对应哪个任务」
+        // 不必再开信封比对，机械可得。
+        const rawTaskId = (body as { task_id?: unknown }).task_id;
+        const bodyTaskId =
+          body !== null && typeof body === "object" && typeof rawTaskId === "string" && rawTaskId.length > 0
+            ? rawTaskId
+            : undefined;
+        await appendEvent(from, "mailbox/deliver", {
+          to,
+          envelope_id: envelopeId,
+          msg_type: type,
+          ...(bodyTaskId !== undefined ? { task_id: bodyTaskId } : {}),
+        });
         return { ok: true, envelope_id: envelopeId };
       } catch (error) {
         wrap(error);
