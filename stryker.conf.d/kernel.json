@@ -25,5 +25,6 @@
   "mutate": [
     "src/runtime/kernel/**/*.ts",
     "!src/**/*.d.ts"
-  ]
+  ],
+  "timeoutMS": 2000
 }

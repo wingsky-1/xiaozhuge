@@ -26,5 +26,6 @@
     "src/plugin/**/*.ts",
     "!src/plugin/handlers.ts",
     "!src/**/*.d.ts"
-  ]
+  ],
+  "timeoutMS": 2000
 }

@@ -29,5 +29,6 @@
     "src/runtime/view/**/*.ts",
     "src/index.ts",
     "!src/**/*.d.ts"
-  ]
+  ],
+  "timeoutMS": 2000
 }
