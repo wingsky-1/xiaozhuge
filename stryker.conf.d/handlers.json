@@ -24,5 +24,6 @@
   },
   "mutate": [
     "src/plugin/handlers.ts"
-  ]
+  ],
+  "timeoutMS": 2000
 }
