@@ -160,7 +160,7 @@ export function makeOverviewRoute(teamHomeFor: (sessionId: string) => string): W
       const teamHome = teamHomeFor(sessionId);
       // 非团队会话短路：实例根未初始化（team.yaml 快照不在场），与 team/status 判定一致。
       if (!existsSync(layout(teamHome).teamYaml)) {
-        writeJson(res, 200, { isTeam: false, members: [], rooms: [] });
+        writeJson(res, 200, { isTeam: false, masterRegistered: false, members: [], rooms: [] });
         return;
       }
       try {

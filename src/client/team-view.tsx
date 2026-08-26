@@ -48,6 +48,7 @@ interface RoomView {
 
 interface TeamOverview {
   isTeam: boolean;
+  masterRegistered: boolean;
   members: MemberNodeView[];
   rooms: RoomView[];
 }
@@ -398,6 +399,24 @@ export function TeamView(props: { sessionId?: string }): React.ReactNode {
           </span>
         ) : null}
       </div>
+
+      {/* L3 未握手黄条（#79）：静态框架文案，不渲染任何服务端动态内容（防注入） */}
+      {overview !== null && overview.isTeam && !overview.masterRegistered ? (
+        <div
+          role="status"
+          style={{
+            margin: "8px 12px 0",
+            padding: "8px 12px",
+            borderRadius: 8,
+            border: "1px solid #d29922",
+            background: "rgba(210, 153, 34, 0.12)",
+            fontSize: 13,
+          }}
+        >
+          主控尚未完成启动握手：实例已初始化，但 tier0 主控未在注册表中（旧实例兼容态）。
+          可在会话中重发「从对账节继续」恢复巡场。
+        </div>
+      ) : null}
 
       {/* L1 房间树画布（只读：禁止拖拽/连线，允许平移缩放） */}
       <div style={{ flex: 1, minHeight: 0 }}>
