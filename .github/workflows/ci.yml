@@ -85,8 +85,14 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm typecheck
+      # lint 与 typecheck 相互独立（只读源码），并行执行压缩 gauntlet 串行等待；
+      # wait 确保任一失败都以非零退出整体步骤红（shell -e 下后台任务失败不
+      # 自动传播，必须显式 wait 检查退出码）。
+      - name: Static checks (lint + typecheck in parallel)
+        run: |
+          pnpm lint &
+          pnpm typecheck &
+          wait
       - run: pnpm build
       - run: pnpm test
       - name: Coverage gate (>= 70)
