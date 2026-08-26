@@ -15,14 +15,45 @@ concurrency:
   # 连续合入时新触发取代旧全量跑；手动 dispatch 完整执行
   cancel-in-progress: ${{ github.event_name == 'push' }}
 
-# GITHUB_TOKEN 默认只读：开基线快照 PR 需要 push 分支（contents）与建 PR（pull-requests）写权限
-permissions:
-  contents: write
-  pull-requests: write
+# GITHUB_TOKEN 默认只读；开基线快照 PR 需要 push 分支（contents）与建 PR（pull-requests）写权限，
+# 按最小权限原则下放到唯一 job 级（issue #101 P5）。
 
 jobs:
-  archive:
+  # 变更面检测（issue #101 P5）：mutate 面未变的合入（docs-only 等）不可能改变
+  # mutant 结果，跳过全量归档。触发集与 ci.yml changes job 保持同一份变异面口径
+  # （src/tests/prompts/stryker 配置/lockfile/tsconfig），另加归档链路自身：
+  # check-mutation-baseline.mjs（normalize/语义 diff 逻辑）与本 workflow。
+  # fail-safe 口径与 ci.yml 一致：基线不可得即执行。
+  changes:
     runs-on: ubuntu-latest
+    outputs:
+      relevant: ${{ steps.filter.outputs.relevant }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compute changed files vs previous main
+        id: filter
+        run: |
+          base="${{ github.event.before }}"
+          if [ "${{ github.event_name }}" != "push" ] || [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --name-only "$base"..."$(git rev-parse HEAD)" | grep -qE '^(src/|tests/|prompts/|stryker\.conf\.json$|package\.json$|pnpm-lock\.yaml$|tsconfig.*\.json$|scripts/check-mutation-baseline\.mjs$|\.github/workflows/baseline\.yml$)'; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+            echo "变异面无变化，跳过全量归档"
+          fi
+
+  archive:
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
