@@ -71,6 +71,14 @@ describe("golden 场景一：init → spawn → task 全链路", () => {
     await expect(
       handlers.handoff({ task_id: created.task_id, to_role: "qa", receipt: [] }),
     ).rejects.toMatchObject({ code: "receipt-incomplete" });
+    // 6.1 逐条结论格式校验（#98 步骤 2）：非 pass:/fail: 开头即拒
+    await expect(
+      handlers.handoff({
+        task_id: created.task_id,
+        to_role: "qa",
+        receipt: ["构建通过所以没问题了"],
+      }),
+    ).rejects.toMatchObject({ code: "receipt-format" });
     const handed = (await handlers.handoff({
       task_id: created.task_id,
       to_role: "qa",

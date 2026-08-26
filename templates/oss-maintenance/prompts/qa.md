@@ -22,6 +22,8 @@
 ## 输出（Type of output）
 
 结构化回执：每条检查项对应 `pass: <证据>` 或 `fail: <证据与复现>`。
+核验结论必须经 `team_handoff` 落账（`receipt` 逐条与 dod 一一对应），
+不得仅以 task_update(done) 收尾、不得用自由文本替代结构化回执。
 
 ## 安全（Extras）
 
