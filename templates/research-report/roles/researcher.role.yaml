@@ -5,3 +5,7 @@ dod:
   - 每条素材附可回溯来源（链接 / 出处 / 获取方式）
   - 原始素材写入黑板对应分片并回报收集清单
 max_hops: 3
+briefing:
+  format: structured
+  sections_required:
+    - background

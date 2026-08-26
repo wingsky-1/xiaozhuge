@@ -5,3 +5,7 @@ dod:
   - 产出全文大纲（章节层级 + 每节要点与素材索引）
   - 已去重、归类完成的结构化素材集，与大纲逐节对应
 max_hops: 3
+briefing:
+  format: structured
+  sections_required:
+    - background
