@@ -10,8 +10,9 @@
 
 设计定稿源自 dsh-plugin-hub 的
 [issue #171](https://github.com/wingsky-1/dsh-plugin-hub/issues/171) 与
-[PR #172](https://github.com/wingsky-1/dsh-plugin-hub/pull/172)（docs/agent-team，v2.2）。
-定稿正文为**冻结版**，本仓库不复制正文；后续所有决策修订以 `docs/adr/` 增量 ADR 承载。
+[PR #172](https://github.com/wingsky-1/dsh-plugin-hub/pull/172)（v2.2）。
+三份通用设计文档已迁入本仓 [`docs/agent-team/`](docs/agent-team/)（10 通用模型 / 11 运行时 / 12 Console），
+**在本仓库独立演进**；后续所有决策修订以 `docs/adr/` 增量 ADR 承载。
 
 ## 核心理念
 
