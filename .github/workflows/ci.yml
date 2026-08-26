@@ -37,6 +37,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # pull_request 默认检出动态 merge ref（= 当前 base 最新 + head），
+          # 与静态 base.sha 不同步时 diff 会混入 base 分支的新进展（#119 实证：
+          # main 前进引入 tests/** 变更导致误判 full）。显式检出 head.sha 使
+          # diff 只反映 PR 自身变更。push/其它事件下该表达式为空 → 用默认 ref。
+          ref: ${{ github.event.pull_request && github.event.pull_request.head.sha || '' }}
       - name: Compute changed files vs base
         id: diff
         run: |
