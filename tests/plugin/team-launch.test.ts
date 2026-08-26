@@ -245,6 +245,34 @@ describe("team/status 团队会话探测", () => {
     const r = await fetch(`${base}/api/xiaozhuge/team/status`);
     expect(r.status).toBe(400);
   });
+
+  it("成员子会话反查命中 → is_team=true 且附归属（#97 问题 3）", async () => {
+    // 在 DSH_HOME 会话根下落一个已初始化实例，注册成员 durable id。
+    const rootDir = join(home, "dsh-home", "xiaozhuge", "sessions", "s-root");
+    mkdirSync(rootDir, { recursive: true });
+    writeFileSync(join(rootDir, "team.yaml"), JSON.stringify({ name: "research-report" }));
+    writeFileSync(
+      join(rootDir, "agents.json"),
+      JSON.stringify({
+        members: {
+          master: { member: "master", durableId: "s-root", tier: 0, status: "running", lastSeen: 1 },
+          coder: { member: "coder", durableId: "dur-m1", parent: "master", tier: 1, status: "spawned", lastSeen: 2 },
+        },
+      }),
+    );
+
+    const base = await listen();
+    const d = (await (
+      await fetch(`${base}/api/xiaozhuge/team/status?session=dur-m1`)
+    ).json()) as {
+      is_team: boolean;
+      name?: string | null;
+      membership?: { rootSession: string; member: string };
+    };
+    expect(d.is_team).toBe(true);
+    expect(d.name).toBe("research-report");
+    expect(d.membership).toEqual({ rootSession: "s-root", member: "coder" });
+  });
 });
 
 describe("入口页与启动消息", () => {

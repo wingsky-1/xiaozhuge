@@ -9,6 +9,7 @@
  * - user 层 = `<DSH_HOME>/xiaozhuge/templates/`（ADR 0002 定稿落点）
  * - project 层 = `<projectRoot>/.xiaozhuge/templates/`（ADR 0002 定稿落点）
  */
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -23,6 +24,53 @@ export function resolveDshHome(): string {
  */
 export function resolveTeamHome(sessionId: string): string {
   return join(resolveDshHome(), "xiaozhuge", "sessions", sessionId);
+}
+
+/** 视图解析结果：teamHome 为供数实例根；membership 非空 = 子会话反查命中。 */
+export interface TeamHomeResolution {
+  teamHome: string;
+  membership: { rootSession: string; member: string } | null;
+}
+
+/**
+ * 视图供数解析（#97 问题 3）：先按主会话直查；未命中实例根时，按成员
+ * durable id 反查所属实例（扫各实例 agents.json，纯读）。子会话页据此
+ * 以实例根身份取数，打通「子会话 → 所属团队」反向入口。
+ *
+ * 边界：扫描范围限本 DSH_HOME 的 xiaozhuge/sessions；单实例注册表损坏
+ * 跳过继续（不整体失败）；实例未初始化（team.yaml 不在）视为未命中，
+ * 与 team/status 判定一致。
+ */
+export function resolveTeamHomeForView(sessionId: string): TeamHomeResolution {
+  const direct = resolveTeamHome(sessionId);
+  if (existsSync(join(direct, "team.yaml"))) {
+    return { teamHome: direct, membership: null };
+  }
+  const sessionsDir = join(resolveDshHome(), "xiaozhuge", "sessions");
+  let entries: string[] = [];
+  try {
+    entries = readdirSync(sessionsDir);
+  } catch {
+    return { teamHome: direct, membership: null };
+  }
+  for (const entry of entries) {
+    const teamHome = join(sessionsDir, entry);
+    const agentsJson = join(teamHome, "agents.json");
+    if (!existsSync(agentsJson) || !existsSync(join(teamHome, "team.yaml"))) continue;
+    try {
+      const reg = JSON.parse(readFileSync(agentsJson, "utf8")) as {
+        members?: Record<string, { durableId?: string; member?: string }>;
+      };
+      for (const m of Object.values(reg.members ?? {})) {
+        if (m.durableId === sessionId && typeof m.member === "string") {
+          return { teamHome, membership: { rootSession: entry, member: m.member } };
+        }
+      }
+    } catch {
+      // 注册表损坏：跳过该实例继续扫描
+    }
+  }
+  return { teamHome: direct, membership: null };
 }
 
 /** user 层模板根（ADR 0013）：<DSH_HOME>/xiaozhuge/templates/。 */

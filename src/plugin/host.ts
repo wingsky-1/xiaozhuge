@@ -9,7 +9,7 @@
 import type { Agent } from "@deepseek-ai/dsh-agent";
 import type { ToolDefinition, ToolRunContext } from "@deepseek-ai/dsh-tools";
 import type { WebRoute } from "@deepseek-ai/dsh-host-webserver";
-import { resolveTeamHome } from "./team-home.js";
+import { resolveTeamHome, resolveTeamHomeForView } from "./team-home.js";
 import { createHandlers, type Handlers } from "./handlers.js";
 import { schemas } from "./schemas.js";
 import { makeGateRoutes, makeConsoleRoute } from "./gate-console.js";
@@ -197,7 +197,9 @@ export function apply(ctx: {
   // Gate Console + Team 拉起入口路由（webServer 可选注入：headless 形态无此服务）。
   const ws = ctx.webServer;
   if (typeof ws === "object" && ws !== null) {
-    const teamHomeFor = (sessionId: string) => resolveTeamHome(sessionId);
+    // 视图供数解析走 ForView 变体：子会话按成员 durable id 反查所属实例，
+    // 使团队 tab 在成员会话页同样可用（#97 问题 3）；纯读路径。
+    const teamHomeFor = (sessionId: string) => resolveTeamHomeForView(sessionId).teamHome;
     for (const route of [
       ...makeGateRoutes({ teamHomeFor }),
       makeConsoleRoute(),

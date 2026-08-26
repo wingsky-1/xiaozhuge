@@ -18,7 +18,7 @@ import { existsSync, readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 import type { WebRoute } from "@deepseek-ai/dsh-host-webserver";
-import { resolveTeamHome, userTemplatesRoot, projectTemplatesRoot } from "./team-home.js";
+import { resolveTeamHome, resolveTeamHomeForView, userTemplatesRoot, projectTemplatesRoot } from "./team-home.js";
 import { createHandlers, PACKAGE_ROOT } from "./handlers.js";
 import { layout, listScenarios } from "../runtime/index.js";
 import { fetchSiteAllowed, originAllowed } from "./gate-console.js";
@@ -79,7 +79,10 @@ export function makeLaunchRoutes(): WebRoute[] {
           writeJson(res, 400, { error: "missing session parameter" });
           return;
         }
-        const l = layout(resolveTeamHome(sessionId));
+        // 视图供数解析：主会话直查优先；子会话按成员 durable id 反查所属
+        // 实例（#97 问题 3），命中即以实例根身份应答并附归属信息。
+        const view = resolveTeamHomeForView(sessionId);
+        const l = layout(view.teamHome);
         // 团队会话判定：实例根已初始化（team.yaml 快照在场）。
         if (!existsSync(l.teamYaml)) {
           writeJson(res, 200, { is_team: false });
@@ -94,9 +97,15 @@ export function makeLaunchRoutes(): WebRoute[] {
             is_team: true,
             name: snap.name ?? null,
             playbook_digest: snap.playbook_digest ?? null,
+            ...(view.membership !== null ? { membership: view.membership } : {}),
           });
         } catch {
-          writeJson(res, 200, { is_team: true, name: null, playbook_digest: null });
+          writeJson(res, 200, {
+            is_team: true,
+            name: null,
+            playbook_digest: null,
+            ...(view.membership !== null ? { membership: view.membership } : {}),
+          });
         }
       },
     },
