@@ -82,6 +82,9 @@
   禁止盲目重放整段）；等效散装三步
   `team_spawn` + `team_task_update(assignee)` + `team_send` 仍可使用，
   同样不得省略 parent。
+- **派发后置 `running`**：`team_task_update(status=running)`——状态机无
+  queued 直达 done，且 R1 以 running 计占位、R2 以状态迁移计进展，
+  滞留 queued 即并发池虚空、进展信号丢失。
 - 派单后 `send_message` 唤醒该角色（仅直接子可唤醒）。
 - 无空位则本轮不派发。
 
@@ -91,6 +94,8 @@
   （对已知后台任务用 `job_output(wait=true)` 设超时上限；无后台句柄时用
   有界 sleep + 一次 reconcile 核查）把整个等待窗消化在一个 turn 内；
   goal 轮只在 turn 结束 idle 后推进，turn 内阻塞不消耗轮次。
+  取值锚点：单段阻塞上限默认 **10 分钟**，与宿主工具 timeout 封顶取较小者；
+  预算依据 = R3 单任务轮预算的分钟级折算，不随任务规模自由放大。
 - **禁止短轮询出 turn**：不允许「查一次状态即结束 turn」——那会把等待
   摊进多个轮次/多次 LLM 往返，每次都付完整上下文代价。
 - **防 max-tokens 解除武装**：单 turn 内多次拼接模型输出撞上限会导致 goal
