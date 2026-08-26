@@ -278,6 +278,28 @@ describe("事件流", () => {
     await log.init();
     expect(await log.count()).toBe(0);
   });
+
+  it("同路径多实例并发 append 10 次 → seq 单调不重复（Wave 1a 多写者护栏）", async () => {
+    const file = join(tmpHome(), "events.jsonl");
+    const logA = new EventLog(file);
+    const logB = new EventLog(file);
+    await logA.init();
+    await logB.init();
+    const seqs: number[] = [];
+    const results = await Promise.all(
+      Array.from({ length: 10 }, (_, i) =>
+        (i % 2 === 0 ? logA : logB).append({ session_id: "s", actor: "a", type: `e${i}` }),
+      ),
+    );
+    for (const r of results) seqs.push(r.seq);
+    // seq 全序唯一（严格递增排序后等于 1..10），无重复无缺口。
+    expect([...seqs].sort((x, y) => x - y)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    // 文件落盘行数一致，回放 seq 亦单调。
+    const logC = new EventLog(file);
+    await logC.init();
+    const { events } = await logC.read();
+    expect(events.map((e) => e.seq).sort((x, y) => x - y)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  });
 });
 
 describe("注册表", () => {
