@@ -178,16 +178,21 @@ export interface Handlers {
 export function createHandlers(teamHome: string, sessionId: string): Handlers {
   const l = layout(teamHome);
   let ledger: Ledger | undefined;
-  let events: EventLog | undefined;
   let registry: Registry | undefined;
+  // 按 room 缓存 EventLog：不同房间各自独立文件，互不串写。
+  const eventLogs = new Map<string, EventLog>();
 
   // 惰性单例：同一实例根内复用事件游标等内存状态。
   function led(): Ledger {
     return (ledger ??= new Ledger(teamHome, l.ledgerTasksDir));
   }
   function log(room: string): EventLog {
-    // 同房间单写者约定下缓存游标；不同房间各自独立文件。
-    return (events ??= new EventLog(join(l.roomsDir, room, "events.jsonl")));
+    let entry = eventLogs.get(room);
+    if (entry === undefined) {
+      entry = new EventLog(join(l.roomsDir, room, "events.jsonl"));
+      eventLogs.set(room, entry);
+    }
+    return entry;
   }
   function reg(): Registry {
     return (registry ??= new Registry(teamHome));

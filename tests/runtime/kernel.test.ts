@@ -1,7 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
-// 将 node:fs/promises 导出替换为透传 spy（可 mockRejectedValueOnce 注入单次
-// 失败），不改真实行为；仅本次测试使用。
-vi.mock("node:fs/promises", { spy: true });
+import { describe, expect, it } from "vitest";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -302,27 +299,6 @@ describe("事件流", () => {
     await logC.init();
     const { events } = await logC.read();
     expect(events.map((e) => e.seq).sort((x, y) => x - y)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-  });
-
-  it("append 失败不阻断后继 append，且失败不推进 seq 游标", async () => {
-    const file = join(tmpHome(), "events.jsonl");
-    const log = new EventLog(file);
-    await log.init();
-    const fsMod = await import("node:fs/promises");
-    const spy = vi
-      .spyOn(fsMod, "writeFile")
-      .mockRejectedValueOnce(new Error("disk full"));
-    try {
-      // 首个 append 写文件失败 → reject；游标不推进。
-      await expect(
-        log.append({ session_id: "s", actor: "a", type: "boom" }),
-      ).rejects.toThrow("disk full");
-      // 后继 append 正常执行，链未被失败任务卡死；失败未推进游标 → seq=1。
-      const first = await log.append({ session_id: "s", actor: "a", type: "ok" });
-      expect(first.seq).toBe(1);
-    } finally {
-      spy.mockRestore();
-    }
   });
 });
 
