@@ -78,7 +78,7 @@
       "low": 70
     },
     "timeoutFactor": 1.5,
-    "timeoutMS": 5000,
+    "timeoutMS": 2000,
     "tsconfigFile": "tsconfig.json",
     "vitest": {
       "related": true
@@ -89,6 +89,135 @@
     "src/plugin/handlers.ts": {
       "language": "typescript",
       "mutants": [
+        {
+          "coveredBy": [
+            "58",
+            "63",
+            "96",
+            "97",
+            "98",
+            "99",
+            "100",
+            "102",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "155",
+            "163",
+            "174",
+            "175",
+            "176",
+            "177",
+            "178",
+            "179",
+            "180",
+            "181",
+            "182",
+            "183",
+            "184",
+            "185",
+            "186",
+            "187",
+            "188",
+            "189",
+            "190",
+            "191",
+            "192",
+            "193",
+            "194",
+            "195",
+            "196",
+            "197",
+            "198",
+            "199",
+            "206"
+          ],
+          "id": "0",
+          "killedBy": [
+            "58"
+          ],
+          "location": {
+            "end": {
+              "column": 4,
+              "line": 54
+            },
+            "start": {
+              "column": 46,
+              "line": 50
+            }
+          },
+          "mutatorName": "BlockStatement",
+          "replacement": "{}",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "no-such-template: expected 409 to be 400 // Object.is equality",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "58",
+            "63",
+            "96",
+            "97",
+            "98",
+            "99",
+            "100",
+            "102",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "155",
+            "163",
+            "174",
+            "175",
+            "176",
+            "177",
+            "178",
+            "179",
+            "180",
+            "181",
+            "182",
+            "183",
+            "184",
+            "185",
+            "186",
+            "187",
+            "188",
+            "189",
+            "190",
+            "191",
+            "192",
+            "193",
+            "194",
+            "195",
+            "196",
+            "197",
+            "198",
+            "199",
+            "206"
+          ],
+          "id": "1",
+          "killedBy": [],
+          "location": {
+            "end": {
+              "column": 28,
+              "line": 52
+            },
+            "start": {
+              "column": 17,
+              "line": 52
+            }
+          },
+          "mutatorName": "StringLiteral",
+          "replacement": "\"\"",
+          "static": false,
+          "status": "Survived",
+          "testsCompleted": 42
+        },
         {
           "coveredBy": [],
           "id": "2",
@@ -157,6 +286,198 @@
           "status": "Killed",
           "statusReason": "unknown-scenario: no template \"oss-maintenance\"",
           "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "58",
+            "63",
+            "96",
+            "97",
+            "98",
+            "99",
+            "100",
+            "102",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "155",
+            "163",
+            "174",
+            "175",
+            "176",
+            "177",
+            "178",
+            "179",
+            "180",
+            "181",
+            "182",
+            "183",
+            "184",
+            "185",
+            "186",
+            "187",
+            "188",
+            "189",
+            "190",
+            "191",
+            "192",
+            "193",
+            "194",
+            "195",
+            "196",
+            "197",
+            "198",
+            "199",
+            "206"
+          ],
+          "id": "5",
+          "killedBy": [
+            "58"
+          ],
+          "location": {
+            "end": {
+              "column": 2,
+              "line": 64
+            },
+            "start": {
+              "column": 38,
+              "line": 60
+            }
+          },
+          "mutatorName": "BlockStatement",
+          "replacement": "{}",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "Unexpected end of JSON input",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "58",
+            "63",
+            "96",
+            "97",
+            "98",
+            "99",
+            "100",
+            "102",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "155",
+            "163",
+            "174",
+            "175",
+            "176",
+            "177",
+            "178",
+            "179",
+            "180",
+            "181",
+            "182",
+            "183",
+            "184",
+            "185",
+            "186",
+            "187",
+            "188",
+            "189",
+            "190",
+            "191",
+            "192",
+            "193",
+            "194",
+            "195",
+            "196",
+            "197",
+            "198",
+            "199",
+            "206"
+          ],
+          "id": "6",
+          "killedBy": [],
+          "location": {
+            "end": {
+              "column": 33,
+              "line": 61
+            },
+            "start": {
+              "column": 7,
+              "line": 61
+            }
+          },
+          "mutatorName": "ConditionalExpression",
+          "replacement": "true",
+          "static": false,
+          "status": "Survived",
+          "testsCompleted": 42
+        },
+        {
+          "coveredBy": [
+            "58",
+            "63",
+            "96",
+            "97",
+            "98",
+            "99",
+            "100",
+            "102",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "155",
+            "163",
+            "174",
+            "175",
+            "176",
+            "177",
+            "178",
+            "179",
+            "180",
+            "181",
+            "182",
+            "183",
+            "184",
+            "185",
+            "186",
+            "187",
+            "188",
+            "189",
+            "190",
+            "191",
+            "192",
+            "193",
+            "194",
+            "195",
+            "196",
+            "197",
+            "198",
+            "199",
+            "206"
+          ],
+          "id": "7",
+          "killedBy": [],
+          "location": {
+            "end": {
+              "column": 33,
+              "line": 61
+            },
+            "start": {
+              "column": 7,
+              "line": 61
+            }
+          },
+          "mutatorName": "ConditionalExpression",
+          "replacement": "false",
+          "static": false,
+          "status": "Survived",
+          "testsCompleted": 42
         },
         {
           "coveredBy": [
@@ -5379,6 +5700,65 @@
           "coveredBy": [
             "56",
             "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "150",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "161",
+            "164",
+            "169",
+            "198",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "186",
+          "killedBy": [
+            "56"
+          ],
+          "location": {
+            "end": {
+              "column": 48,
+              "line": 193
+            },
+            "start": {
+              "column": 13,
+              "line": 193
+            }
+          },
+          "mutatorName": "AssignmentOperator",
+          "replacement": "registry &&= new Registry(teamHome)",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected 409 to be 200 // Object.is equality",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
             "60",
             "61",
             "62",
@@ -6483,6 +6863,224 @@
             "205",
             "206"
           ],
+          "id": "216",
+          "killedBy": [],
+          "location": {
+            "end": {
+              "column": 34,
+              "line": 233
+            },
+            "start": {
+              "column": 28,
+              "line": 233
+            }
+          },
+          "mutatorName": "StringLiteral",
+          "replacement": "\"\"",
+          "static": false,
+          "status": "Survived",
+          "testsCompleted": 32
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "217",
+          "killedBy": [],
+          "location": {
+            "end": {
+              "column": 36,
+              "line": 234
+            },
+            "start": {
+              "column": 30,
+              "line": 234
+            }
+          },
+          "mutatorName": "StringLiteral",
+          "replacement": "\"\"",
+          "static": false,
+          "status": "Survived",
+          "testsCompleted": 32
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "218",
+          "killedBy": [
+            "96"
+          ],
+          "location": {
+            "end": {
+              "column": 10,
+              "line": 239
+            },
+            "start": {
+              "column": 12,
+              "line": 237
+            }
+          },
+          "mutatorName": "BlockStatement",
+          "replacement": "{}",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected false to be true // Object.is equality",
+          "testsCompleted": 8
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "220",
+          "killedBy": [
+            "96"
+          ],
+          "location": {
+            "end": {
+              "column": 45,
+              "line": 238
+            },
+            "start": {
+              "column": 26,
+              "line": 238
+            }
+          },
+          "mutatorName": "ObjectLiteral",
+          "replacement": "{}",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "EEXIST: file already exists, mkdir '/tmp/xzg-golden-BVIO2m'",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
           "id": "221",
           "killedBy": [
             "96"
@@ -6595,6 +7193,118 @@
             "205",
             "206"
           ],
+          "id": "223",
+          "killedBy": [
+            "57"
+          ],
+          "location": {
+            "end": {
+              "column": 87,
+              "line": 245
+            },
+            "start": {
+              "column": 26,
+              "line": 245
+            }
+          },
+          "mutatorName": "ConditionalExpression",
+          "replacement": "false",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected 'oss-maintenance' to be 'research-report' // Object.is equality",
+          "testsCompleted": 14
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "224",
+          "killedBy": [
+            "96"
+          ],
+          "location": {
+            "end": {
+              "column": 87,
+              "line": 245
+            },
+            "start": {
+              "column": 26,
+              "line": 245
+            }
+          },
+          "mutatorName": "LogicalOperator",
+          "replacement": "typeof args.scenario === \"string\" || args.scenario.length > 0",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "Cannot read properties of undefined (reading 'length')",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
           "id": "225",
           "killedBy": [
             "96"
@@ -6651,6 +7361,314 @@
             "205",
             "206"
           ],
+          "id": "226",
+          "killedBy": [
+            "96"
+          ],
+          "location": {
+            "end": {
+              "column": 59,
+              "line": 245
+            },
+            "start": {
+              "column": 26,
+              "line": 245
+            }
+          },
+          "mutatorName": "EqualityOperator",
+          "replacement": "typeof args.scenario !== \"string\"",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "Cannot read properties of undefined (reading 'length')",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "227",
+          "killedBy": [
+            "57"
+          ],
+          "location": {
+            "end": {
+              "column": 59,
+              "line": 245
+            },
+            "start": {
+              "column": 51,
+              "line": 245
+            }
+          },
+          "mutatorName": "StringLiteral",
+          "replacement": "\"\"",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected 'oss-maintenance' to be 'research-report' // Object.is equality",
+          "testsCompleted": 2
+        },
+        {
+          "coveredBy": [
+            "57",
+            "58",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65"
+          ],
+          "id": "228",
+          "killedBy": [],
+          "location": {
+            "end": {
+              "column": 87,
+              "line": 245
+            },
+            "start": {
+              "column": 63,
+              "line": 245
+            }
+          },
+          "mutatorName": "ConditionalExpression",
+          "replacement": "true",
+          "static": false,
+          "status": "Survived",
+          "testsCompleted": 7
+        },
+        {
+          "coveredBy": [
+            "57",
+            "58",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65"
+          ],
+          "id": "229",
+          "killedBy": [],
+          "location": {
+            "end": {
+              "column": 87,
+              "line": 245
+            },
+            "start": {
+              "column": 63,
+              "line": 245
+            }
+          },
+          "mutatorName": "EqualityOperator",
+          "replacement": "args.scenario.length >= 0",
+          "static": false,
+          "status": "Survived",
+          "testsCompleted": 7
+        },
+        {
+          "coveredBy": [
+            "57",
+            "58",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65"
+          ],
+          "id": "230",
+          "killedBy": [
+            "57"
+          ],
+          "location": {
+            "end": {
+              "column": 87,
+              "line": 245
+            },
+            "start": {
+              "column": 63,
+              "line": 245
+            }
+          },
+          "mutatorName": "EqualityOperator",
+          "replacement": "args.scenario.length <= 0",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected 'oss-maintenance' to be 'research-report' // Object.is equality",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "231",
+          "killedBy": [],
+          "location": {
+            "end": {
+              "column": 90,
+              "line": 248
+            },
+            "start": {
+              "column": 33,
+              "line": 248
+            }
+          },
+          "mutatorName": "ConditionalExpression",
+          "replacement": "true",
+          "static": false,
+          "status": "Survived",
+          "testsCompleted": 32
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "232",
+          "killedBy": [
+            "64"
+          ],
+          "location": {
+            "end": {
+              "column": 90,
+              "line": 248
+            },
+            "start": {
+              "column": 33,
+              "line": 248
+            }
+          },
+          "mutatorName": "ConditionalExpression",
+          "replacement": "false",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected 400 to be 200 // Object.is equality",
+          "testsCompleted": 8
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
           "id": "233",
           "killedBy": [
             "103"
@@ -6670,6 +7688,62 @@
           "static": false,
           "status": "Killed",
           "statusReason": "Cannot read properties of undefined (reading 'length')",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "234",
+          "killedBy": [
+            "56"
+          ],
+          "location": {
+            "end": {
+              "column": 64,
+              "line": 248
+            },
+            "start": {
+              "column": 33,
+              "line": 248
+            }
+          },
+          "mutatorName": "ConditionalExpression",
+          "replacement": "true",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected 409 to be 200 // Object.is equality",
           "testsCompleted": 1
         },
         {
@@ -6763,6 +7837,187 @@
             "205",
             "206"
           ],
+          "id": "236",
+          "killedBy": [
+            "64"
+          ],
+          "location": {
+            "end": {
+              "column": 64,
+              "line": 248
+            },
+            "start": {
+              "column": 56,
+              "line": 248
+            }
+          },
+          "mutatorName": "StringLiteral",
+          "replacement": "\"\"",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected 400 to be 200 // Object.is equality",
+          "testsCompleted": 8
+        },
+        {
+          "coveredBy": [
+            "61",
+            "64"
+          ],
+          "id": "237",
+          "killedBy": [],
+          "location": {
+            "end": {
+              "column": 90,
+              "line": 248
+            },
+            "start": {
+              "column": 68,
+              "line": 248
+            }
+          },
+          "mutatorName": "ConditionalExpression",
+          "replacement": "true",
+          "static": false,
+          "status": "Survived",
+          "testsCompleted": 2
+        },
+        {
+          "coveredBy": [
+            "61",
+            "64"
+          ],
+          "id": "238",
+          "killedBy": [],
+          "location": {
+            "end": {
+              "column": 90,
+              "line": 248
+            },
+            "start": {
+              "column": 68,
+              "line": 248
+            }
+          },
+          "mutatorName": "EqualityOperator",
+          "replacement": "args.source.length >= 0",
+          "static": false,
+          "status": "Survived",
+          "testsCompleted": 2
+        },
+        {
+          "coveredBy": [
+            "61",
+            "64"
+          ],
+          "id": "239",
+          "killedBy": [
+            "64"
+          ],
+          "location": {
+            "end": {
+              "column": 90,
+              "line": 248
+            },
+            "start": {
+              "column": 68,
+              "line": 248
+            }
+          },
+          "mutatorName": "EqualityOperator",
+          "replacement": "args.source.length <= 0",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected 400 to be 200 // Object.is equality",
+          "testsCompleted": 2
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "240",
+          "killedBy": [],
+          "location": {
+            "end": {
+              "column": 98,
+              "line": 251
+            },
+            "start": {
+              "column": 29,
+              "line": 251
+            }
+          },
+          "mutatorName": "ConditionalExpression",
+          "replacement": "true",
+          "static": false,
+          "status": "Survived",
+          "testsCompleted": 32
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
           "id": "241",
           "killedBy": [
             "152"
@@ -6819,6 +8074,370 @@
             "205",
             "206"
           ],
+          "id": "242",
+          "killedBy": [
+            "56"
+          ],
+          "location": {
+            "end": {
+              "column": 98,
+              "line": 251
+            },
+            "start": {
+              "column": 29,
+              "line": 251
+            }
+          },
+          "mutatorName": "LogicalOperator",
+          "replacement": "typeof args.project_root === \"string\" || args.project_root.length > 0",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected 409 to be 200 // Object.is equality",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "243",
+          "killedBy": [
+            "56"
+          ],
+          "location": {
+            "end": {
+              "column": 66,
+              "line": 251
+            },
+            "start": {
+              "column": 29,
+              "line": 251
+            }
+          },
+          "mutatorName": "ConditionalExpression",
+          "replacement": "true",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected 409 to be 200 // Object.is equality",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "244",
+          "killedBy": [
+            "56"
+          ],
+          "location": {
+            "end": {
+              "column": 66,
+              "line": 251
+            },
+            "start": {
+              "column": 29,
+              "line": 251
+            }
+          },
+          "mutatorName": "EqualityOperator",
+          "replacement": "typeof args.project_root !== \"string\"",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected 409 to be 200 // Object.is equality",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "245",
+          "killedBy": [
+            "63"
+          ],
+          "location": {
+            "end": {
+              "column": 66,
+              "line": 251
+            },
+            "start": {
+              "column": 58,
+              "line": 251
+            }
+          },
+          "mutatorName": "StringLiteral",
+          "replacement": "\"\"",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected 200 to be 400 // Object.is equality",
+          "testsCompleted": 7
+        },
+        {
+          "coveredBy": [
+            "63",
+            "64",
+            "149",
+            "151",
+            "152",
+            "153"
+          ],
+          "id": "246",
+          "killedBy": [],
+          "location": {
+            "end": {
+              "column": 98,
+              "line": 251
+            },
+            "start": {
+              "column": 70,
+              "line": 251
+            }
+          },
+          "mutatorName": "ConditionalExpression",
+          "replacement": "true",
+          "static": false,
+          "status": "Survived",
+          "testsCompleted": 6
+        },
+        {
+          "coveredBy": [
+            "63",
+            "64",
+            "149",
+            "151",
+            "152",
+            "153"
+          ],
+          "id": "247",
+          "killedBy": [],
+          "location": {
+            "end": {
+              "column": 98,
+              "line": 251
+            },
+            "start": {
+              "column": 70,
+              "line": 251
+            }
+          },
+          "mutatorName": "EqualityOperator",
+          "replacement": "args.project_root.length >= 0",
+          "static": false,
+          "status": "Survived",
+          "testsCompleted": 6
+        },
+        {
+          "coveredBy": [
+            "63",
+            "64",
+            "149",
+            "151",
+            "152",
+            "153"
+          ],
+          "id": "248",
+          "killedBy": [
+            "152"
+          ],
+          "location": {
+            "end": {
+              "column": 98,
+              "line": 251
+            },
+            "start": {
+              "column": 70,
+              "line": 251
+            }
+          },
+          "mutatorName": "EqualityOperator",
+          "replacement": "args.project_root.length <= 0",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected false to be true // Object.is equality",
+          "testsCompleted": 3
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "249",
+          "killedBy": [
+            "149"
+          ],
+          "location": {
+            "end": {
+              "column": 10,
+              "line": 258
+            },
+            "start": {
+              "column": 39,
+              "line": 255
+            }
+          },
+          "mutatorName": "ArrayDeclaration",
+          "replacement": "[]",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "unknown-scenario: no template \"oss-maintenance\"",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
           "id": "250",
           "killedBy": [
             "149"
@@ -6838,6 +8457,62 @@
           "static": false,
           "status": "Killed",
           "statusReason": "The \"path\" argument must be of type string. Received undefined",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "251",
+          "killedBy": [
+            "103"
+          ],
+          "location": {
+            "end": {
+              "column": 30,
+              "line": 256
+            },
+            "start": {
+              "column": 21,
+              "line": 256
+            }
+          },
+          "mutatorName": "StringLiteral",
+          "replacement": "\"\"",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "template validation failed:\n- [source-invalid] team.source: source must be one of builtin|user|project",
           "testsCompleted": 1
         },
         {
@@ -6931,6 +8606,62 @@
             "205",
             "206"
           ],
+          "id": "253",
+          "killedBy": [
+            "61"
+          ],
+          "location": {
+            "end": {
+              "column": 27,
+              "line": 257
+            },
+            "start": {
+              "column": 21,
+              "line": 257
+            }
+          },
+          "mutatorName": "StringLiteral",
+          "replacement": "\"\"",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected 400 to be 200 // Object.is equality",
+          "testsCompleted": 5
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
           "id": "254",
           "killedBy": [
             "204"
@@ -6951,6 +8682,62 @@
           "status": "Killed",
           "statusReason": "The \"path\" argument must be of type string. Received undefined",
           "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "58",
+            "60",
+            "61",
+            "62",
+            "63",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "255",
+          "killedBy": [
+            "63"
+          ],
+          "location": {
+            "end": {
+              "column": 38,
+              "line": 259
+            },
+            "start": {
+              "column": 13,
+              "line": 259
+            }
+          },
+          "mutatorName": "ConditionalExpression",
+          "replacement": "false",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected 200 to be 400 // Object.is equality",
+          "testsCompleted": 25
         },
         {
           "coveredBy": [
@@ -7010,6 +8797,96 @@
         },
         {
           "coveredBy": [
+            "63",
+            "64",
+            "149",
+            "151",
+            "152",
+            "153"
+          ],
+          "id": "257",
+          "killedBy": [
+            "63"
+          ],
+          "location": {
+            "end": {
+              "column": 10,
+              "line": 261
+            },
+            "start": {
+              "column": 40,
+              "line": 259
+            }
+          },
+          "mutatorName": "BlockStatement",
+          "replacement": "{}",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected 200 to be 400 // Object.is equality",
+          "testsCompleted": 5
+        },
+        {
+          "coveredBy": [
+            "63",
+            "64",
+            "149",
+            "151",
+            "152",
+            "153"
+          ],
+          "id": "259",
+          "killedBy": [
+            "63"
+          ],
+          "location": {
+            "end": {
+              "column": 83,
+              "line": 260
+            },
+            "start": {
+              "column": 22,
+              "line": 260
+            }
+          },
+          "mutatorName": "ObjectLiteral",
+          "replacement": "{}",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected 'unknown-scenario' to be 'ambiguous-scenario' // Object.is equality",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "63",
+            "64",
+            "149",
+            "151",
+            "152",
+            "153"
+          ],
+          "id": "260",
+          "killedBy": [
+            "64"
+          ],
+          "location": {
+            "end": {
+              "column": 41,
+              "line": 260
+            },
+            "start": {
+              "column": 32,
+              "line": 260
+            }
+          },
+          "mutatorName": "StringLiteral",
+          "replacement": "\"\"",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected 400 to be 200 // Object.is equality",
+          "testsCompleted": 2
+        },
+        {
+          "coveredBy": [
             "56",
             "57",
             "58",
@@ -7065,6 +8942,313 @@
           "testsCompleted": 1
         },
         {
+          "coveredBy": [
+            "58",
+            "63"
+          ],
+          "id": "262",
+          "killedBy": [
+            "58"
+          ],
+          "location": {
+            "end": {
+              "column": 10,
+              "line": 274
+            },
+            "start": {
+              "column": 25,
+              "line": 268
+            }
+          },
+          "mutatorName": "BlockStatement",
+          "replacement": "{}",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "no-such-template: expected 409 to be 400 // Object.is equality",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "58",
+            "63"
+          ],
+          "id": "263",
+          "killedBy": [
+            "58"
+          ],
+          "location": {
+            "end": {
+              "column": 52,
+              "line": 270
+            },
+            "start": {
+              "column": 15,
+              "line": 270
+            }
+          },
+          "mutatorName": "ConditionalExpression",
+          "replacement": "true",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "no-such-template: expected 'ambiguous-scenario' to be 'unknown-scenario' // Object.is equality",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "58",
+            "63"
+          ],
+          "id": "264",
+          "killedBy": [
+            "63"
+          ],
+          "location": {
+            "end": {
+              "column": 52,
+              "line": 270
+            },
+            "start": {
+              "column": 15,
+              "line": 270
+            }
+          },
+          "mutatorName": "ConditionalExpression",
+          "replacement": "false",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected 'unknown-scenario' to be 'ambiguous-scenario' // Object.is equality",
+          "testsCompleted": 2
+        },
+        {
+          "coveredBy": [
+            "58",
+            "63"
+          ],
+          "id": "265",
+          "killedBy": [
+            "63"
+          ],
+          "location": {
+            "end": {
+              "column": 52,
+              "line": 270
+            },
+            "start": {
+              "column": 15,
+              "line": 270
+            }
+          },
+          "mutatorName": "MethodExpression",
+          "replacement": "msg.endsWith(\"ambiguous-scenario:\")",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected 'unknown-scenario' to be 'ambiguous-scenario' // Object.is equality",
+          "testsCompleted": 2
+        },
+        {
+          "coveredBy": [
+            "58",
+            "63"
+          ],
+          "id": "266",
+          "killedBy": [
+            "58"
+          ],
+          "location": {
+            "end": {
+              "column": 51,
+              "line": 270
+            },
+            "start": {
+              "column": 30,
+              "line": 270
+            }
+          },
+          "mutatorName": "StringLiteral",
+          "replacement": "\"\"",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "no-such-template: expected 'ambiguous-scenario' to be 'unknown-scenario' // Object.is equality",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "63"
+          ],
+          "id": "267",
+          "killedBy": [
+            "63"
+          ],
+          "location": {
+            "end": {
+              "column": 12,
+              "line": 272
+            },
+            "start": {
+              "column": 54,
+              "line": 270
+            }
+          },
+          "mutatorName": "BlockStatement",
+          "replacement": "{}",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected 'unknown-scenario' to be 'ambiguous-scenario' // Object.is equality",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "63"
+          ],
+          "id": "269",
+          "killedBy": [
+            "63"
+          ],
+          "location": {
+            "end": {
+              "column": 53,
+              "line": 271
+            },
+            "start": {
+              "column": 33,
+              "line": 271
+            }
+          },
+          "mutatorName": "StringLiteral",
+          "replacement": "\"\"",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected 409 to be 400 // Object.is equality",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "58"
+          ],
+          "id": "271",
+          "killedBy": [
+            "58"
+          ],
+          "location": {
+            "end": {
+              "column": 49,
+              "line": 273
+            },
+            "start": {
+              "column": 31,
+              "line": 273
+            }
+          },
+          "mutatorName": "StringLiteral",
+          "replacement": "\"\"",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "no-such-template: expected 409 to be 400 // Object.is equality",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "60",
+            "61",
+            "62",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "272",
+          "killedBy": [],
+          "location": {
+            "end": {
+              "column": 98,
+              "line": 287
+            },
+            "start": {
+              "column": 30,
+              "line": 287
+            }
+          },
+          "mutatorName": "LogicalOperator",
+          "replacement": "(loaded.template.tiers as Array<{\n  id?: string;\n}>)[0]?.id && \"master\"",
+          "static": false,
+          "status": "Survived",
+          "testsCompleted": 30
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "60",
+            "61",
+            "62",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "273",
+          "killedBy": [],
+          "location": {
+            "end": {
+              "column": 86,
+              "line": 287
+            },
+            "start": {
+              "column": 30,
+              "line": 287
+            }
+          },
+          "mutatorName": "OptionalChaining",
+          "replacement": "(loaded.template.tiers as Array<{\n  id?: string;\n}>)[0].id",
+          "static": false,
+          "status": "Survived",
+          "testsCompleted": 30
+        },
+        {
           "coveredBy": [],
           "id": "274",
           "killedBy": [],
@@ -7082,6 +9266,114 @@
           "replacement": "\"\"",
           "static": false,
           "status": "NoCoverage"
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "60",
+            "61",
+            "62",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "276",
+          "killedBy": [
+            "60"
+          ],
+          "location": {
+            "end": {
+              "column": 72,
+              "line": 288
+            },
+            "start": {
+              "column": 53,
+              "line": 288
+            }
+          },
+          "mutatorName": "ObjectLiteral",
+          "replacement": "{}",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected undefined to be 'reentered' // Object.is equality",
+          "testsCompleted": 3
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "60",
+            "61",
+            "62",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "277",
+          "killedBy": [
+            "60"
+          ],
+          "location": {
+            "end": {
+              "column": 70,
+              "line": 288
+            },
+            "start": {
+              "column": 66,
+              "line": 288
+            }
+          },
+          "mutatorName": "BooleanLiteral",
+          "replacement": "false",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected undefined to be 'reentered' // Object.is equality",
+          "testsCompleted": 3
         },
         {
           "coveredBy": [
@@ -7386,6 +9678,57 @@
             "205",
             "206"
           ],
+          "id": "283",
+          "killedBy": [],
+          "location": {
+            "end": {
+              "column": 52,
+              "line": 298
+            },
+            "start": {
+              "column": 26,
+              "line": 298
+            }
+          },
+          "mutatorName": "LogicalOperator",
+          "replacement": "args.instance_note && null",
+          "static": false,
+          "status": "Survived",
+          "testsCompleted": 30
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "60",
+            "61",
+            "62",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
           "id": "284",
           "killedBy": [
             "204"
@@ -7408,6 +9751,111 @@
           "testsCompleted": 27
         },
         {
+          "coveredBy": [
+            "56",
+            "57",
+            "60",
+            "61",
+            "62",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "285",
+          "killedBy": [
+            "56"
+          ],
+          "location": {
+            "end": {
+              "column": 103,
+              "line": 302
+            },
+            "start": {
+              "column": 33,
+              "line": 302
+            }
+          },
+          "mutatorName": "LogicalOperator",
+          "replacement": "(loaded.template.tiers as Array<{\n  prompt?: string;\n}>)[0]?.prompt && \"\"",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected '# Tier-0 巡场规程\\n\\n> 本规程是 tiers[0] 主控提示…' to contain '一级主控场景编排'",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "60",
+            "61",
+            "62",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "286",
+          "killedBy": [],
+          "location": {
+            "end": {
+              "column": 97,
+              "line": 302
+            },
+            "start": {
+              "column": 33,
+              "line": 302
+            }
+          },
+          "mutatorName": "OptionalChaining",
+          "replacement": "(loaded.template.tiers as Array<{\n  prompt?: string;\n}>)[0].prompt",
+          "static": false,
+          "status": "Survived",
+          "testsCompleted": 30
+        },
+        {
           "coveredBy": [],
           "id": "287",
           "killedBy": [],
@@ -7427,6 +9875,60 @@
           "status": "NoCoverage"
         },
         {
+          "coveredBy": [
+            "56",
+            "57",
+            "60",
+            "61",
+            "62",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "288",
+          "killedBy": [
+            "56"
+          ],
+          "location": {
+            "end": {
+              "column": 69,
+              "line": 303
+            },
+            "start": {
+              "column": 32,
+              "line": 303
+            }
+          },
+          "mutatorName": "LogicalOperator",
+          "replacement": "loaded.prompts[tier0PromptPath] && \"\"",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected '# Tier-0 巡场规程\\n\\n> 本规程是 tiers[0] 主控提示…' to contain '一级主控场景编排'",
+          "testsCompleted": 1
+        },
+        {
           "coveredBy": [],
           "id": "289",
           "killedBy": [],
@@ -7444,6 +9946,166 @@
           "replacement": "\"Stryker was here!\"",
           "static": false,
           "status": "NoCoverage"
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "60",
+            "61",
+            "62",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "290",
+          "killedBy": [
+            "56"
+          ],
+          "location": {
+            "end": {
+              "column": 10,
+              "line": 316
+            },
+            "start": {
+              "column": 16,
+              "line": 304
+            }
+          },
+          "mutatorName": "ObjectLiteral",
+          "replacement": "{}",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected undefined to be true // Object.is equality",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "56",
+            "57",
+            "60",
+            "61",
+            "62",
+            "64",
+            "65",
+            "96",
+            "97",
+            "100",
+            "101",
+            "102",
+            "103",
+            "104",
+            "105",
+            "106",
+            "107",
+            "108",
+            "109",
+            "149",
+            "151",
+            "152",
+            "153",
+            "154",
+            "155",
+            "164",
+            "169",
+            "204",
+            "205",
+            "206"
+          ],
+          "id": "291",
+          "killedBy": [
+            "56"
+          ],
+          "location": {
+            "end": {
+              "column": 19,
+              "line": 305
+            },
+            "start": {
+              "column": 15,
+              "line": 305
+            }
+          },
+          "mutatorName": "BooleanLiteral",
+          "replacement": "false",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "expected false to be true // Object.is equality",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "58",
+            "63"
+          ],
+          "id": "292",
+          "killedBy": [
+            "58"
+          ],
+          "location": {
+            "end": {
+              "column": 8,
+              "line": 319
+            },
+            "start": {
+              "column": 23,
+              "line": 317
+            }
+          },
+          "mutatorName": "BlockStatement",
+          "replacement": "{}",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "Unexpected end of JSON input",
+          "testsCompleted": 1
+        },
+        {
+          "coveredBy": [
+            "58",
+            "63"
+          ],
+          "id": "293",
+          "killedBy": [
+            "58"
+          ],
+          "location": {
+            "end": {
+              "column": 21,
+              "line": 318
+            },
+            "start": {
+              "column": 9,
+              "line": 318
+            }
+          },
+          "mutatorName": "CallExpression",
+          "replacement": ";",
+          "static": false,
+          "status": "Killed",
+          "statusReason": "Unexpected end of JSON input",
+          "testsCompleted": 1
         },
         {
           "coveredBy": [
@@ -21052,2651 +23714,6 @@
           "status": "Killed",
           "statusReason": "promise resolved \"undefined\" instead of rejecting",
           "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "58",
-            "63",
-            "96",
-            "97",
-            "98",
-            "99",
-            "100",
-            "102",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "155",
-            "163",
-            "174",
-            "175",
-            "176",
-            "177",
-            "178",
-            "179",
-            "180",
-            "181",
-            "182",
-            "183",
-            "184",
-            "185",
-            "186",
-            "187",
-            "188",
-            "189",
-            "190",
-            "191",
-            "192",
-            "193",
-            "194",
-            "195",
-            "196",
-            "197",
-            "198",
-            "199",
-            "206"
-          ],
-          "id": "5",
-          "killedBy": [
-            "58"
-          ],
-          "location": {
-            "end": {
-              "column": 2,
-              "line": 64
-            },
-            "start": {
-              "column": 38,
-              "line": 60
-            }
-          },
-          "mutatorName": "BlockStatement",
-          "replacement": "{}",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "Unexpected end of JSON input",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "58",
-            "63",
-            "96",
-            "97",
-            "98",
-            "99",
-            "100",
-            "102",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "155",
-            "163",
-            "174",
-            "175",
-            "176",
-            "177",
-            "178",
-            "179",
-            "180",
-            "181",
-            "182",
-            "183",
-            "184",
-            "185",
-            "186",
-            "187",
-            "188",
-            "189",
-            "190",
-            "191",
-            "192",
-            "193",
-            "194",
-            "195",
-            "196",
-            "197",
-            "198",
-            "199",
-            "206"
-          ],
-          "id": "0",
-          "killedBy": [
-            "58"
-          ],
-          "location": {
-            "end": {
-              "column": 4,
-              "line": 54
-            },
-            "start": {
-              "column": 46,
-              "line": 50
-            }
-          },
-          "mutatorName": "BlockStatement",
-          "replacement": "{}",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "no-such-template: expected 409 to be 400 // Object.is equality",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "150",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "161",
-            "164",
-            "169",
-            "198",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "186",
-          "killedBy": [
-            "56"
-          ],
-          "location": {
-            "end": {
-              "column": 48,
-              "line": 193
-            },
-            "start": {
-              "column": 13,
-              "line": 193
-            }
-          },
-          "mutatorName": "AssignmentOperator",
-          "replacement": "registry &&= new Registry(teamHome)",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected 409 to be 200 // Object.is equality",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "58",
-            "63",
-            "96",
-            "97",
-            "98",
-            "99",
-            "100",
-            "102",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "155",
-            "163",
-            "174",
-            "175",
-            "176",
-            "177",
-            "178",
-            "179",
-            "180",
-            "181",
-            "182",
-            "183",
-            "184",
-            "185",
-            "186",
-            "187",
-            "188",
-            "189",
-            "190",
-            "191",
-            "192",
-            "193",
-            "194",
-            "195",
-            "196",
-            "197",
-            "198",
-            "199",
-            "206"
-          ],
-          "id": "6",
-          "location": {
-            "end": {
-              "column": 33,
-              "line": 61
-            },
-            "start": {
-              "column": 7,
-              "line": 61
-            }
-          },
-          "mutatorName": "ConditionalExpression",
-          "replacement": "true",
-          "static": false,
-          "status": "Survived",
-          "testsCompleted": 42
-        },
-        {
-          "coveredBy": [
-            "58",
-            "63",
-            "96",
-            "97",
-            "98",
-            "99",
-            "100",
-            "102",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "155",
-            "163",
-            "174",
-            "175",
-            "176",
-            "177",
-            "178",
-            "179",
-            "180",
-            "181",
-            "182",
-            "183",
-            "184",
-            "185",
-            "186",
-            "187",
-            "188",
-            "189",
-            "190",
-            "191",
-            "192",
-            "193",
-            "194",
-            "195",
-            "196",
-            "197",
-            "198",
-            "199",
-            "206"
-          ],
-          "id": "1",
-          "location": {
-            "end": {
-              "column": 28,
-              "line": 52
-            },
-            "start": {
-              "column": 17,
-              "line": 52
-            }
-          },
-          "mutatorName": "StringLiteral",
-          "replacement": "\"\"",
-          "static": false,
-          "status": "Survived",
-          "testsCompleted": 42
-        },
-        {
-          "coveredBy": [
-            "58",
-            "63",
-            "96",
-            "97",
-            "98",
-            "99",
-            "100",
-            "102",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "155",
-            "163",
-            "174",
-            "175",
-            "176",
-            "177",
-            "178",
-            "179",
-            "180",
-            "181",
-            "182",
-            "183",
-            "184",
-            "185",
-            "186",
-            "187",
-            "188",
-            "189",
-            "190",
-            "191",
-            "192",
-            "193",
-            "194",
-            "195",
-            "196",
-            "197",
-            "198",
-            "199",
-            "206"
-          ],
-          "id": "7",
-          "location": {
-            "end": {
-              "column": 33,
-              "line": 61
-            },
-            "start": {
-              "column": 7,
-              "line": 61
-            }
-          },
-          "mutatorName": "ConditionalExpression",
-          "replacement": "false",
-          "static": false,
-          "status": "Survived",
-          "testsCompleted": 42
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "220",
-          "killedBy": [
-            "96"
-          ],
-          "location": {
-            "end": {
-              "column": 45,
-              "line": 238
-            },
-            "start": {
-              "column": 26,
-              "line": 238
-            }
-          },
-          "mutatorName": "ObjectLiteral",
-          "replacement": "{}",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "EEXIST: file already exists, mkdir '/tmp/xzg-golden-BVIO2m'",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "218",
-          "killedBy": [
-            "96"
-          ],
-          "location": {
-            "end": {
-              "column": 10,
-              "line": 239
-            },
-            "start": {
-              "column": 12,
-              "line": 237
-            }
-          },
-          "mutatorName": "BlockStatement",
-          "replacement": "{}",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected false to be true // Object.is equality",
-          "testsCompleted": 8
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "224",
-          "killedBy": [
-            "96"
-          ],
-          "location": {
-            "end": {
-              "column": 87,
-              "line": 245
-            },
-            "start": {
-              "column": 26,
-              "line": 245
-            }
-          },
-          "mutatorName": "LogicalOperator",
-          "replacement": "typeof args.scenario === \"string\" || args.scenario.length > 0",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "Cannot read properties of undefined (reading 'length')",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "216",
-          "location": {
-            "end": {
-              "column": 34,
-              "line": 233
-            },
-            "start": {
-              "column": 28,
-              "line": 233
-            }
-          },
-          "mutatorName": "StringLiteral",
-          "replacement": "\"\"",
-          "static": false,
-          "status": "Survived",
-          "testsCompleted": 32
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "226",
-          "killedBy": [
-            "96"
-          ],
-          "location": {
-            "end": {
-              "column": 59,
-              "line": 245
-            },
-            "start": {
-              "column": 26,
-              "line": 245
-            }
-          },
-          "mutatorName": "EqualityOperator",
-          "replacement": "typeof args.scenario !== \"string\"",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "Cannot read properties of undefined (reading 'length')",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "227",
-          "killedBy": [
-            "57"
-          ],
-          "location": {
-            "end": {
-              "column": 59,
-              "line": 245
-            },
-            "start": {
-              "column": 51,
-              "line": 245
-            }
-          },
-          "mutatorName": "StringLiteral",
-          "replacement": "\"\"",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected 'oss-maintenance' to be 'research-report' // Object.is equality",
-          "testsCompleted": 2
-        },
-        {
-          "coveredBy": [
-            "57",
-            "58",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65"
-          ],
-          "id": "228",
-          "location": {
-            "end": {
-              "column": 87,
-              "line": 245
-            },
-            "start": {
-              "column": 63,
-              "line": 245
-            }
-          },
-          "mutatorName": "ConditionalExpression",
-          "replacement": "true",
-          "static": false,
-          "status": "Survived",
-          "testsCompleted": 7
-        },
-        {
-          "coveredBy": [
-            "57",
-            "58",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65"
-          ],
-          "id": "229",
-          "location": {
-            "end": {
-              "column": 87,
-              "line": 245
-            },
-            "start": {
-              "column": 63,
-              "line": 245
-            }
-          },
-          "mutatorName": "EqualityOperator",
-          "replacement": "args.scenario.length >= 0",
-          "static": false,
-          "status": "Survived",
-          "testsCompleted": 7
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "223",
-          "killedBy": [
-            "57"
-          ],
-          "location": {
-            "end": {
-              "column": 87,
-              "line": 245
-            },
-            "start": {
-              "column": 26,
-              "line": 245
-            }
-          },
-          "mutatorName": "ConditionalExpression",
-          "replacement": "false",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected 'oss-maintenance' to be 'research-report' // Object.is equality",
-          "testsCompleted": 14
-        },
-        {
-          "coveredBy": [
-            "57",
-            "58",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65"
-          ],
-          "id": "230",
-          "killedBy": [
-            "57"
-          ],
-          "location": {
-            "end": {
-              "column": 87,
-              "line": 245
-            },
-            "start": {
-              "column": 63,
-              "line": 245
-            }
-          },
-          "mutatorName": "EqualityOperator",
-          "replacement": "args.scenario.length <= 0",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected 'oss-maintenance' to be 'research-report' // Object.is equality",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "234",
-          "killedBy": [
-            "56"
-          ],
-          "location": {
-            "end": {
-              "column": 64,
-              "line": 248
-            },
-            "start": {
-              "column": 33,
-              "line": 248
-            }
-          },
-          "mutatorName": "ConditionalExpression",
-          "replacement": "true",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected 409 to be 200 // Object.is equality",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "217",
-          "location": {
-            "end": {
-              "column": 36,
-              "line": 234
-            },
-            "start": {
-              "column": 30,
-              "line": 234
-            }
-          },
-          "mutatorName": "StringLiteral",
-          "replacement": "\"\"",
-          "static": false,
-          "status": "Survived",
-          "testsCompleted": 32
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "232",
-          "killedBy": [
-            "64"
-          ],
-          "location": {
-            "end": {
-              "column": 90,
-              "line": 248
-            },
-            "start": {
-              "column": 33,
-              "line": 248
-            }
-          },
-          "mutatorName": "ConditionalExpression",
-          "replacement": "false",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected 400 to be 200 // Object.is equality",
-          "testsCompleted": 8
-        },
-        {
-          "coveredBy": [
-            "61",
-            "64"
-          ],
-          "id": "237",
-          "location": {
-            "end": {
-              "column": 90,
-              "line": 248
-            },
-            "start": {
-              "column": 68,
-              "line": 248
-            }
-          },
-          "mutatorName": "ConditionalExpression",
-          "replacement": "true",
-          "static": false,
-          "status": "Survived",
-          "testsCompleted": 2
-        },
-        {
-          "coveredBy": [
-            "61",
-            "64"
-          ],
-          "id": "238",
-          "location": {
-            "end": {
-              "column": 90,
-              "line": 248
-            },
-            "start": {
-              "column": 68,
-              "line": 248
-            }
-          },
-          "mutatorName": "EqualityOperator",
-          "replacement": "args.source.length >= 0",
-          "static": false,
-          "status": "Survived",
-          "testsCompleted": 2
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "236",
-          "killedBy": [
-            "64"
-          ],
-          "location": {
-            "end": {
-              "column": 64,
-              "line": 248
-            },
-            "start": {
-              "column": 56,
-              "line": 248
-            }
-          },
-          "mutatorName": "StringLiteral",
-          "replacement": "\"\"",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected 400 to be 200 // Object.is equality",
-          "testsCompleted": 8
-        },
-        {
-          "coveredBy": [
-            "61",
-            "64"
-          ],
-          "id": "239",
-          "killedBy": [
-            "64"
-          ],
-          "location": {
-            "end": {
-              "column": 90,
-              "line": 248
-            },
-            "start": {
-              "column": 68,
-              "line": 248
-            }
-          },
-          "mutatorName": "EqualityOperator",
-          "replacement": "args.source.length <= 0",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected 400 to be 200 // Object.is equality",
-          "testsCompleted": 2
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "242",
-          "killedBy": [
-            "56"
-          ],
-          "location": {
-            "end": {
-              "column": 98,
-              "line": 251
-            },
-            "start": {
-              "column": 29,
-              "line": 251
-            }
-          },
-          "mutatorName": "LogicalOperator",
-          "replacement": "typeof args.project_root === \"string\" || args.project_root.length > 0",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected 409 to be 200 // Object.is equality",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "243",
-          "killedBy": [
-            "56"
-          ],
-          "location": {
-            "end": {
-              "column": 66,
-              "line": 251
-            },
-            "start": {
-              "column": 29,
-              "line": 251
-            }
-          },
-          "mutatorName": "ConditionalExpression",
-          "replacement": "true",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected 409 to be 200 // Object.is equality",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "244",
-          "killedBy": [
-            "56"
-          ],
-          "location": {
-            "end": {
-              "column": 66,
-              "line": 251
-            },
-            "start": {
-              "column": 29,
-              "line": 251
-            }
-          },
-          "mutatorName": "EqualityOperator",
-          "replacement": "typeof args.project_root !== \"string\"",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected 409 to be 200 // Object.is equality",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "245",
-          "killedBy": [
-            "63"
-          ],
-          "location": {
-            "end": {
-              "column": 66,
-              "line": 251
-            },
-            "start": {
-              "column": 58,
-              "line": 251
-            }
-          },
-          "mutatorName": "StringLiteral",
-          "replacement": "\"\"",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected 200 to be 400 // Object.is equality",
-          "testsCompleted": 7
-        },
-        {
-          "coveredBy": [
-            "63",
-            "64",
-            "149",
-            "151",
-            "152",
-            "153"
-          ],
-          "id": "246",
-          "location": {
-            "end": {
-              "column": 98,
-              "line": 251
-            },
-            "start": {
-              "column": 70,
-              "line": 251
-            }
-          },
-          "mutatorName": "ConditionalExpression",
-          "replacement": "true",
-          "static": false,
-          "status": "Survived",
-          "testsCompleted": 6
-        },
-        {
-          "coveredBy": [
-            "63",
-            "64",
-            "149",
-            "151",
-            "152",
-            "153"
-          ],
-          "id": "248",
-          "killedBy": [
-            "152"
-          ],
-          "location": {
-            "end": {
-              "column": 98,
-              "line": 251
-            },
-            "start": {
-              "column": 70,
-              "line": 251
-            }
-          },
-          "mutatorName": "EqualityOperator",
-          "replacement": "args.project_root.length <= 0",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected false to be true // Object.is equality",
-          "testsCompleted": 3
-        },
-        {
-          "coveredBy": [
-            "63",
-            "64",
-            "149",
-            "151",
-            "152",
-            "153"
-          ],
-          "id": "247",
-          "location": {
-            "end": {
-              "column": 98,
-              "line": 251
-            },
-            "start": {
-              "column": 70,
-              "line": 251
-            }
-          },
-          "mutatorName": "EqualityOperator",
-          "replacement": "args.project_root.length >= 0",
-          "static": false,
-          "status": "Survived",
-          "testsCompleted": 6
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "231",
-          "location": {
-            "end": {
-              "column": 90,
-              "line": 248
-            },
-            "start": {
-              "column": 33,
-              "line": 248
-            }
-          },
-          "mutatorName": "ConditionalExpression",
-          "replacement": "true",
-          "static": false,
-          "status": "Survived",
-          "testsCompleted": 32
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "249",
-          "killedBy": [
-            "149"
-          ],
-          "location": {
-            "end": {
-              "column": 10,
-              "line": 258
-            },
-            "start": {
-              "column": 39,
-              "line": 255
-            }
-          },
-          "mutatorName": "ArrayDeclaration",
-          "replacement": "[]",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "unknown-scenario: no template \"oss-maintenance\"",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "251",
-          "killedBy": [
-            "103"
-          ],
-          "location": {
-            "end": {
-              "column": 30,
-              "line": 256
-            },
-            "start": {
-              "column": 21,
-              "line": 256
-            }
-          },
-          "mutatorName": "StringLiteral",
-          "replacement": "\"\"",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "template validation failed:\n- [source-invalid] team.source: source must be one of builtin|user|project",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "253",
-          "killedBy": [
-            "61"
-          ],
-          "location": {
-            "end": {
-              "column": 27,
-              "line": 257
-            },
-            "start": {
-              "column": 21,
-              "line": 257
-            }
-          },
-          "mutatorName": "StringLiteral",
-          "replacement": "\"\"",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected 400 to be 200 // Object.is equality",
-          "testsCompleted": 5
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "240",
-          "location": {
-            "end": {
-              "column": 98,
-              "line": 251
-            },
-            "start": {
-              "column": 29,
-              "line": 251
-            }
-          },
-          "mutatorName": "ConditionalExpression",
-          "replacement": "true",
-          "static": false,
-          "status": "Survived",
-          "testsCompleted": 32
-        },
-        {
-          "coveredBy": [
-            "63",
-            "64",
-            "149",
-            "151",
-            "152",
-            "153"
-          ],
-          "id": "259",
-          "killedBy": [
-            "63"
-          ],
-          "location": {
-            "end": {
-              "column": 83,
-              "line": 260
-            },
-            "start": {
-              "column": 22,
-              "line": 260
-            }
-          },
-          "mutatorName": "ObjectLiteral",
-          "replacement": "{}",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected 'unknown-scenario' to be 'ambiguous-scenario' // Object.is equality",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "63",
-            "64",
-            "149",
-            "151",
-            "152",
-            "153"
-          ],
-          "id": "257",
-          "killedBy": [
-            "63"
-          ],
-          "location": {
-            "end": {
-              "column": 10,
-              "line": 261
-            },
-            "start": {
-              "column": 40,
-              "line": 259
-            }
-          },
-          "mutatorName": "BlockStatement",
-          "replacement": "{}",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected 200 to be 400 // Object.is equality",
-          "testsCompleted": 5
-        },
-        {
-          "coveredBy": [
-            "63",
-            "64",
-            "149",
-            "151",
-            "152",
-            "153"
-          ],
-          "id": "260",
-          "killedBy": [
-            "64"
-          ],
-          "location": {
-            "end": {
-              "column": 41,
-              "line": 260
-            },
-            "start": {
-              "column": 32,
-              "line": 260
-            }
-          },
-          "mutatorName": "StringLiteral",
-          "replacement": "\"\"",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected 400 to be 200 // Object.is equality",
-          "testsCompleted": 2
-        },
-        {
-          "coveredBy": [
-            "58",
-            "63"
-          ],
-          "id": "262",
-          "killedBy": [
-            "58"
-          ],
-          "location": {
-            "end": {
-              "column": 10,
-              "line": 274
-            },
-            "start": {
-              "column": 25,
-              "line": 268
-            }
-          },
-          "mutatorName": "BlockStatement",
-          "replacement": "{}",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "no-such-template: expected 409 to be 400 // Object.is equality",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "58",
-            "63"
-          ],
-          "id": "263",
-          "killedBy": [
-            "58"
-          ],
-          "location": {
-            "end": {
-              "column": 52,
-              "line": 270
-            },
-            "start": {
-              "column": 15,
-              "line": 270
-            }
-          },
-          "mutatorName": "ConditionalExpression",
-          "replacement": "true",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "no-such-template: expected 'ambiguous-scenario' to be 'unknown-scenario' // Object.is equality",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "58",
-            "63"
-          ],
-          "id": "265",
-          "killedBy": [
-            "63"
-          ],
-          "location": {
-            "end": {
-              "column": 52,
-              "line": 270
-            },
-            "start": {
-              "column": 15,
-              "line": 270
-            }
-          },
-          "mutatorName": "MethodExpression",
-          "replacement": "msg.endsWith(\"ambiguous-scenario:\")",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected 'unknown-scenario' to be 'ambiguous-scenario' // Object.is equality",
-          "testsCompleted": 2
-        },
-        {
-          "coveredBy": [
-            "58",
-            "63"
-          ],
-          "id": "264",
-          "killedBy": [
-            "63"
-          ],
-          "location": {
-            "end": {
-              "column": 52,
-              "line": 270
-            },
-            "start": {
-              "column": 15,
-              "line": 270
-            }
-          },
-          "mutatorName": "ConditionalExpression",
-          "replacement": "false",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected 'unknown-scenario' to be 'ambiguous-scenario' // Object.is equality",
-          "testsCompleted": 2
-        },
-        {
-          "coveredBy": [
-            "58",
-            "63"
-          ],
-          "id": "266",
-          "killedBy": [
-            "58"
-          ],
-          "location": {
-            "end": {
-              "column": 51,
-              "line": 270
-            },
-            "start": {
-              "column": 30,
-              "line": 270
-            }
-          },
-          "mutatorName": "StringLiteral",
-          "replacement": "\"\"",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "no-such-template: expected 'ambiguous-scenario' to be 'unknown-scenario' // Object.is equality",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "63"
-          ],
-          "id": "267",
-          "killedBy": [
-            "63"
-          ],
-          "location": {
-            "end": {
-              "column": 12,
-              "line": 272
-            },
-            "start": {
-              "column": 54,
-              "line": 270
-            }
-          },
-          "mutatorName": "BlockStatement",
-          "replacement": "{}",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected 'unknown-scenario' to be 'ambiguous-scenario' // Object.is equality",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "63"
-          ],
-          "id": "269",
-          "killedBy": [
-            "63"
-          ],
-          "location": {
-            "end": {
-              "column": 53,
-              "line": 271
-            },
-            "start": {
-              "column": 33,
-              "line": 271
-            }
-          },
-          "mutatorName": "StringLiteral",
-          "replacement": "\"\"",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected 409 to be 400 // Object.is equality",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "58",
-            "60",
-            "61",
-            "62",
-            "63",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "255",
-          "killedBy": [
-            "63"
-          ],
-          "location": {
-            "end": {
-              "column": 38,
-              "line": 259
-            },
-            "start": {
-              "column": 13,
-              "line": 259
-            }
-          },
-          "mutatorName": "ConditionalExpression",
-          "replacement": "false",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected 200 to be 400 // Object.is equality",
-          "testsCompleted": 25
-        },
-        {
-          "coveredBy": [
-            "58"
-          ],
-          "id": "271",
-          "killedBy": [
-            "58"
-          ],
-          "location": {
-            "end": {
-              "column": 49,
-              "line": 273
-            },
-            "start": {
-              "column": 31,
-              "line": 273
-            }
-          },
-          "mutatorName": "StringLiteral",
-          "replacement": "\"\"",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "no-such-template: expected 409 to be 400 // Object.is equality",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "60",
-            "61",
-            "62",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "276",
-          "killedBy": [
-            "60"
-          ],
-          "location": {
-            "end": {
-              "column": 72,
-              "line": 288
-            },
-            "start": {
-              "column": 53,
-              "line": 288
-            }
-          },
-          "mutatorName": "ObjectLiteral",
-          "replacement": "{}",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected undefined to be 'reentered' // Object.is equality",
-          "testsCompleted": 3
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "60",
-            "61",
-            "62",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "277",
-          "killedBy": [
-            "60"
-          ],
-          "location": {
-            "end": {
-              "column": 70,
-              "line": 288
-            },
-            "start": {
-              "column": 66,
-              "line": 288
-            }
-          },
-          "mutatorName": "BooleanLiteral",
-          "replacement": "false",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected undefined to be 'reentered' // Object.is equality",
-          "testsCompleted": 3
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "60",
-            "61",
-            "62",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "285",
-          "killedBy": [
-            "56"
-          ],
-          "location": {
-            "end": {
-              "column": 103,
-              "line": 302
-            },
-            "start": {
-              "column": 33,
-              "line": 302
-            }
-          },
-          "mutatorName": "LogicalOperator",
-          "replacement": "(loaded.template.tiers as Array<{\n  prompt?: string;\n}>)[0]?.prompt && \"\"",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected '# Tier-0 巡场规程\\n\\n> 本规程是 tiers[0] 主控提示…' to contain '一级主控场景编排'",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "60",
-            "61",
-            "62",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "272",
-          "location": {
-            "end": {
-              "column": 98,
-              "line": 287
-            },
-            "start": {
-              "column": 30,
-              "line": 287
-            }
-          },
-          "mutatorName": "LogicalOperator",
-          "replacement": "(loaded.template.tiers as Array<{\n  id?: string;\n}>)[0]?.id && \"master\"",
-          "static": false,
-          "status": "Survived",
-          "testsCompleted": 30
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "60",
-            "61",
-            "62",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "273",
-          "location": {
-            "end": {
-              "column": 86,
-              "line": 287
-            },
-            "start": {
-              "column": 30,
-              "line": 287
-            }
-          },
-          "mutatorName": "OptionalChaining",
-          "replacement": "(loaded.template.tiers as Array<{\n  id?: string;\n}>)[0].id",
-          "static": false,
-          "status": "Survived",
-          "testsCompleted": 30
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "60",
-            "61",
-            "62",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "288",
-          "killedBy": [
-            "56"
-          ],
-          "location": {
-            "end": {
-              "column": 69,
-              "line": 303
-            },
-            "start": {
-              "column": 32,
-              "line": 303
-            }
-          },
-          "mutatorName": "LogicalOperator",
-          "replacement": "loaded.prompts[tier0PromptPath] && \"\"",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected '# Tier-0 巡场规程\\n\\n> 本规程是 tiers[0] 主控提示…' to contain '一级主控场景编排'",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "60",
-            "61",
-            "62",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "290",
-          "killedBy": [
-            "56"
-          ],
-          "location": {
-            "end": {
-              "column": 10,
-              "line": 316
-            },
-            "start": {
-              "column": 16,
-              "line": 304
-            }
-          },
-          "mutatorName": "ObjectLiteral",
-          "replacement": "{}",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected undefined to be true // Object.is equality",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "60",
-            "61",
-            "62",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "283",
-          "location": {
-            "end": {
-              "column": 52,
-              "line": 298
-            },
-            "start": {
-              "column": 26,
-              "line": 298
-            }
-          },
-          "mutatorName": "LogicalOperator",
-          "replacement": "args.instance_note && null",
-          "static": false,
-          "status": "Survived",
-          "testsCompleted": 30
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "60",
-            "61",
-            "62",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "291",
-          "killedBy": [
-            "56"
-          ],
-          "location": {
-            "end": {
-              "column": 19,
-              "line": 305
-            },
-            "start": {
-              "column": 15,
-              "line": 305
-            }
-          },
-          "mutatorName": "BooleanLiteral",
-          "replacement": "false",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "expected false to be true // Object.is equality",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "58",
-            "63"
-          ],
-          "id": "292",
-          "killedBy": [
-            "58"
-          ],
-          "location": {
-            "end": {
-              "column": 8,
-              "line": 319
-            },
-            "start": {
-              "column": 23,
-              "line": 317
-            }
-          },
-          "mutatorName": "BlockStatement",
-          "replacement": "{}",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "Unexpected end of JSON input",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "58",
-            "63"
-          ],
-          "id": "293",
-          "killedBy": [
-            "58"
-          ],
-          "location": {
-            "end": {
-              "column": 21,
-              "line": 318
-            },
-            "start": {
-              "column": 9,
-              "line": 318
-            }
-          },
-          "mutatorName": "CallExpression",
-          "replacement": ";",
-          "static": false,
-          "status": "Killed",
-          "statusReason": "Unexpected end of JSON input",
-          "testsCompleted": 1
-        },
-        {
-          "coveredBy": [
-            "56",
-            "57",
-            "60",
-            "61",
-            "62",
-            "64",
-            "65",
-            "96",
-            "97",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-            "106",
-            "107",
-            "108",
-            "109",
-            "149",
-            "151",
-            "152",
-            "153",
-            "154",
-            "155",
-            "164",
-            "169",
-            "204",
-            "205",
-            "206"
-          ],
-          "id": "286",
-          "location": {
-            "end": {
-              "column": 97,
-              "line": 302
-            },
-            "start": {
-              "column": 33,
-              "line": 302
-            }
-          },
-          "mutatorName": "OptionalChaining",
-          "replacement": "(loaded.template.tiers as Array<{\n  prompt?: string;\n}>)[0].prompt",
-          "static": false,
-          "status": "Survived",
-          "testsCompleted": 30
         }
       ],
       "source": "/**\n * team_* 工具 handler 工厂：纯逻辑层，不依赖 cordis。\n * golden 调用集直接驱动本层断言「工具返回 + 账本/信箱/事件流状态迁移」；\n * 宿主装配层（host.ts）把它包装成 ToolDefinition。\n *\n * 一切校验委托 P2a/P2b 纯库；本层只做参数装配与错误文案包装\n * （定稿 G0 边界：确定性操作在工具内部完成，LLM 只做决策）。\n */\nimport { existsSync, mkdirSync, readdirSync, readFileSync } from \"node:fs\";\nimport { join } from \"node:path\";\nimport { fileURLToPath } from \"node:url\";\nimport type {\n  TaskRecord,\n  TaskStatus,\n  TemplateSource,\n  ScenarioRoot,\n} from \"../runtime/index.js\";\nimport {\n  ensureDir,\n  writeJsonAtomic,\n  layout,\n  assembleTier0Prompt,\n  builtinTemplatesRoot,\n  instantiateSnapshot,\n  loadTemplate,\n  loadTier0Playbook,\n  resolveScenarioDir,\n  DEFAULT_SCENARIO,\n  Ledger,\n  findConflicts,\n  EventLog,\n  Registry,\n  getShard,\n  listShards,\n  setShard,\n  acknowledge,\n  claim,\n  deliver,\n  readUnread,\n  PROGRESS_CONTRACT,\n  acquireCas,\n} from \"../runtime/index.js\";\nimport { userTemplatesRoot, projectTemplatesRoot } from \"./team-home.js\";\nimport { appendToolManifest } from \"./tool-manifest.js\";\nimport { auditWorkspace } from \"./workspace-audit.js\";\n\n/** 统一错误形状：{ error: { code, message } }，模型可读可路由。 */\nexport class ToolError extends Error {\n  readonly code: string;\n  constructor(code: string, message: string) {\n    super(message);\n    this.name = \"ToolError\";\n    this.code = code;\n  }\n}\n\n/** 包根目录（dist 与 src 双形态均回溯到仓根），builtin 模板定位用。 */\nexport const PACKAGE_ROOT = join(fileURLToPath(new URL(\".\", import.meta.url)), \"..\", \"..\");\n\nfunction wrap(error: unknown): never {\n  if (error instanceof ToolError) throw error;\n  const e = error as { code?: string; message?: string };\n  throw new ToolError(e.code ?? \"internal-error\", e.message ?? String(error));\n}\n\n/** 必填字符串参数校验（裸 definition 无自动校验，S1 结论）。 */\nfunction reqStr(args: Record<string, unknown>, key: string): string {\n  const v = args[key];\n  if (typeof v !== \"string\" || v.length === 0) {\n    throw new ToolError(\"invalid-arguments\", `string field \"${key}\" is required`);\n  }\n  return v;\n}\n\n/** 必填数字参数校验。 */\nfunction reqNum(args: Record<string, unknown>, key: string): number {\n  const v = args[key];\n  if (typeof v !== \"number\" || !Number.isFinite(v)) {\n    throw new ToolError(\"invalid-arguments\", `number field \"${key}\" is required`);\n  }\n  return v;\n}\n\nfunction optStr(args: Record<string, unknown>, key: string): string | undefined {\n  const v = args[key];\n  if (v === undefined) return undefined;\n  if (typeof v !== \"string\") throw new ToolError(\"invalid-arguments\", `field \"${key}\" must be a string`);\n  return v;\n}\n\nfunction optNum(args: Record<string, unknown>, key: string): number | undefined {\n  const v = args[key];\n  if (v === undefined) return undefined;\n  if (typeof v !== \"number\" || !Number.isFinite(v)) {\n    throw new ToolError(\"invalid-arguments\", `field \"${key}\" must be a number`);\n  }\n  return v;\n}\n\nfunction optStrArray(args: Record<string, unknown>, key: string): string[] | undefined {\n  const v = args[key];\n  if (v === undefined) return undefined;\n  if (!Array.isArray(v) || v.some((x) => typeof x !== \"string\")) {\n    throw new ToolError(\"invalid-arguments\", `field \"${key}\" must be a string array`);\n  }\n  return v as string[];\n}\n\n/** role_inline 白名单（对齐模板 role schema 的动态字段，ADR 0015：随信封投递不持久化）。 */\nconst ROLE_INLINE_FIELDS = [\"prompt\", \"briefing\", \"dod\", \"max_hops\", \"as_judge\"] as const;\n\nfunction optRoleInline(args: Record<string, unknown>): Record<string, unknown> | undefined {\n  const v = args.role_inline;\n  if (v === undefined) return undefined;\n  if (typeof v !== \"object\" || v === null || Array.isArray(v)) {\n    throw new ToolError(\"invalid-arguments\", 'field \"role_inline\" must be an object');\n  }\n  const inline = v as Record<string, unknown>;\n  for (const key of Object.keys(inline)) {\n    if (!(ROLE_INLINE_FIELDS as readonly string[]).includes(key)) {\n      throw new ToolError(\"invalid-arguments\", `unknown role_inline field \"${key}\"`);\n    }\n  }\n  if (\n    inline.prompt !== undefined &&\n    (typeof inline.prompt !== \"string\" || inline.prompt.length === 0)\n  ) {\n    throw new ToolError(\"invalid-arguments\", 'role_inline.prompt must be a non-empty string');\n  }\n  if (\n    inline.briefing !== undefined &&\n    (typeof inline.briefing !== \"string\" || inline.briefing.length === 0)\n  ) {\n    throw new ToolError(\"invalid-arguments\", 'role_inline.briefing must be a non-empty string');\n  }\n  if (inline.dod !== undefined) {\n    const probe = { dod: inline.dod };\n    if (optStrArray(probe, \"dod\") === undefined) {\n      throw new ToolError(\"invalid-arguments\", 'role_inline.dod must be a string array');\n    }\n  }\n  if (inline.max_hops !== undefined && (typeof inline.max_hops !== \"number\" || !Number.isFinite(inline.max_hops))) {\n    throw new ToolError(\"invalid-arguments\", 'role_inline.max_hops must be a number');\n  }\n  if (inline.as_judge !== undefined && typeof inline.as_judge !== \"boolean\") {\n    throw new ToolError(\"invalid-arguments\", 'role_inline.as_judge must be a boolean');\n  }\n  return inline;\n}\n\n/** 一个团队实例的 handler 集（绑定到某主会话的 TEAM_HOME）。 */\nexport interface Handlers {\n  /** team_init：建目录结构 + agents.json 骨架 + room.lock 幂等占位。 */\n  init: (args: Record<string, unknown>) => Promise<unknown>;\n  /** team_spawn：登记成员 durable id 入 agents.json。 */\n  spawn: (args: Record<string, unknown>) => Promise<unknown>;\n  /** team_dispatch（ADR 0015，#67）：spawn → 指派 → 派单复合原语，半事务。 */\n  dispatch: (args: Record<string, unknown>) => Promise<unknown>;\n  /** team_send：定向信箱投递（可达性 = 注册表存在性，MVP auto 模式）。 */\n  send: (args: Record<string, unknown>) => Promise<unknown>;\n  /** team_inbox：读未读 / 认领指定信封。 */\n  inbox: (args: Record<string, unknown>) => Promise<unknown>;\n  /** team_ack：确认处理完成。 */\n  ack: (args: Record<string, unknown>) => Promise<unknown>;\n  /** team_task_create / update / list。 */\n  taskCreate: (args: Record<string, unknown>) => Promise<unknown>;\n  taskUpdate: (args: Record<string, unknown>) => Promise<unknown>;\n  taskList: (args: Record<string, unknown>) => Promise<unknown>;\n  /** team_state_get / set：黑板读写。 */\n  stateGet: (args: Record<string, unknown>) => Promise<unknown>;\n  stateSet: (args: Record<string, unknown>) => Promise<unknown>;\n  /** team_handoff：显式交接（dod 回执核验）。 */\n  handoff: (args: Record<string, unknown>) => Promise<unknown>;\n  /** team_reconcile（ADR 0015）：对账全量视图 / scope=audit 旁路 report-only。 */\n  reconcile: (args: Record<string, unknown>) => Promise<unknown>;\n}\n\nexport function createHandlers(teamHome: string, sessionId: string): Handlers {\n  const l = layout(teamHome);\n  let ledger: Ledger | undefined;\n  let events: EventLog | undefined;\n  let registry: Registry | undefined;\n\n  // 惰性单例：同一实例根内复用事件游标等内存状态。\n  function led(): Ledger {\n    return (ledger ??= new Ledger(teamHome, l.ledgerTasksDir));\n  }\n  function log(room: string): EventLog {\n    // 同房间单写者约定下缓存游标；不同房间各自独立文件。\n    return (events ??= new EventLog(join(l.roomsDir, room, \"events.jsonl\")));\n  }\n  function reg(): Registry {\n    return (registry ??= new Registry(teamHome));\n  }\n\n  async function appendEvent(actor: string, type: string, payload: unknown, room = \"root\"): Promise<void> {\n    await ensureDir(join(l.roomsDir, room));\n    const eventLog = log(room);\n    await eventLog.init();\n    await eventLog.append({ session_id: sessionId, actor, type, payload });\n  }\n\n  async function assertNoTaskConflict(taskId: string, room: string, touched: string[], mutexGroups: string[]): Promise<void> {\n    const { tasks } = await led().list();\n    const probe: TaskRecord = {\n      id: taskId,\n      title: \"\",\n      status: \"running\",\n      room,\n      touched,\n      mutexGroups,\n      rounds: 0,\n      maxRounds: 0,\n      dod: [],\n      rev: 1,\n      createdAt: 0,\n      updatedAt: 0,\n    };\n    const conflicts = findConflicts([...tasks.filter((t) => t.id !== taskId), probe]);\n    if (conflicts.length > 0) {\n      const c = conflicts[0]!;\n      throw new ToolError(\"mutex-conflict\", `conflicts with ${c.a === taskId ? c.b : c.a}: ${c.reason}`);\n    }\n  }\n\n  return {\n    async init(args) {\n      try {\n        for (const dir of [\n          l.teamHome,\n          l.ledgerTasksDir,\n          l.roomsDir,\n          join(l.roomsDir, \"root\"),\n          join(l.mailboxDir, \"root\"),\n          l.gatesDir,\n          l.archiveDir,\n        ]) {\n          mkdirSync(dir, { recursive: true });\n        }\n        // room.lock CAS 幂等：同会话重入成功，异会话重复实例化拒绝。\n        const outcome = await acquireCas(l.roomLock, sessionId);\n        await reg().write(await reg().read());\n        // 场景选择（#47 三级来源解析）：scenario 必选或缺省，source 可选消歧，\n        // project_root 控制 project 层参与。同名未指定 source → ambiguous-scenario。\n        const scenario = typeof args.scenario === \"string\" && args.scenario.length > 0\n          ? args.scenario\n          : DEFAULT_SCENARIO;\n        const requestedSource = typeof args.source === \"string\" && args.source.length > 0\n          ? (args.source as TemplateSource)\n          : undefined;\n        const projectRoot = typeof args.project_root === \"string\" && args.project_root.length > 0\n          ? args.project_root\n          : undefined;\n        // 三级来源根组装（builtin + user + 可选 project）\n        const roots: ScenarioRoot[] = [\n          { source: \"builtin\", dir: builtinTemplatesRoot(PACKAGE_ROOT) },\n          { source: \"user\", dir: userTemplatesRoot() },\n        ];\n        if (projectRoot !== undefined) {\n          roots.push({ source: \"project\", dir: projectTemplatesRoot(projectRoot) });\n        }\n        let scenarioDir: string;\n        let scenarioSource: TemplateSource;\n        try {\n          const resolved = resolveScenarioDir(roots, scenario, requestedSource);\n          scenarioDir = resolved.dir;\n          scenarioSource = resolved.source;\n        } catch (error) {\n          const msg = (error as Error).message;\n          if (msg.startsWith(\"ambiguous-scenario:\")) {\n            throw new ToolError(\"ambiguous-scenario\", msg);\n          }\n          throw new ToolError(\"unknown-scenario\", msg);\n        }\n        // 模板快照落盘 + Tier-0 组装（#42 分层定稿）：tier0_prompt =\n        // 规程全文（playbooks/tier0-playbook.md，唯一事实源）+ 固定分隔符 +\n        // 场景 tiers[0].prompt；快照增补 playbook_digest 审计字段。\n        const loaded = await loadTemplate(scenarioDir, scenarioSource);\n        const playbook = loadTier0Playbook(PACKAGE_ROOT);\n        // 工作区持久化（ADR 0015）：audit 扫描根的唯一合法来源（不接受调用方传参）。\n        await writeJsonAtomic(l.teamYaml, instantiateSnapshot(loaded, playbook.digest, projectRoot));\n        // L1 预登记（#79）：tier0 主控根成员在 init 时入册——G0 边界把\n        // agents.json 登记列为运行时确定性操作，不依赖提示词自觉。主控\n        // durableId = 宿主主会话 id；status=running（init 由该存活会话触发）。\n        // 同会话重入经三态判定的幂等分支自然收敛。并入 team/init 事件载荷，\n        // 不另发 spawn 事件（保持事件类型序列契约稳定）。\n        const masterMember = (loaded.template.tiers as Array<{ id?: string }>)[0]?.id ?? \"master\";\n        mkdirSync(join(l.mailboxDir, masterMember), { recursive: true });\n        const masterOutcome = await reg().upsertMember({\n          member: masterMember,\n          tier: 0,\n          parent: null,\n          durableId: sessionId,\n          status: \"running\",\n          lastSeen: Date.now(),\n        });\n        await appendEvent(\"system\", \"team/init\", {\n          instance_note: args.instance_note ?? null,\n          lock: outcome,\n          master: { member: masterMember, outcome: masterOutcome },\n        });\n        const tier0PromptPath = (loaded.template.tiers as Array<{ prompt?: string }>)[0]?.prompt ?? \"\";\n        const scenarioPrompt = loaded.prompts[tier0PromptPath] ?? \"\";\n        return {\n          ok: true,\n          lock: outcome,\n          home: l.teamHome,\n          scenario,\n          source: scenarioSource,\n          // L1（#79）：预登记的 tier0 主控成员名与登记形态，供入口层展示。\n          master_member: masterMember,\n          // ADR 0015 决策 3：tier0_prompt 尾部追加「框架工具面自述」保留段\n          //（仅 team_* 自述 + 盲区声明；appendToolManifest 保证不双份）。\n          tier0_prompt: appendToolManifest(assembleTier0Prompt(playbook, scenarioPrompt)),\n          playbook_digest: playbook.digest,\n        };\n      } catch (error) {\n        wrap(error);\n      }\n    },\n\n    async spawn(args) {\n      try {\n        const member = reqStr(args, \"member\");\n        const durableId = reqStr(args, \"durable_id\");\n        const role = reqStr(args, \"role\");\n        const tier = optNum(args, \"tier\");\n        const parent = optStr(args, \"parent\");\n        if (tier === undefined) throw new ToolError(\"invalid-arguments\", 'number field \"tier\" is required');\n        await ensureDir(join(l.mailboxDir, member));\n        // parent 持久化（#79 顺带修复：此前仅解析未落账，接管层级树缺边）。\n        await reg().upsertMember({\n          member,\n          durableId,\n          ...(parent !== undefined ? { parent } : {}),\n          tier,\n          status: \"spawned\",\n          lastSeen: Date.now(),\n        });\n        await appendEvent(\"system\", \"team/spawn\", {\n          member,\n          durable_id: durableId,\n          role,\n          tier,\n          ...(parent !== undefined ? { parent } : {}),\n        });\n        return { ok: true, member, durable_id: durableId };\n      } catch (error) {\n        wrap(error);\n      }\n    },\n\n    async dispatch(args) {\n      try {\n        const member = reqStr(args, \"member\");\n        const durableId = reqStr(args, \"durable_id\");\n        const role = reqStr(args, \"role\");\n        const tier = reqNum(args, \"tier\");\n        const parent = optStr(args, \"parent\");\n        const taskId = reqStr(args, \"task_id\");\n        const from = optStr(args, \"from\") ?? \"root\";\n        const provider = optStr(args, \"provider\");\n        const model = optStr(args, \"model\");\n        const inline = optRoleInline(args);\n        const expectRev = optNum(args, \"expect_rev\");\n\n        // 前置校验（无副作用，不参与半事务）：任务必须在场——账本先行约定。\n        const task = await led().get(taskId);\n        if (task === undefined) {\n          throw new ToolError(\"task-not-found\", `task ${taskId} does not exist`);\n        }\n\n        // 半事务执行：任一步失败即停，已完成步骤随错误留痕（ADR 0015）。\n        const completed: string[] = [];\n        try {\n          // step 1: 注册（三态 upsert，与 team_spawn 同一落账函数；幂等重入\n          // 走同 member+同 durableId 分支）。\n          await ensureDir(join(l.mailboxDir, member));\n          await reg().upsertMember({\n            member,\n            durableId,\n            ...(parent !== undefined ? { parent } : {}),\n            tier,\n            status: \"spawned\",\n            lastSeen: Date.now(),\n          });\n          await appendEvent(\"system\", \"team/spawn\", {\n            member,\n            durable_id: durableId,\n            role,\n            tier,\n            ...(parent !== undefined ? { parent } : {}),\n            ...(provider !== undefined ? { provider } : {}),\n            ...(model !== undefined ? { model } : {}),\n            ...(inline !== undefined ? { role_inline: inline } : {}),\n          });\n          completed.push(\"spawn\");\n          // step 2: 指派（乐观锁透传，防并发误派）。\n          const updated = await led().update(\n            taskId,\n            { assignee: member },\n            { ...(expectRev !== undefined ? { expectRev } : {}) },\n          );\n          await appendEvent(member, \"task/update\", {\n            task_id: taskId,\n            status: updated.status,\n            rev: updated.rev,\n          });\n          completed.push(\"assign\");\n          // step 3: 派单信封（role_inline 与模型档位随信封投递给成员；\n          // 进度契约为框架注入的固定段——开工/里程碑/完成回执不靠成员自觉）。\n          const envelopeId = await deliver(teamHome, member, {\n            from,\n            type: \"task-assign\",\n            body: {\n              task_id: taskId,\n              title: task.title,\n              room: task.room,\n              dod: task.dod,\n              role_inline: inline ?? null,\n              provider: provider ?? null,\n              model: model ?? null,\n              progress_contract: PROGRESS_CONTRACT,\n            },\n          });\n          await appendEvent(from, \"mailbox/deliver\", {\n            to: member,\n            envelope_id: envelopeId,\n            msg_type: \"task-assign\",\n            task_id: taskId,\n          });\n          completed.push(\"send\");\n          return {\n            ok: true,\n            member,\n            durable_id: durableId,\n            task_id: taskId,\n            envelope_id: envelopeId,\n            steps: completed,\n          };\n        } catch (error) {\n          const e = error as { code?: string; message?: string };\n          // 已知稳定错误码原样透传（可路由），其余归并为 dispatch-partial；\n          // 两种形态都携带已完成步骤，供主控决定续跑或回滚。\n          const code = e.code ?? \"dispatch-partial\";\n          throw new ToolError(\n            code,\n            `dispatch stopped after [${completed.join(\", \") || \"none\"}]: ${e.message ?? String(error)}`,\n          );\n        }\n      } catch (error) {\n        wrap(error);\n      }\n    },\n\n    async send(args) {\n      try {\n        const to = reqStr(args, \"to\");\n        const from = reqStr(args, \"from\");\n        const type = reqStr(args, \"type\");\n        const body = args.body ?? null;\n        if ((await reg().getMember(to)) === undefined) {\n          throw new ToolError(\"unknown-member\", `recipient ${to} is not registered`);\n        }\n        const envelopeId = await deliver(teamHome, to, { from, type, body });\n        // 计账增补 task_id（若 body 为对象且携带）：对账时「哪封信对应哪个任务」\n        // 不必再开信封比对，机械可得。\n        const rawTaskId = (body as { task_id?: unknown }).task_id;\n        const bodyTaskId =\n          body !== null && typeof body === \"object\" && typeof rawTaskId === \"string\" && rawTaskId.length > 0\n            ? rawTaskId\n            : undefined;\n        await appendEvent(from, \"mailbox/deliver\", {\n          to,\n          envelope_id: envelopeId,\n          msg_type: type,\n          ...(bodyTaskId !== undefined ? { task_id: bodyTaskId } : {}),\n        });\n        return { ok: true, envelope_id: envelopeId };\n      } catch (error) {\n        wrap(error);\n      }\n    },\n\n    async inbox(args) {\n      try {\n        const member = reqStr(args, \"member\");\n        const uuid = optStr(args, \"envelope_id\");\n        if (uuid !== undefined) {\n          const claimed = await claim(teamHome, member, uuid);\n          return { ok: true, envelope: claimed };\n        }\n        return { ok: true, unread: await readUnread(teamHome, member) };\n      } catch (error) {\n        wrap(error);\n      }\n    },\n\n    async ack(args) {\n      try {\n        const member = reqStr(args, \"member\");\n        const uuid = reqStr(args, \"envelope_id\");\n        await acknowledge(teamHome, member, uuid);\n        await appendEvent(member, \"mailbox/ack\", { envelope_id: uuid });\n        return { ok: true };\n      } catch (error) {\n        wrap(error);\n      }\n    },\n\n    async taskCreate(args) {\n      try {\n        const title = reqStr(args, \"title\");\n        const room = reqStr(args, \"room\");\n        const assignee = optStr(args, \"assignee\");\n        const touched = optStrArray(args, \"touched_paths\");\n        const mutexGroups = optStrArray(args, \"mutex_groups\");\n        const maxRounds = optNum(args, \"max_rounds\");\n        const dod = optStrArray(args, \"dod\");\n        const baseline = optStr(args, \"baseline\");\n\n        // 创建前互斥预检：与现存 running 任务冲突即拒（不留半成品任务）。\n        await assertNoTaskConflict(\"pending-create\", room, touched ?? [], mutexGroups ?? []);\n        const task = await led().create({\n          title,\n          room,\n          ...(assignee !== undefined ? { assignee } : {}),\n          ...(touched !== undefined ? { touched } : {}),\n          ...(mutexGroups !== undefined ? { mutexGroups } : {}),\n          ...(maxRounds !== undefined ? { maxRounds } : {}),\n          ...(dod !== undefined ? { dod } : {}),\n          ...(baseline !== undefined ? { baseline } : {}),\n        });\n        await appendEvent(assignee ?? \"system\", \"task/create\", { task_id: task.id, title, room });\n        return { ok: true, task_id: task.id, status: task.status };\n      } catch (error) {\n        wrap(error);\n      }\n    },\n\n    async taskUpdate(args) {\n      try {\n        const taskId = reqStr(args, \"task_id\");\n        const status = optStr(args, \"status\");\n        const rounds = optNum(args, \"rounds\");\n        const expectRev = optNum(args, \"expect_rev\");\n        const updated = await led().update(\n          taskId,\n          {\n            ...(status !== undefined ? { status: status as TaskStatus } : {}),\n            ...(optStr(args, \"assignee\") !== undefined\n              ? { assignee: optStr(args, \"assignee\") as string }\n              : {}),\n            ...(rounds !== undefined ? { rounds } : {}),\n            ...(optStr(args, \"artifact\") !== undefined\n              ? { artifact: optStr(args, \"artifact\") as string }\n              : {}),\n          },\n          { ...(expectRev !== undefined ? { expectRev } : {}) },\n        );\n        await appendEvent(updated.assignee ?? \"system\", \"task/update\", {\n          task_id: taskId,\n          status: updated.status,\n          rev: updated.rev,\n        });\n        return { ok: true, task_id: taskId, status: updated.status, rev: updated.rev };\n      } catch (error) {\n        wrap(error);\n      }\n    },\n\n    async taskList(args) {\n      try {\n        const { tasks, corrupt } = await led().list();\n        const room = optStr(args, \"room\");\n        const status = optStr(args, \"status\");\n        const filtered = tasks.filter(\n          (t) => (room === undefined || t.room === room) && (status === undefined || t.status === status),\n        );\n        return { ok: true, tasks: filtered, corrupt_files: corrupt };\n      } catch (error) {\n        wrap(error);\n      }\n    },\n\n    async stateGet(args) {\n      try {\n        const room = reqStr(args, \"room\");\n        const role = optStr(args, \"role\");\n        if (role !== undefined) {\n          return { ok: true, shard: (await getShard(teamHome, room, role)) ?? null };\n        }\n        return { ok: true, shards: await listShards(teamHome, room) };\n      } catch (error) {\n        wrap(error);\n      }\n    },\n\n    async stateSet(args) {\n      try {\n        const room = reqStr(args, \"room\");\n        const role = reqStr(args, \"role\");\n        const status = reqStr(args, \"status\");\n        const ext = args.ext;\n        const shard = await setShard(teamHome, room, role, {\n          status: status as Parameters<typeof setShard>[3][\"status\"],\n          ...(ext !== undefined ? { ext } : {}),\n        });\n        await appendEvent(role, \"blackboard/set\", { room, status: shard.status });\n        return { ok: true, role, status: shard.status };\n      } catch (error) {\n        wrap(error);\n      }\n    },\n\n    async handoff(args) {\n      try {\n        const taskId = reqStr(args, \"task_id\");\n        const toRole = reqStr(args, \"to_role\");\n        const receipt = optStrArray(args, \"receipt\");\n        const task = await led().get(taskId);\n        if (task === undefined) throw new ToolError(\"task-not-found\", `task ${taskId} does not exist`);\n        if (receipt === undefined && task.dod.length > 0) {\n          throw new ToolError(\n            \"receipt-required\",\n            `task ${taskId} has dod items; attach a per-item pass/fail receipt array`,\n          );\n        }\n        if (receipt !== undefined) {\n          if (receipt.length < task.dod.length) {\n            throw new ToolError(\n              \"receipt-incomplete\",\n              `dod has ${task.dod.length} items but receipt has ${receipt.length} conclusions`,\n            );\n          }\n          // 逐条结论格式校验（10§3.3 文档宣称的兑现，#98 步骤 2）：\n          // 每条必须以 pass:/fail: 开头附一句话结论——回执是 judge 的\n          // 结构化凭据，自由文本无法被凭据卡片与对账消费。\n          const badIdx = receipt.findIndex((line) => !/^\\s*(pass|fail)\\s*[:：]/i.test(line));\n          if (badIdx >= 0) {\n            throw new ToolError(\n              \"receipt-format\",\n              `receipt[${badIdx}] must start with \"pass:\" or \"fail:\" followed by a one-line conclusion`,\n            );\n          }\n        }\n        // handoff 只换持有者；任务在 blocked 时随交接恢复 running，其余态不变\n        // （running→running 是非法迁移，交给状态机校验兜底）。\n        const updated = await led().update(taskId, {\n          assignee: toRole,\n          ...(task.status === \"blocked\" ? { status: \"running\" as TaskStatus } : {}),\n        });\n        await appendEvent(toRole, \"handoff\", { task_id: taskId, to_role: toRole, receipt: receipt ?? null });\n        return { ok: true, task_id: taskId, assignee: updated.assignee, rev: updated.rev };\n      } catch (error) {\n        wrap(error);\n      }\n    },\n    async reconcile(args) {\n      try {\n        const scope = optStr(args, \"scope\") ?? \"overview\";\n        if (scope !== \"overview\" && scope !== \"audit\") {\n          throw new ToolError(\"invalid-arguments\", 'field \"scope\" must be \"overview\" or \"audit\"');\n        }\n\n        // 实例快照摘要（team.yaml 在场性 = 已初始化判定，与 HTTP status 端点一致）。\n        let snapshot: Record<string, unknown> | null = null;\n        if (existsSync(l.teamYaml)) {\n          try {\n            snapshot = JSON.parse(readFileSync(l.teamYaml, \"utf8\")) as Record<string, unknown>;\n          } catch {\n            snapshot = null; // 快照损坏：按未摘要化处理，不阻断账本/注册表对账\n          }\n        }\n\n        const { tasks } = await led().list();\n        const registry = await reg().read();\n        const members = Object.values(registry.members ?? {});\n\n        // 成员账本对照：assignee 视角聚合；存活列诚实标注框架不可见（V3）。\n        const byAssignee = new Map<string, string[]>();\n        for (const t of tasks) {\n          if (t.assignee === undefined) continue;\n          byAssignee.set(t.assignee, [...(byAssignee.get(t.assignee) ?? []), t.id]);\n        }\n        const memberLedger = members.map((m) => ({\n          member: m.member,\n          durable_id: m.durableId,\n          tier: m.tier,\n          parent: m.parent ?? null,\n          status: m.status,\n          liveness: \"framework-invisible\",\n          assigned_task_ids: byAssignee.get(m.member) ?? [],\n        }));\n        // 悬空态检测：账本指派了、但注册表无此成员。\n        const registeredNames = new Set(members.map((m) => m.member));\n        const dangling_assignees = [...byAssignee.keys()].filter((a) => !registeredNames.has(a));\n\n        // 孤儿检测（report-only）：非根成员缺 parent 或 parent 未在册即标出，\n        // 供主控/视图核对协作链路；硬校验待误报率数据产出后另行评审。\n        // tier=0 根主控豁免（单入口原则：有且仅有一个无父主控）。\n        const orphan_members = members\n          .filter((m) => m.tier !== 0)\n          .filter((m) => m.parent === undefined || m.parent === null || !registeredNames.has(m.parent))\n          .map((m) => ({\n            member: m.member,\n            tier: m.tier,\n            parent: m.parent ?? null,\n            reason: m.parent === undefined || m.parent === null ? \"parent-missing\" : \"parent-dangling\",\n          }));\n\n        // 任务账本快照：状态分布 + 明细。\n        const statusCounts: Record<string, number> = {};\n        for (const t of tasks) statusCounts[t.status] = (statusCounts[t.status] ?? 0) + 1;\n        const taskDetails = tasks.map((t) => ({\n          id: t.id,\n          title: t.title,\n          room: t.room,\n          status: t.status,\n          assignee: t.assignee ?? null,\n          rounds: t.rounds,\n          max_rounds: t.maxRounds ?? null,\n          touched_paths: t.touched,\n        }));\n\n        // 事件游标：逐房间独立打开日志读末笔 seq（不经单写者缓存的 log()）。\n        const eventCursors: Array<{ room: string; seq: number }> = [];\n        if (existsSync(l.roomsDir)) {\n          for (const room of readdirSync(l.roomsDir)) {\n            try {\n              const el = new EventLog(join(l.roomsDir, room, \"events.jsonl\"));\n              await el.init();\n              const { events } = await el.read();\n              const last = events[events.length - 1];\n              eventCursors.push({ room, seq: last?.seq ?? 0 });\n            } catch {\n              // 房间目录存在但事件文件不可读：游标记 0\n              eventCursors.push({ room, seq: 0 });\n            }\n          }\n        }\n\n        const overview = {\n          initialized: snapshot !== null,\n          snapshot: snapshot && {\n            name: snapshot.name ?? null,\n            source: snapshot.source ?? null,\n            digest: snapshot.digest ?? null,\n            playbook_digest: snapshot.playbook_digest ?? null,\n            instantiated_at: snapshot.instantiated_at ?? null,\n          },\n          members: memberLedger,\n          dangling_assignees,\n          orphan_members,\n          task_status_counts: statusCounts,\n          tasks: taskDetails,\n          event_cursors: eventCursors,\n          goal_binding: \"framework-invisible; run get_goal to verify\",\n          tool_manifest_pointer: \"see framework tool manifest section of the boot message\",\n        };\n\n        if (scope === \"overview\") return { ok: true, scope, ...overview };\n\n        // scope=audit：旁路 report-only。扫描根只取快照持久化的工作区。\n        const workspace =\n          snapshot && typeof snapshot.workspace === \"string\" ? snapshot.workspace : null;\n        const registeredPaths = tasks.flatMap((t) => t.touched ?? []);\n        const report = auditWorkspace(workspace, registeredPaths);\n        return { ok: true, scope, overview, audit: report };\n      } catch (error) {\n        wrap(error);\n      }\n    },\n\n  };\n}\n"
