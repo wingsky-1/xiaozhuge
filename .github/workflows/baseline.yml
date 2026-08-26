@@ -72,9 +72,22 @@ jobs:
           labels: chore
       # merge 同样走 PAT：GITHUB_TOKEN 触发的 push 不产生 workflow run（防递归
       # 机制），会导致「快照合入后的 main」从未被 CI 验证过；PAT 身份则正常触发。
+      # strict 分支保护要求 up-to-date：快照 PR 创建后 main 若前进会 BLOCKED，
+      # 故先 update-branch 同步并等待其 CI（skip 路由 + gauntlet，约 1 分钟）绿。
       - name: Auto-merge baseline PR
         if: steps.snapshot.outputs.pull-request-number != ''
         env:
           GH_TOKEN: ${{ secrets.BASELINE_PAT }}
         run: |
-          gh pr merge --squash --delete-branch "${{ steps.snapshot.outputs.pull-request-number }}"
+          PR="${{ steps.snapshot.outputs.pull-request-number }}"
+          # 同步分支到最新 base；已最新时 update-branch 报无害错误（no changes）
+          gh pr update-branch "$PR" || true
+          # 最多等 5 分钟：路由应为 skip（仅基线文件），gauntlet 约 50s
+          for _ in $(seq 1 15); do
+            state="$(gh pr view "$PR" --json mergeStateStatus --jq .mergeStateStatus)"
+            if [ "$state" = "CLEAN" ] || [ "$state" = "MERGEABLE" ]; then
+              break
+            fi
+            sleep 20
+          done
+          gh pr merge --squash --delete-branch "$PR"
