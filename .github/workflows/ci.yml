@@ -6,6 +6,38 @@ on:
   pull_request:
 
 jobs:
+  # 变更面检测（issue #101 P2）：mutation 只回答「源码/测试/运行时数据是否被改动」，
+  # docs-only 变更不可能改变任何 mutant 结果，跳过以省 ~163s 固定成本。
+  # 触发集依据：mutate 面 src/**/*.ts；tests/** 改变 killed 集合；
+  # prompts/** 被 src/runtime/template-loader.ts 运行时读入（参与行为，缺失即抛）。
+  # fail-safe：无法取得 diff 基线（新分支 push 等）时一律视为需要跑。
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      mutation: ${{ steps.filter.outputs.mutation }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compute changed files vs base
+        id: filter
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+          if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "mutation=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff --name-only "$base"..."$(git rev-parse HEAD)" > /tmp/changed-files.txt
+          if grep -qE '^(src/|tests/|prompts/|stryker\.conf\.json$|package\.json$|pnpm-lock\.yaml$|tsconfig.*\.json$|\.github/workflows/ci\.yml$)' /tmp/changed-files.txt; then
+            echo "mutation=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "mutation=false" >> "$GITHUB_OUTPUT"
+          fi
+
   gauntlet:
     runs-on: ubuntu-latest
     steps:
@@ -37,6 +69,9 @@ jobs:
       - run: pnpm cov:patch
 
   mutation:
+    needs: changes
+    # docs-only 变更跳过（issue #101 P2）；判定逻辑见 changes job 注释
+    if: needs.changes.outputs.mutation == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
