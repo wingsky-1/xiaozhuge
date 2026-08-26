@@ -17,6 +17,9 @@ fail 必须附具体修改项并定位到章节，不给笼统评语；你只判
 ## 输出（Type of output）
 
 pass / fail 结构化回执；fail 附逐项修改清单（定位 + 问题 + 期望）。
+终审结论必须经 `team_handoff` 落账：`receipt` 数组逐条以 `pass:`/`fail:`
+开头附一句话结论（与 dod 条目一一对应），不得仅以 task_update(done)
+收尾、不得用自由文本替代结构化回执。
 
 ## 安全（Extras）
 

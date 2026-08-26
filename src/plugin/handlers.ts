@@ -626,11 +626,23 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
             `task ${taskId} has dod items; attach a per-item pass/fail receipt array`,
           );
         }
-        if (receipt !== undefined && receipt.length < task.dod.length) {
-          throw new ToolError(
-            "receipt-incomplete",
-            `dod has ${task.dod.length} items but receipt has ${receipt.length} conclusions`,
-          );
+        if (receipt !== undefined) {
+          if (receipt.length < task.dod.length) {
+            throw new ToolError(
+              "receipt-incomplete",
+              `dod has ${task.dod.length} items but receipt has ${receipt.length} conclusions`,
+            );
+          }
+          // 逐条结论格式校验（10§3.3 文档宣称的兑现，#98 步骤 2）：
+          // 每条必须以 pass:/fail: 开头附一句话结论——回执是 judge 的
+          // 结构化凭据，自由文本无法被凭据卡片与对账消费。
+          const badIdx = receipt.findIndex((line) => !/^\s*(pass|fail)\s*[:：]/i.test(line));
+          if (badIdx >= 0) {
+            throw new ToolError(
+              "receipt-format",
+              `receipt[${badIdx}] must start with "pass:" or "fail:" followed by a one-line conclusion`,
+            );
+          }
         }
         // handoff 只换持有者；任务在 blocked 时随交接恢复 running，其余态不变
         // （running→running 是非法迁移，交给状态机校验兜底）。
