@@ -51,8 +51,13 @@ describe("team_reconcile overview", () => {
     expect(view.scope).toBe("overview");
     expect(view.initialized).toBe(true);
     expect(view.snapshot?.source).toBe("builtin");
-    expect(view.members).toHaveLength(1);
-    expect(view.members[0]).toMatchObject({
+    expect(view.members).toHaveLength(2);
+    // init 预登记的 tier0 主控（#79）：durableId = 宿主会话 id，对账可见。
+    expect(view.members.find((m) => m.member === "master")).toMatchObject({
+      durable_id: SESSION,
+      liveness: "framework-invisible",
+    });
+    expect(view.members.find((m) => m.member === "coder")).toMatchObject({
       member: "coder",
       durable_id: "dur-coder",
       liveness: "framework-invisible",
