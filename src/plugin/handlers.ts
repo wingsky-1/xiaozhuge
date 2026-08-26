@@ -465,9 +465,10 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
         const envelopeId = await deliver(teamHome, to, { from, type, body });
         // 计账增补 task_id（若 body 为对象且携带）：对账时「哪封信对应哪个任务」
         // 不必再开信封比对，机械可得。
+        const rawTaskId = (body as { task_id?: unknown }).task_id;
         const bodyTaskId =
-          body !== null && typeof body === "object" && typeof (body as { task_id?: unknown }).task_id === "string"
-            ? (body as { task_id: string }).task_id
+          body !== null && typeof body === "object" && typeof rawTaskId === "string" && rawTaskId.length > 0
+            ? rawTaskId
             : undefined;
         await appendEvent(from, "mailbox/deliver", {
           to,
