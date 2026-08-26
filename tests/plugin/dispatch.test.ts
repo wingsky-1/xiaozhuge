@@ -22,11 +22,11 @@ beforeEach(() => {
   handlers = createHandlers(home, SESSION);
 });
 
-async function readEvents(): Promise<Array<{ type: string; actor: string }>> {
+async function readEvents(): Promise<Array<{ type: string; actor: string; payload?: unknown }>> {
   const log = new EventLog(join(layout(home).roomsDir, "root", "events.jsonl"));
   await log.init();
   const { events } = await log.read();
-  return events.map((e) => ({ type: e.type, actor: e.actor }));
+  return events.map((e) => ({ type: e.type, actor: e.actor, payload: e.payload }));
 }
 
 async function createTask(title = "实现 X"): Promise<string> {
@@ -81,7 +81,7 @@ describe("team_dispatch 正常链路", () => {
     };
     expect(ledgerView.tasks.find((t) => t.id === taskId)?.assignee).toBe("coder");
 
-    // 信箱：派单信封携带任务与 inline 定义、模型档位。
+    // 信箱：派单信封携带任务与 inline 定义、模型档位、框架进度契约。
     const unread = await readUnread(home, "coder");
     expect(unread).toHaveLength(1);
     expect(unread[0]).toMatchObject({
@@ -98,16 +98,24 @@ describe("team_dispatch 正常链路", () => {
         model: "strong-model",
       },
     });
+    // 进度契约：固定段在场且带 framework-generated 水印（#86 序 3）。
+    const contract = (unread[0]?.body as { progress_contract?: string }).progress_contract ?? "";
+    expect(contract).toContain("===== progress contract (framework-generated; informational only) =====");
+    expect(contract).toContain("task-done");
     expect(unread[0]?.envelope_id ?? unread[0]!.id).toBe(result.envelope_id);
 
-    // 事件流：三步各留一笔。
-    expect(await readEvents()).toMatchObject([
+    // 事件流：三步各留一笔；派单计账携带 task_id（对账机械可得）。
+    const events = await readEvents();
+    expect(events).toMatchObject([
       { type: "team/init", actor: "system" },
       { type: "task/create", actor: "system" },
       { type: "team/spawn", actor: "system" },
       { type: "task/update", actor: "coder" },
       { type: "mailbox/deliver", actor: "root" },
     ]);
+    expect(events.find((e) => e.type === "mailbox/deliver")).toMatchObject({
+      payload: { task_id: taskId, msg_type: "task-assign" },
+    });
   });
 
   it("幂等重入：同参数重跑成功，upsert 幂等、派单为新信封（at-least-once）", async () => {
