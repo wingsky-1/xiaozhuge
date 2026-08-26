@@ -14,6 +14,8 @@
 import type { Agent } from "@deepseek-ai/dsh-agent";
 import type { ToolDefinition, ToolRunContext } from "@deepseek-ai/dsh-tools";
 import type { WebRoute } from "@deepseek-ai/dsh-host-webserver";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { resolveTeamHome, resolveTeamHomeForView } from "./team-home.js";
 import { createHandlers, ToolError, type Handlers } from "./handlers.js";
 import { schemas } from "./schemas.js";
@@ -29,8 +31,9 @@ export const inject = ["tools", "webServer"];
 
 /**
  * 从执行上下文解析主会话 id。官方 Agent.id 即会话 id；工具面 agent-required：
- * agentless 调用抛稳定错误码（对齐 dsh-tool-cordis requireAgent 先例），
- * 不静默挂空实例（复核必改 3）。
+ * agentless 调用抛错（参考官方 requireAgent 先例的抛错行为），并携带本项目
+ * 内部稳定 code（agent-required）供框架路由与测试断言，不静默挂空实例
+ * （复核必改 3；官方先例为裸 Error，code 是内部增强，端到端呈现以 message 为准）。
  */
 function sessionIdOf(agent: Agent | undefined): string {
   if (agent?.id === undefined) {
@@ -66,8 +69,21 @@ export function apply(ctx: {
       // Wave 1a：与 HTTP 视图路由同款反查挂载主控实例根（#120 v2 计划 1a）。
       // 主会话直查；子代理（成员 durable id）反查所属主控的 TEAM_HOME，
       // 使工具面与视图面共享同一实例状态。
-      h = createHandlers(resolveTeamHomeForView(sessionId).teamHome, sessionId);
-      handlerCache.set(sessionId, h);
+      const resolution = resolveTeamHomeForView(sessionId);
+      h = createHandlers(resolution.teamHome, sessionId);
+      // 缓存不变量（复核必改 5）：键 = 调用会话 id，值 = 反查所得实例根上的
+      // handler 集；一次会话生命周期内 durableId→实例映射不变。DSH_HOME 运行期
+      // 变更 / 实例迁移不在支持范围——需重启插件进程重建。
+      //
+      // 仅当反查「确实命中」实例时才缓存：主会话自身根有 team.yaml，或子代理
+      // 命中某主控实例（membership 非空）。子代理尚未登记（agents.json 无此
+      // durable id）时反查回退到会话自身的逻辑根——此时不写缓存，后续调用
+      // 每次重新解析；待主控登记后即可命中正确实例（自愈），避免首调空解析
+      // 被永久缓存（独立审核发现的中危边界）。
+      const selfRoot = resolveTeamHome(sessionId);
+      const hit =
+        resolution.membership !== null || existsSync(join(selfRoot, "team.yaml"));
+      if (hit) handlerCache.set(sessionId, h);
     }
     return h;
   }

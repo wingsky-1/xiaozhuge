@@ -140,4 +140,33 @@ describe("Wave 1a 工具面反查挂载（子代理 → 主控实例）", () => 
       registered.get("team_task_list")!.execute({}, { agent: undefined }),
     ).rejects.toMatchObject({ code: "agent-required" });
   });
+
+  it("子代理未登记首调不缓存空解析，主控登记后自愈命中（独立审核发现）", async () => {
+    const { registered } = makeHost();
+    await createHandlers(resolveTeamHome(SESSION_MASTER), SESSION_MASTER).init({});
+    // 子代理 dur-q1 尚未被主控登记：首调反查未命中 → 走自身逻辑根，不炸，
+    // 但不得把空解析写入 handlerCache。
+    const before = (await registered.get("team_task_list")!.execute(
+      {},
+      { agent: { id: DUR_X } },
+    )) as { ok: boolean; tasks: unknown[] };
+    expect(before.ok).toBe(true);
+    expect(before.tasks).toEqual([]);
+    // 主控侧建任务 + dispatch 登记 dur-q1 并派发信封。
+    const created = (await registered.get("team_task_create")!.execute(
+      { title: "t", room: "root" },
+      { agent: { id: SESSION_MASTER } },
+    )) as { ok: boolean; task_id: string };
+    await registered.get("team_dispatch")!.execute(
+      { member: MEMBER, durable_id: DUR_X, role: MEMBER, tier: 1, task_id: created.task_id },
+      { agent: { id: SESSION_MASTER } },
+    );
+    // 子代理再次调用：应重新解析并命中主控实例，读到主控派发的信封。
+    const after = (await registered.get("team_inbox")!.execute(
+      { member: MEMBER },
+      { agent: { id: DUR_X } },
+    )) as { ok: boolean; unread: Array<{ id: string }> };
+    expect(after.ok).toBe(true);
+    expect(after.unread).toHaveLength(1);
+  });
 });

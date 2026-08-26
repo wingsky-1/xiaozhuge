@@ -105,8 +105,10 @@ export class EventLog {
     // seq 分配与写文件整体入队：同进程多实例（主控/子代理共享同一 events.jsonl）
     // 并发 append 时串行化；共享游标保证 seq 单调不重复（复核必改 1）。
     return enqueueAppend(this.file, async () => {
+      // 队列内串行分配：读游标 → 写文件成功 → 才推进游标。写失败不推进，
+      // 后续 append 复用同一 seq，与 torn-tail「坏行不计入游标、重写同 seq」
+      // 语义一致，避免失败路径产生 seq 空洞（独立审核确认）。
       const next = (seqCursors.get(this.file) ?? 0) + 1;
-      seqCursors.set(this.file, next);
       const record: EventRecord = {
         seq: next,
         ts: Date.now(),
@@ -116,6 +118,7 @@ export class EventLog {
         payload: input.payload ?? null,
       };
       await writeFile(this.file, JSON.stringify(record) + "\n", { flag: "a", encoding: "utf8" });
+      seqCursors.set(this.file, next);
       return record;
     });
   }
