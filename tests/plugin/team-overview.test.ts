@@ -160,3 +160,65 @@ describe("readEventsTail：jsonl 尾部窗口读取", () => {
     expect(events.every((e) => Number.isFinite(e.seq))).toBe(true);
   });
 });
+
+/**
+ * #97 主链路回归：host.ts 装配的 teamHomeFor 改走 resolveTeamHomeForView
+ * 后，以成员子会话 durableId 打 overview 必须以所属实例根供数——防止
+ * 未来有人把装配改回直查导致反查静默失效（届时本用例变红）。
+ */
+describe("overview 经 ForView 装配的子会话反查供数（#97）", () => {
+  it("成员 durableId 打 overview → 以实例根数据应答；未知会话仍短路 isTeam=false", async () => {
+    const prev = process.env.DSH_HOME;
+    const home = mkdtempSync(join(tmpdir(), "xzg-overview-fv-"));
+    process.env.DSH_HOME = home;
+    try {
+      const rootDir = join(home, "xiaozhuge", "sessions", "s-root");
+      mkdirSync(join(rootDir, "rooms", "root", "state"), { recursive: true });
+      writeFileSync(join(rootDir, "team.yaml"), JSON.stringify({ name: "demo" }));
+      writeFileSync(
+        join(rootDir, "agents.json"),
+        JSON.stringify({
+          members: {
+            master: { member: "master", durableId: "s-root", parent: null, tier: 0, status: "running", lastSeen: 1 },
+            coder: { member: "coder", durableId: "dur-c9", parent: "master", tier: 1, status: "running", lastSeen: 2 },
+          },
+        }),
+      );
+      writeFileSync(
+        join(rootDir, "rooms", "root", "events.jsonl"),
+        JSON.stringify({ seq: 1, ts: 11, session_id: "s-root", actor: "system", type: "team/init", payload: null }) + "\n",
+      );
+
+      // 复刻 host.ts 装配口径。
+      const { resolveTeamHomeForView } = await import("../../src/plugin/team-home.js");
+      const teamHomeFor = (sid: string): string => resolveTeamHomeForView(sid).teamHome;
+      const server: Server = createServer((req, res) => {
+        void makeOverviewRoute(teamHomeFor).handler(req, res);
+      });
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      const addr = server.address();
+      if (addr === null || typeof addr === "string") throw new Error("no port");
+      const base = `http://127.0.0.1:${addr.port}`;
+      try {
+        // 子会话 durableId → 实例根供数（isTeam=true 且 members 非空）。
+        const viaMember = (await (await fetch(`${base}/api/xiaozhuge/team/overview?session=dur-c9`)).json()) as {
+          isTeam: boolean;
+          members: Array<{ member: string }>;
+        };
+        expect(viaMember.isTeam).toBe(true);
+        expect(viaMember.members.map((m) => m.member)).toContain("coder");
+
+        // 未知会话 → 维持非团队短路，不受反查影响。
+        const unknown = (await (await fetch(`${base}/api/xiaozhuge/team/overview?session=s-nowhere`)).json()) as {
+          isTeam: boolean;
+        };
+        expect(unknown.isTeam).toBe(false);
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      }
+    } finally {
+      if (prev === undefined) delete process.env.DSH_HOME;
+      else process.env.DSH_HOME = prev;
+    }
+  });
+});

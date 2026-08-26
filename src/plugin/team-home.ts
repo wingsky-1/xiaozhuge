@@ -29,7 +29,8 @@ export function resolveTeamHome(sessionId: string): string {
 /** 视图解析结果：teamHome 为供数实例根；membership 非空 = 子会话反查命中。 */
 export interface TeamHomeResolution {
   teamHome: string;
-  membership: { rootSession: string; member: string } | null;
+  /** 命名随 HTTP 响应体 snake_case 口径（is_team/playbook_digest 同风格）。 */
+  membership: { root_session: string; member: string } | null;
 }
 
 /**
@@ -49,7 +50,9 @@ export function resolveTeamHomeForView(sessionId: string): TeamHomeResolution {
   const sessionsDir = join(resolveDshHome(), "xiaozhuge", "sessions");
   let entries: string[] = [];
   try {
-    entries = readdirSync(sessionsDir);
+    // 显式排序：命中顺序确定化（durable id 全局唯一时理论上无多实例冲突，
+    // 排序保证极端情况下行为可复现）。
+    entries = readdirSync(sessionsDir).sort();
   } catch {
     return { teamHome: direct, membership: null };
   }
@@ -63,7 +66,7 @@ export function resolveTeamHomeForView(sessionId: string): TeamHomeResolution {
       };
       for (const m of Object.values(reg.members ?? {})) {
         if (m.durableId === sessionId && typeof m.member === "string") {
-          return { teamHome, membership: { rootSession: entry, member: m.member } };
+          return { teamHome, membership: { root_session: entry, member: m.member } };
         }
       }
     } catch {

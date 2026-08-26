@@ -267,11 +267,11 @@ describe("team/status 团队会话探测", () => {
     ).json()) as {
       is_team: boolean;
       name?: string | null;
-      membership?: { rootSession: string; member: string };
+      membership?: { root_session: string; member: string };
     };
     expect(d.is_team).toBe(true);
     expect(d.name).toBe("research-report");
-    expect(d.membership).toEqual({ rootSession: "s-root", member: "coder" });
+    expect(d.membership).toEqual({ root_session: "s-root", member: "coder" });
   });
 });
 

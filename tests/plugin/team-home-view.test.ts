@@ -50,7 +50,7 @@ describe("resolveTeamHomeForView", () => {
       coder: { member: "coder", durableId: "dur-c1" },
     });
     const r = resolveTeamHomeForView("dur-c1");
-    expect(r.membership).toEqual({ rootSession: "s-root", member: "coder" });
+    expect(r.membership).toEqual({ root_session: "s-root", member: "coder" });
     expect(r.teamHome).toBe(join(dshHome, "xiaozhuge", "sessions", "s-root"));
   });
 
@@ -64,7 +64,7 @@ describe("resolveTeamHomeForView", () => {
     makeInstance("s-bad", {}, { corruptAgents: true });
     makeInstance("s-good", { writer: { member: "writer", durableId: "dur-w1" } });
     const r = resolveTeamHomeForView("dur-w1");
-    expect(r.membership).toEqual({ rootSession: "s-good", member: "writer" });
+    expect(r.membership).toEqual({ root_session: "s-good", member: "writer" });
   });
 
   it("完全未知会话 → 回落直查路径，membership=null 不抛错", () => {
