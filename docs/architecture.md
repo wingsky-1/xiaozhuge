@@ -113,6 +113,44 @@ sequenceDiagram
     M->>R: 全部 done → archive 归档 → goal complete
 ```
 
+## 5.1 三条数据链路：工具调用 → 文件落盘 → Web 渲染
+
+```mermaid
+flowchart LR
+    LLM["LLM 会话<br>（主控 / 成员决策）"]
+    H["handlers 校验链<br>schema · 状态机 · 互斥"]
+    RT["runtime 纯库执行<br>业务写 + appendEvent"]
+    FILES[("TEAM_HOME 文件<br>JSON 原子写 / jsonl 追加")]
+    REDUCE["reduceOnce 归约<br>ETag / 304 · single-flight"]
+    API["只读 HTTP 路由"]
+    UI["Team Console React<br>纯文本渲染"]
+
+    LLM -->|"team_* 调用"| H
+    H --> RT
+    RT -->|"业务状态 + 事件流落账"| FILES
+    REDUCE <-->|"读尾窗 + 快照"| FILES
+    API --- REDUCE
+    UI -->|"低频轮询 fetch"| API
+```
+
+**① 工具调用链（model-facing）**：LLM 决策 → `team_*` 调用 → host.ts 按会话路由到
+handler → 三段校验（参数 schema / 任务状态机合法迁移 / touched paths 互斥）→
+runtime 纯库执行业务写 → 运行时自动 `appendEvent` 落账 → 返回结构化结果。
+校验全部先于副作用抛出，失败不留半态。
+
+**② 文件落盘链（持久化）**：一切状态落 TEAM_HOME 文件——JSON 走
+`writeJsonAtomic`（临时文件 + rename/link 原子发布），事件走 jsonl 追加；
+单写者约定：事件流仅运行时可写、黑板 per-role 分片、账本每任务一文件、
+注册表限主控进程 await 链内串行。**审计完整性靠构造保证**：无旁路写路径，
+事件流可完整回放到 dsh transcript。
+
+**③ Web 渲染链（read-facing）**：client 插件经 conversation.view 插槽注入团队 tab
+（`TeamViewWatcher` 探测 status，子会话按成员 durableId 反查归属实例）；TeamView
+低频轮询 `GET team/overview` → 服务端 `reduceOnce` 读 agents.json + 事件尾窗 +
+黑板分片归约（指纹哈希 ETag，命中 304；single-flight 合并并发请求）→ React
+纯文本渲染。安全约定：**payload 不出投影面**（浏览器只见白名单字段）、外部内容
+一律数据非指令、Gate resolve 是唯一写路径且经 Origin/双头防跨站围栏（ADR 0010）。
+
 ## 6. Tier-0 巡场循环
 
 持续驱动力 = **DSH goal 机制**（目标未完成自动开新一轮 turn；idle 边沿触发，
