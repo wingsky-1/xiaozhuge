@@ -13,6 +13,8 @@
 [PR #172](https://github.com/wingsky-1/dsh-plugin-hub/pull/172)（v2.2）。
 三份通用设计文档已迁入本仓 [`docs/agent-team/`](docs/agent-team/)（10 通用模型 / 11 运行时 / 12 Console），
 **在本仓库独立演进**；后续所有决策修订以 `docs/adr/` 增量 ADR 承载。
+全貌速览（分层结构 / 目录协议 / 工具面 / 巡场循环，含架构图）见
+[`docs/architecture.md`](docs/architecture.md)。
 
 ## 核心理念
 
