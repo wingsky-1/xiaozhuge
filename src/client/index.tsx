@@ -51,7 +51,7 @@ interface ScenarioEntry {
  */
 export const BOOT_MESSAGE_HEAD =
   "团队已由人经入口创建，实例初始化完成。以下是你的 Tier-0 规程与场景编排" +
-  "提示词全文（规程在前、场景段在后，以固定分隔符分界），请从启动对账节开始执行：";
+  "提示词全文（规程在前、场景段在后，以固定分隔符分界），请从启动对账节开始执行。首 turn 检查单：① 第一个工具调用必须是 team_reconcile（readiness gate，失败即上行摘要）；② 确认 goal 已创建；③ 输出首轮摘要上行。";
 
 /** 本插件注册名（cordis 名册 id = npm 包名，经 dsh.client 契约）。 */
 export const name = "@wingsky-1/dsh-xiaozhuge";

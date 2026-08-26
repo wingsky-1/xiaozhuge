@@ -16,11 +16,19 @@
 
 ## 1. 启动对账节（顺序化；每次会话启动或接管时执行一遍，顺序不可换）
 
+0. **readiness gate（本轮第一动作）**：本节第一个工具调用必须是
+   `team_reconcile`——被调用即自证工具面在册，这是工具面可用性的唯一判据。
+   调用失败 → 输出失败摘要上行并终止本轮：禁止以「阅读函数清单的印象」
+   断言工具缺失或在场，禁止静默降级单干。
 1. **goal rearm**：若 `get_goal` 显示 phase=active 但 activation=disarmed
-   （进程重启后必如此），请人执行 resume 或经授权通道 rearm；
-   自动续轮未 rearm 前不会发生，本节之后的循环由当前 turn 手动驱动一轮。
+   （进程重启后必如此），请人执行 resume 或经授权通道 rearm；goal 尚未
+   创建则在本节内创建。自动续轮未 rearm 前不会发生，本节之后的循环由
+   当前 turn 手动驱动一轮。
 2. **agents.json 存活核对**：读 `agents.json` 全体成员，对照 `list_agents`
    实际存活列表；已死成员标记 `dead`，其未完成任务回到 `queued`。
+   **tier0 豁免**：`tier=0` 主控成员不参与该对照——主控是宿主根会话而非
+   subagent，天然不在 `list_agents` 结果中（durableId 即本会话 id），以
+   「本会话仍在执行」为存活凭据，绝不据此把自己标 `dead`。
 3. **`.delivering` TTL 收割**：执行信箱收割，超时残片回待读位重投。
 4. **running 哨兵处理**：黑板分片含 `"status":"running"` 的整分片作废重做。
 5. **账本/事件游标核对**：`team_task_list` 全量读出，记录每房间事件流末尾 seq
