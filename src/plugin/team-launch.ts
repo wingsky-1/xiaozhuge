@@ -37,10 +37,12 @@ async function readBody(req: IncomingMessage): Promise<string> {
   return raw;
 }
 
-/** 启动消息头（不含规程正文）；bootMessage 与页面脚本共用同一前缀。 */
+/** 启动消息头（不含规程正文）；bootMessage 与页面脚本共用同一前缀。
+ * 尾部附首 turn 检查单（#79 L2）：注意力聚焦三件事，规程正文不再依赖跳读。 */
 export const BOOT_MESSAGE_HEAD =
   "团队已由人经入口创建，实例初始化完成。以下是你的 Tier-0 规程与场景编排" +
-  "提示词全文（规程在前、场景段在后，以固定分隔符分界），请从启动对账节开始执行：";
+  "提示词全文（规程在前、场景段在后，以固定分隔符分界），请从启动对账节开始执行。" +
+  "首 turn 检查单：① 第一个工具调用必须是 team_reconcile（readiness gate，失败即上行摘要）；② 确认 goal 已创建；③ 输出首轮摘要上行。";
 
 /** 启动消息 = 前缀 + 组装好的 tier0_prompt。 */
 export function bootMessage(tier0Prompt: string): string {

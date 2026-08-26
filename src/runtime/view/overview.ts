@@ -41,7 +41,7 @@ export interface MemberNodeView {
   tier: number;
   /** 直接父成员名（根成员为 null）；父未注册时挂 null（前端归 root 层）。 */
   parent: string | null;
-  /** durable subagent id（「打开会话」跳转凭据）。 */
+  /** 持久身份锚点：执行成员 = durable subagent id；tier0 主控 = 宿主主会话 id（#79）。 */
   durableId: string | null;
   /** agents.json 注册态原文（徽标辅助图标用）；未注册成员无此字段语义 → null。 */
   registryStatus: MemberRecord["status"] | null;
@@ -60,6 +60,12 @@ export interface RoomView {
 /** 团队总览视图模型。 */
 export interface TeamOverview {
   isTeam: boolean;
+  /**
+   * tier0 主控是否已在册（#79 L3 单一确定信号）：false = 实例已初始化但
+   * 主控记录缺失（旧实例兼容态 / 未完成启动握手）→ 前端渲染静态黄条。
+   * 注意信号单向：只识别「未登记」，不判定「登记了但未跑对账」。
+   */
+  masterRegistered: boolean;
   /** 全体注册成员扁平表（前端按 parent 组装 root 主房间的树）。 */
   members: MemberNodeView[];
   rooms: RoomView[];
@@ -153,6 +159,7 @@ export function reduceOverview(input: OverviewInput): TeamOverview {
   });
   return {
     isTeam: memberNames.length > 0,
+    masterRegistered: memberNames.some((n) => input.registry.members[n]!.tier === 0),
     members,
     rooms: input.rooms.map(reduceRoom),
   };

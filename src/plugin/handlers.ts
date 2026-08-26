@@ -278,7 +278,26 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
         const playbook = loadTier0Playbook(PACKAGE_ROOT);
         // 工作区持久化（ADR 0015）：audit 扫描根的唯一合法来源（不接受调用方传参）。
         await writeJsonAtomic(l.teamYaml, instantiateSnapshot(loaded, playbook.digest, projectRoot));
-        await appendEvent("system", "team/init", { instance_note: args.instance_note ?? null, lock: outcome });
+        // L1 预登记（#79）：tier0 主控根成员在 init 时入册——G0 边界把
+        // agents.json 登记列为运行时确定性操作，不依赖提示词自觉。主控
+        // durableId = 宿主主会话 id；status=running（init 由该存活会话触发）。
+        // 同会话重入经三态判定的幂等分支自然收敛。并入 team/init 事件载荷，
+        // 不另发 spawn 事件（保持事件类型序列契约稳定）。
+        const masterMember = (loaded.template.tiers as Array<{ id?: string }>)[0]?.id ?? "master";
+        mkdirSync(join(l.mailboxDir, masterMember), { recursive: true });
+        const masterOutcome = await reg().upsertMember({
+          member: masterMember,
+          tier: 0,
+          parent: null,
+          durableId: sessionId,
+          status: "running",
+          lastSeen: Date.now(),
+        });
+        await appendEvent("system", "team/init", {
+          instance_note: args.instance_note ?? null,
+          lock: outcome,
+          master: { member: masterMember, outcome: masterOutcome },
+        });
         const tier0PromptPath = (loaded.template.tiers as Array<{ prompt?: string }>)[0]?.prompt ?? "";
         const scenarioPrompt = loaded.prompts[tier0PromptPath] ?? "";
         return {
@@ -287,6 +306,8 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
           home: l.teamHome,
           scenario,
           source: scenarioSource,
+          // L1（#79）：预登记的 tier0 主控成员名与登记形态，供入口层展示。
+          master_member: masterMember,
           // ADR 0015 决策 3：tier0_prompt 尾部追加「框架工具面自述」保留段
           //（仅 team_* 自述 + 盲区声明；appendToolManifest 保证不双份）。
           tier0_prompt: appendToolManifest(assembleTier0Prompt(playbook, scenarioPrompt)),
@@ -306,14 +327,22 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
         const parent = optStr(args, "parent");
         if (tier === undefined) throw new ToolError("invalid-arguments", 'number field "tier" is required');
         await ensureDir(join(l.mailboxDir, member));
+        // parent 持久化（#79 顺带修复：此前仅解析未落账，接管层级树缺边）。
         await reg().upsertMember({
           member,
           durableId,
+          ...(parent !== undefined ? { parent } : {}),
           tier,
           status: "spawned",
           lastSeen: Date.now(),
         });
-        await appendEvent("system", "team/spawn", { member, durable_id: durableId, role, tier });
+        await appendEvent("system", "team/spawn", {
+          member,
+          durable_id: durableId,
+          role,
+          tier,
+          ...(parent !== undefined ? { parent } : {}),
+        });
         return { ok: true, member, durable_id: durableId };
       } catch (error) {
         wrap(error);
@@ -343,11 +372,13 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
         // 半事务执行：任一步失败即停，已完成步骤随错误留痕（ADR 0015）。
         const completed: string[] = [];
         try {
-          // step 1: 注册（幂等 upsert，与 team_spawn 同一落账函数）。
+          // step 1: 注册（三态 upsert，与 team_spawn 同一落账函数；幂等重入
+          // 走同 member+同 durableId 分支）。
           await ensureDir(join(l.mailboxDir, member));
           await reg().upsertMember({
             member,
             durableId,
+            ...(parent !== undefined ? { parent } : {}),
             tier,
             status: "spawned",
             lastSeen: Date.now(),

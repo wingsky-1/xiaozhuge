@@ -159,5 +159,30 @@ describe("reduceOverview：成员表与 isTeam 判定", () => {
     const overview = reduceOverview({ registry: { members: {} }, rooms: [{ room: "root", events: [], shards: [] }] });
     expect(overview.isTeam).toBe(false);
     expect(overview.members).toEqual([]);
+    expect(overview.masterRegistered).toBe(false);
+  });
+
+  it("masterRegistered：tier0 在册为 true；仅执行成员（旧实例）为 false（#79）", () => {
+    const withMaster = reduceOverview({
+      registry: {
+        members: {
+          master: { member: "master", durableId: "session-root", parent: null, tier: 0, status: "running", lastSeen: 1 },
+          coder: { member: "coder", durableId: "d-coder", parent: "master", tier: 1, status: "spawned", lastSeen: 2 },
+        },
+      },
+      rooms: [],
+    });
+    expect(withMaster.masterRegistered).toBe(true);
+    const withoutMaster = reduceOverview({
+      registry: {
+        members: {
+          coder: { member: "coder", durableId: "d-coder", parent: null, tier: 1, status: "spawned", lastSeen: 2 },
+        },
+      },
+      rooms: [],
+    });
+    // 信号单向：只识别「未登记」，不判定「登记了但未跑对账」。
+    expect(withoutMaster.isTeam).toBe(true);
+    expect(withoutMaster.masterRegistered).toBe(false);
   });
 });

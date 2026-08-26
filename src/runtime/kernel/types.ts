@@ -84,7 +84,11 @@ export interface LockInfo {
 export interface MemberRecord {
   /** 成员逻辑名（角色 id）。 */
   member: string;
-  /** durable subagent id（父死后凭此对账）。 */
+  /**
+   * 成员的持久身份锚点。tier ≥ 1 执行成员 = durable subagent id（父死后凭此
+   * 对账）；tier 0 主控例外 = 宿主主会话 id（#79 口径扩展——主控不经 subagent
+   * 机制创建，存活以主会话为准，ADR 0006 接管核对据此豁免）。
+   */
   durableId: string;
   /** 直接父成员名（根成员为 null）。 */
   parent?: string | null;

@@ -30,6 +30,7 @@ import {
   withCasLock,
   writeJsonAtomic,
 } from "../../src/index.js";
+import type { MemberRecord } from "../../src/runtime/kernel/types.js";
 
 function tmpHome(): string {
   return mkdtempSync(join(tmpdir(), "xzg-p2a-"));
@@ -296,6 +297,37 @@ describe("注册表", () => {
     const live = await reg.liveMembers();
     expect(live.map((m) => m.member)).toEqual(["master"]);
     await expect(reg.setStatus("ghost", "running")).rejects.toThrow(/not registered/);
+  });
+
+  it("upsert 三态判定（#79）：同 id 幂等刷新 / 异 id 拒绝 / dead 复活", async () => {
+    const reg = new Registry(tmpHome());
+    const coder = (durableId: string, status: MemberRecord["status"]) => ({
+      member: "coder",
+      durableId,
+      parent: null,
+      tier: 1,
+      status,
+      lastSeen: Date.now(),
+    });
+    // 首次登记
+    expect(await reg.upsertMember(coder("dur-1", "spawned"))).toBe("registered");
+    // 同 member + 同 durableId + 同 tier → 幂等成功：仅刷新 lastSeen，不改业务态。
+    expect(await reg.upsertMember(coder("dur-1", "running"))).toBe("idempotent");
+    const after = await reg.getMember("coder");
+    expect(after?.durableId).toBe("dur-1");
+    expect(after?.status).toBe("spawned");
+    // 异 durableId 且旧记录非 dead → 拒绝（接管须先标 dead）。
+    await expect(reg.upsertMember(coder("dur-2", "spawned"))).rejects.toMatchObject({
+      code: "member-conflict",
+    });
+    // 标 dead 后允许复位重登记（状态级重建合法入口）。
+    await reg.setStatus("coder", "dead");
+    expect(await reg.upsertMember(coder("dur-2", "spawned"))).toBe("revived");
+    expect((await reg.getMember("coder"))?.durableId).toBe("dur-2");
+    // 异 tier 同样拒绝（身份锚点三元组整体比对）。
+    await expect(reg.upsertMember({ ...coder("dur-2", "spawned"), tier: 2 })).rejects.toMatchObject({
+      code: "member-conflict",
+    });
   });
 });
 

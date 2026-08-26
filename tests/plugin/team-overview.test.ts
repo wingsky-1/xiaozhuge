@@ -75,7 +75,7 @@ describe("GET /api/xiaozhuge/team/overview", () => {
     await withServer(null, async (port) => {
       const r = await fetch(`http://127.0.0.1:${port}/api/xiaozhuge/team/overview?session=whatever`);
       expect(r.status).toBe(200);
-      expect(await r.json()).toEqual({ isTeam: false, members: [], rooms: [] });
+      expect(await r.json()).toEqual({ isTeam: false, masterRegistered: false, members: [], rooms: [] });
     });
   });
 
