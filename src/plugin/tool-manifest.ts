@@ -53,3 +53,5 @@ export function appendToolManifest(tier0Prompt: string): string {
   }
   return `${tier0Prompt}${TOOL_MANIFEST_SEPARATOR}${toolManifestText()}`;
 }
+
+// verify/partial-gate: 仅验证动态门禁只跑 plugin 段的临时注释，无行为影响。
