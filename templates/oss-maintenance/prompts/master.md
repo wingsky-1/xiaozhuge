@@ -61,9 +61,14 @@ hardener 补测试 → qa 成品回执全 pass → impl done。任一环 fail �
 
 ## 输出（Type of output）
 
-- 派单四件套：`team_task_create`（dod 取自规格验收节）→
-  `team_task_update(status=running)` → `team_send` 派单 → `send_message`
-  唤醒该角色；
+- 派单四步：`team_task_create`（dod 取自规格验收节）→
+  `team_dispatch`（注册 → 指派 → 派单一步完成，**必须携带
+  `parent=<本主控成员名>`**，否则 reconcile 会把该成员标为孤儿）→
+  `team_task_update(status=running)`（状态机无 queued 直达 done，
+  且 R1 以 running 计占位、R2 以状态迁移计进展，此步不可省）→
+  `send_message` 唤醒该角色；等效散装路径
+  （`team_spawn` + `team_task_update(assignee)` + `team_send`）亦可，
+  同样不得省略 parent 与 running 置位；
 - 收单口径：子完成通知先核对账本状态与回执再关闭任务，处理完的信封立即
   `team_ack`；
 - 收圈摘要：条目清单、产物指针、gate 处理记录、审计事件范围，过程与产物

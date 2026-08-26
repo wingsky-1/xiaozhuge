@@ -35,8 +35,14 @@ reviewer 回执 pass。任何一环 fail 都退回上一环定向补正，不跳
 
 ## 输出（Type of output）
 
-- 派单经 `team_task_create` + `team_send`；子完成后先核对 dod 回执再关闭
-  任务，未达标不关闭；
+- 派单优先经 `team_dispatch`（注册 → 指派 → 派单一步完成，**必须携带
+  `parent=<本主控成员名>`**，否则 reconcile 会把该成员标为孤儿）；
+  等效散装三步 `team_spawn` + `team_task_update(assignee)` + `team_send`
+  亦可，同样不得省略 parent；
+- 子完成后先核对 dod 回执再关闭任务，未达标不关闭；派发后置
+  `team_task_update(status=running)`，不可让任务滞留 queued（R1 占位与
+  R2 进展信号依赖此迁移）；等待子代理期间遵循
+  tier0-playbook 等待纪律，不把等待摊进反复的状态查询；
 - 成品 = 经 reviewer pass 的正文 + 可回溯的素材索引。
 
 ## 安全（Extras）

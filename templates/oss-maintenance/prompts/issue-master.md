@@ -9,7 +9,12 @@
 
 - 每条目按 spec / impl 双任务登记（`team_task_create`），touched paths 与
   互斥组如实声明；spec 任务经 qa 核验通过后才创建 impl 任务；
-- 派单给角色成员（`team_send` + `send_message` 唤醒）；
+- 派单给角色成员：优先 `team_dispatch`（**必须携带
+  `parent=<你自己（issue-master）的成员名>`**——schema 语义是直接父成员，
+  你派出的角色的直接父是你而非一级主控；缺失或错挂会被 reconcile 标红）+
+  `send_message` 唤醒；等效散装路径（`team_spawn` +
+  `team_task_update(assignee)` + `team_send`）亦可，同样不得省略 parent；
+  派发后置 `team_task_update(status=running)`，不可让任务滞留 queued；
 - 子完成通知先核对 dod 回执再关闭任务，处理完的信封立即确认。
 
 ## 边界（Adjustments）
