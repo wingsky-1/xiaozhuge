@@ -39,6 +39,7 @@ const PLAYBOOK_SIGNATURES = [
   "状态级重建",
   "blocked_streak",
   "循环不变量",
+  "目标锚定",
   "廉价检查轮",
   "防 max-tokens 解除武装",
 ];
