@@ -21,9 +21,10 @@
     "test": "vitest run",
     "cov": "vitest run --coverage",
     "cov:patch": "diff-cover coverage/cobertura-coverage.xml --compare-branch=origin/main --fail-under=80",
-    "mutation": "stryker run",
+    "mutation": "node scripts/mutation-all.mjs",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.client.json --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.client.json --noEmit",
+    "mutation:gate": "node scripts/mutation-gate.mjs"
   },
   "devDependencies": {
     "@dagrejs/dagre": "3.1.1",

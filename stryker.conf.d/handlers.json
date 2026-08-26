@@ -1,5 +1,5 @@
 {
-  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "$schema": "../node_modules/@stryker-mutator/core/schema/stryker-schema.json",
   "packageManager": "pnpm",
   "testRunner": "vitest",
   "plugins": [
@@ -13,14 +13,16 @@
   ],
   "coverageAnalysis": "perTest",
   "incremental": true,
-  "incrementalFile": "stryker-incremental.json",
+  "incrementalFile": "stryker-incremental-handlers.json",
+  "jsonReporter": {
+    "fileName": "reports/mutation/handlers.json"
+  },
   "thresholds": {
     "high": 85,
     "low": 70,
-    "break": 70
+    "break": 0
   },
   "mutate": [
-    "src/**/*.ts",
-    "!src/**/*.d.ts"
+    "src/plugin/handlers.ts"
   ]
 }

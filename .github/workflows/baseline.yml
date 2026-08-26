@@ -1,55 +1,22 @@
-# 变异测试基线自动归档（issue #62，参照 dsh-plugin-hub#225）：
-# main 每次合入源码后全量重跑变异并快照基线，PR 侧只做增量跑 + 分数门禁，
-# 不再要求人工提交基线。防循环：本 workflow 只改基线文件时被 paths-ignore 过滤。
+# 变异测试基线归档（issue #62 建立的机制；issue #101 P4 段式化改造）：
+# PR 侧做增量跑 + 聚合分数门禁，不再要求人工提交基线。
+# ⚠ push 自动归档已关闭（维护者指示，2026-08-26）：GITHUB_TOKEN 创建的快照
+# PR 自 GitHub 2026-06 平台策略起其 CI 需人工批准，自动链路反复卡死、产出
+# 过期基线反受其害。当前仅保留 workflow_dispatch 手动兜底入口；待 P1（PAT）
+# 落地后以段式自动归档形态重建。
 name: Baseline
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - "stryker-incremental.json"
   workflow_dispatch:
 
 concurrency:
-  group: baseline-${{ github.event_name }}
-  # 连续合入时新触发取代旧全量跑；手动 dispatch 完整执行
-  cancel-in-progress: ${{ github.event_name == 'push' }}
+  group: baseline-dispatch
 
-# GITHUB_TOKEN 默认只读；开基线快照 PR 需要 push 分支（contents）与建 PR（pull-requests）写权限，
-# 按最小权限原则下放到唯一 job 级（issue #101 P5）。
+# 开基线快照 PR 需要 push 分支（contents）与建 PR（pull-requests）写权限，
+# 最小权限原则下放到 job 级（issue #101 P5）。
 
 jobs:
-  # 变更面检测（issue #101 P5）：mutate 面未变的合入（docs-only 等）不可能改变
-  # mutant 结果，跳过全量归档。触发集与 ci.yml changes job 保持同一份变异面口径
-  # （src/tests/prompts/stryker 配置/lockfile/tsconfig），另加归档链路自身：
-  # check-mutation-baseline.mjs（normalize/语义 diff 逻辑）与本 workflow。
-  # fail-safe 口径与 ci.yml 一致：基线不可得即执行。
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      relevant: ${{ steps.filter.outputs.relevant }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Compute changed files vs previous main
-        id: filter
-        run: |
-          base="${{ github.event.before }}"
-          if [ "${{ github.event_name }}" != "push" ] || [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            echo "relevant=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if git diff --name-only "$base"..."$(git rev-parse HEAD)" | grep -qE '^(src/|tests/|prompts/|stryker\.conf\.json$|package\.json$|pnpm-lock\.yaml$|tsconfig.*\.json$|scripts/check-mutation-baseline\.mjs$|\.github/workflows/baseline\.yml$)'; then
-            echo "relevant=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "relevant=false" >> "$GITHUB_OUTPUT"
-            echo "变异面无变化，跳过全量归档"
-          fi
-
   archive:
-    needs: changes
-    if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -63,11 +30,12 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - name: Mutation full run (score >= 70)
+      # 全量跑 = 顺序执行 stryker.conf.d/ 全部段并聚合判分（scripts/mutation-all.mjs）
+      - name: Mutation full run (aggregate score >= 70)
         run: pnpm mutation
       # 规范化基线（剥运行期噪声、稳定键序）——快照 PR 的 diff 只含真实身份变化；
       # 否则全量重跑的 status/location 漂移会让每次都产生假 diff。
-      - name: Normalize baseline
+      - name: Normalize segment baselines
         run: node scripts/check-mutation-baseline.mjs --normalize
       # 语义门控：与 HEAD 基线做身份集合比较，无实质差异则跳过快照 PR。
       # 复用校验脚本的退出码约定：1 = 存在内容级差异（此处即「需要快照」）。
@@ -87,12 +55,11 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           branch: chore/mutation-baseline
-          title: "chore: mutation baseline snapshot"
+          title: "chore: mutation baseline snapshot (segmented)"
           body: |
-            自动归档：main 全量变异后的增量基线快照（issue #62）。
-            合入后由 `paths-ignore` 防止再次触发全量跑。
-          commit-message: "chore: refresh stryker incremental baseline"
-          add-paths: stryker-incremental.json
+            自动归档：全量变异后的段式增量基线快照（issue #62 / #101 P4）。
+          commit-message: "chore: refresh stryker segmented incremental baselines"
+          add-paths: stryker-incremental-*.json
           labels: chore
       - name: Auto-merge baseline PR (best effort, manual fallback)
         if: steps.snapshot.outputs.pull-request-number != ''

@@ -21,9 +21,18 @@
  * property 'line'`），排序/剥 id 或清空 tests 会使复用失效退化为全量重跑。
  */
 import { execSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 
-const FILE = "stryker-incremental.json";
+// 段式增量基线（issue #101 P4）：stryker-incremental-<seg>.json，
+// 与 stryker.conf.d/ 段配置一一对应；旧单文件 stryker-incremental.json 已退役。
+const BASELINE_DIR = ".";
+const BASELINE_PREFIX = "stryker-incremental-";
+
+function baselineFiles() {
+  return readdirSync(BASELINE_DIR)
+    .filter((f) => f.startsWith(BASELINE_PREFIX) && f.endsWith(".json"))
+    .sort();
+}
 
 /** 递归排序对象键；数组保持原序。 */
 function sortDeep(value) {
@@ -74,25 +83,33 @@ function canonical(text) {
 
 if (process.argv[2] === "--normalize") {
   // CI 归档用：最小干预规范化写回。二次执行幂等（键序已稳定、无字段增删）。
-  writeFileSync(
-    FILE,
-    JSON.stringify(normalizedObject(readFileSync(FILE, "utf8")), null, 2) + "\n",
-  );
-  console.log("stryker-incremental.json 已规范化写回");
+  for (const file of baselineFiles()) {
+    writeFileSync(
+      file,
+      JSON.stringify(normalizedObject(readFileSync(file, "utf8")), null, 2) + "\n",
+    );
+    console.log(`${file} 已规范化写回`);
+  }
   process.exit(0);
 }
 
-const current = canonical(readFileSync(FILE, "utf8"));
-const head = execSync(`git show HEAD:${FILE}`, {
-  encoding: "utf8",
-  maxBuffer: 64 * 1024 * 1024,
-});
+let failed = false;
+for (const file of baselineFiles()) {
+  if (!existsSync(file)) continue;
+  const current = canonical(readFileSync(file, "utf8"));
+  const head = execSync(`git show HEAD:${file}`, {
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
 
-if (current !== canonical(head)) {
-  console.error(
-    "::error::stryker-incremental.json 与提交基线不一致（内容级差异）。" +
-      "请本地运行 pnpm mutation 后将更新后的基线一并提交。",
-  );
-  process.exit(1);
+  if (current !== canonical(head)) {
+    failed = true;
+    console.error(
+      `::error::${file} 与提交基线不一致（内容级差异）。` +
+        "请本地运行 pnpm mutation 后将更新后的基线一并提交。",
+    );
+  } else {
+    console.log(`${file} 基线一致（键序/mutant 序无关比较通过）`);
+  }
 }
-console.log("stryker-incremental.json 基线一致（键序/mutant 序无关比较通过）");
+if (failed) process.exit(1);

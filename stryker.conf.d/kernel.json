@@ -1,0 +1,29 @@
+{
+  "$schema": "../node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "packageManager": "pnpm",
+  "testRunner": "vitest",
+  "plugins": [
+    "@stryker-mutator/vitest-runner"
+  ],
+  "reporters": [
+    "html",
+    "clear-text",
+    "json",
+    "progress"
+  ],
+  "coverageAnalysis": "perTest",
+  "incremental": true,
+  "incrementalFile": "stryker-incremental-kernel.json",
+  "jsonReporter": {
+    "fileName": "reports/mutation/kernel.json"
+  },
+  "thresholds": {
+    "high": 85,
+    "low": 70,
+    "break": 0
+  },
+  "mutate": [
+    "src/runtime/kernel/**/*.ts",
+    "!src/**/*.d.ts"
+  ]
+}

@@ -50,7 +50,7 @@ jobs:
             exit 0
           fi
           git diff --name-only "$base"..."$(git rev-parse HEAD)" > /tmp/changed-files.txt
-          if grep -qE '^(src/|tests/|prompts/|stryker\.conf\.json$|package\.json$|pnpm-lock\.yaml$|tsconfig.*\.json$|\.github/workflows/ci\.yml$)' /tmp/changed-files.txt; then
+          if grep -qE '^(src/|tests/|prompts/|stryker\.conf\.d/|scripts/mutation-(gate|all)\.mjs$|package\.json$|pnpm-lock\.yaml$|tsconfig.*\.json$|\.github/workflows/ci\.yml$)' /tmp/changed-files.txt; then
             echo "mutation=true" >> "$GITHUB_OUTPUT"
           else
             echo "mutation=false" >> "$GITHUB_OUTPUT"
@@ -90,11 +90,18 @@ jobs:
       - run: pip install --disable-pip-version-check -r requirements-ci.txt
       - run: pnpm cov:patch
 
+  # 段式变异矩阵（issue #101 P4）：段清单与 stryker.conf.d/*.json 一一对应，
+  # 新增/退役段须同步此处 matrix 与 mutation-gate job 的 artifacts 清单。
   mutation:
     needs: changes
     # docs-only 变更跳过（issue #101 P2）；判定逻辑见 changes job 注释
     if: needs.changes.outputs.mutation == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      # 段间互不遮蔽：一段红其余段继续跑完，聚合门禁一次性给出完整判分
+      fail-fast: false
+      matrix:
+        seg: [kernel, runtime-ext, handlers, plugin]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -106,10 +113,48 @@ jobs:
       # 构建产物依赖：client 契约测试读 dist/client.js，双进程 CAS 测试解析
       # dist/runtime/kernel/cas-lock.js——沙箱无产物则 dry run 必挂。
       - run: pnpm build
-      # 增量门禁（issue #62）：只回答「本次改动是否打穿既有断言」；基线新鲜度由
-      # baseline.yml 在 main 合入后全量归档负责，PR 不再校验、不再人工提交基线。
-      - name: Mutation gate (score >= 70, incremental)
+      # 增量门禁（issue #62）：只回答「本次改动是否打穿既有断言」；段级基线
+      # stryker-incremental-<seg>.json 随仓库维护。thresholds.break=0——分数
+      # 判定统一由 mutation-gate 聚合承担（plugin 段 total 口径 65.68，
+      # 独立 break 会假红，见 scripts/mutation-gate.mjs 头注）。
+      - name: Mutation segment gate (${{ matrix.seg }})
         # CI 裁剪 html/progress reporter（issue #101 P5）：html 纯写盘无消费者，
-        # progress 刷屏；clear-text 供判分读数、json 供事后分析。
+        # progress 刷屏；clear-text 供判分读数、json 供聚合门禁。
         # concurrency 仅 workflow_dispatch 可覆盖（P3 A/B 入口），push/PR 恒用默认
-        run: pnpm mutation --reporters clear-text,json --concurrency "${{ inputs.concurrency || 4 }}"
+        run: pnpm exec stryker run "stryker.conf.d/${{ matrix.seg }}.json" --reporters clear-text,json --concurrency "${{ inputs.concurrency || 4 }}"
+      - name: Upload segment report
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report-${{ matrix.seg }}
+          path: reports/mutation/${{ matrix.seg }}.json
+          if-no-files-found: error
+
+  # 聚合判分层（issue #101 P4）：covered 口径跨段聚合 vs 阈值，fail-closed——
+  # 缺任一段报告即红。needs 失败默认跳过本 job 会漏掉「矩阵某段崩溃」，
+  # 故用 if: always() 并显式检查各前置结果。
+  mutation-gate:
+    needs: [changes, mutation]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      # docs-only（P2 口径）直接放行
+      - name: Skip (docs-only change)
+        if: needs.changes.outputs.mutation != 'true'
+        run: echo "docs-only 变更，变异门禁按 P2 口径跳过"
+      # 矩阵存在失败/取消段时红掉（fail-fast: false 下其余段已跑完，不遮蔽）
+      - name: Fail on matrix failure
+        if: needs.changes.outputs.mutation == 'true' && needs.mutation.result != 'success'
+        run: |
+          echo "::error::mutation 矩阵存在失败段（result=${{ needs.mutation.result }}）"
+          exit 1
+      - uses: actions/checkout@v4
+        if: needs.changes.outputs.mutation == 'true' && needs.mutation.result == 'success'
+      - uses: actions/download-artifact@v4
+        if: needs.changes.outputs.mutation == 'true' && needs.mutation.result == 'success'
+        with:
+          pattern: mutation-report-*
+          path: reports/mutation
+          merge-multiple: true
+      - name: Aggregate covered score gate (>= 70)
+        if: needs.changes.outputs.mutation == 'true' && needs.mutation.result == 'success'
+        run: node scripts/mutation-gate.mjs
