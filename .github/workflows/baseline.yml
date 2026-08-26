@@ -1,6 +1,5 @@
-# 变异测试基线归档（issue #62 建立机制；#101 P4 段式化；P1 恢复自动归档）：
-# main 合入变异面相关代码后全量重跑变异并快照段式基线，PR 侧只做增量跑 +
-# 聚合分数门禁。防循环：本 workflow 只改基线文件时被 paths-ignore 过滤。
+# 变异测试基线归档（issue #62 建立机制；#101 P4 段式化；P1 PAT 自动化）：
+# 定时全量重跑变异并快照段式基线，PR 侧只做增量跑 + 聚合分数门禁。
 #
 # 为什么用 PAT 而非 GITHUB_TOKEN（issue #101 P1 实证）：GitHub 2026-06-11
 # 平台策略起，GITHUB_TOKEN 创建的 PR 其 CI run 需人工批准（action_required），
@@ -11,49 +10,19 @@
 name: Baseline
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - "stryker-incremental-*.json"
+  # 降频触发（维护者指示，2026-08-26）：每日北京时间 09:00（UTC 01:00）一次。
+  # 权衡留痕：基线新鲜度按天计足够——过期代价只是 PR 重测面扩大（慢）而非
+  # 正确性问题；逐合入快照的 git 体积与噪音不值得。手动 dispatch 兜底保留。
+  schedule:
+    - cron: "0 1 * * *"
   workflow_dispatch:
 
 concurrency:
-  group: baseline-${{ github.event_name }}
-  # 连续合入时新触发取代旧全量跑；手动 dispatch 完整执行
-  cancel-in-progress: ${{ github.event_name == 'push' }}
+  group: baseline-scheduled
+  cancel-in-progress: false
 
 jobs:
-  # 变更面检测：mutate 面未变的合入（docs-only 等）不可能改变 mutant 结果，
-  # 跳过全量归档。触发集与 ci.yml changes job 保持同一份变异面口径
-  # （src/tests/prompts/stryker 配置/lockfile/tsconfig），另加归档链路自身：
-  # check-mutation-baseline.mjs（normalize/语义 diff 逻辑）与本 workflow。
-  # fail-safe 口径与 ci.yml 一致：diff 基线不可得即执行。
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      relevant: ${{ steps.filter.outputs.relevant }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Compute changed files vs previous main
-        id: filter
-        run: |
-          base="${{ github.event.before }}"
-          if [ "${{ github.event_name }}" != "push" ] || [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            echo "relevant=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if git diff --name-only "$base"..."$(git rev-parse HEAD)" | grep -qE '^(src/|tests/|prompts/|stryker\.conf\.d/|package\.json$|pnpm-lock\.yaml$|tsconfig.*\.json$|scripts/check-mutation-baseline\.mjs$|\.github/workflows/baseline\.yml$)'; then
-            echo "relevant=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "relevant=false" >> "$GITHUB_OUTPUT"
-            echo "变异面无变化，跳过全量归档"
-          fi
-
   archive:
-    needs: changes
-    if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -103,9 +72,22 @@ jobs:
           labels: chore
       # merge 同样走 PAT：GITHUB_TOKEN 触发的 push 不产生 workflow run（防递归
       # 机制），会导致「快照合入后的 main」从未被 CI 验证过；PAT 身份则正常触发。
+      # strict 分支保护要求 up-to-date：快照 PR 创建后 main 若前进会 BLOCKED，
+      # 故先 update-branch 同步并等待其 CI（skip 路由 + gauntlet，约 1 分钟）绿。
       - name: Auto-merge baseline PR
         if: steps.snapshot.outputs.pull-request-number != ''
         env:
           GH_TOKEN: ${{ secrets.BASELINE_PAT }}
         run: |
-          gh pr merge --squash --delete-branch "${{ steps.snapshot.outputs.pull-request-number }}"
+          PR="${{ steps.snapshot.outputs.pull-request-number }}"
+          # 同步分支到最新 base；已最新时 update-branch 报无害错误（no changes）
+          gh pr update-branch "$PR" || true
+          # 最多等 5 分钟：路由应为 skip（仅基线文件），gauntlet 约 50s
+          for _ in $(seq 1 15); do
+            state="$(gh pr view "$PR" --json mergeStateStatus --jq .mergeStateStatus)"
+            if [ "$state" = "CLEAN" ] || [ "$state" = "MERGEABLE" ]; then
+              break
+            fi
+            sleep 20
+          done
+          gh pr merge --squash --delete-branch "$PR"
