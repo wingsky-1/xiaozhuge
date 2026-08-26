@@ -4,6 +4,15 @@ on:
   push:
     branches: [main]
   pull_request:
+  # A/B 入口（issue #101 P3）：手动指定 stryker concurrency 做 runner 实测对照，
+  # 判据见 issue——killed 绝对数不减且 error 计数不增，timedOut 集合无新增
+  workflow_dispatch:
+    inputs:
+      concurrency:
+        description: "Stryker concurrency（默认 4 = runner 现状）"
+        required: false
+        default: "4"
+        type: string
 
 # 最小权限声明（issue #101 P5）：CI 只需读源码
 permissions:
@@ -101,5 +110,6 @@ jobs:
       # baseline.yml 在 main 合入后全量归档负责，PR 不再校验、不再人工提交基线。
       - name: Mutation gate (score >= 70, incremental)
         # CI 裁剪 html/progress reporter（issue #101 P5）：html 纯写盘无消费者，
-        # progress 刷屏；clear-text 供判分读数、json 供事后分析
-        run: pnpm mutation --reporters clear-text,json
+        # progress 刷屏；clear-text 供判分读数、json 供事后分析。
+        # concurrency 仅 workflow_dispatch 可覆盖（P3 A/B 入口），push/PR 恒用默认
+        run: pnpm mutation --reporters clear-text,json --concurrency "${{ inputs.concurrency || 4 }}"
