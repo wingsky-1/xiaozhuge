@@ -24,37 +24,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # 变更面检测（issue #101 P2）：mutation 只回答「源码/测试/运行时数据是否被改动」，
-  # docs-only 变更不可能改变任何 mutant 结果，跳过以省 ~163s 固定成本。
-  # 触发集依据：mutate 面 src/**/*.ts；tests/** 改变 killed 集合；
-  # prompts/** 被 src/runtime/template-loader.ts 运行时读入（参与行为，缺失即抛）。
-  # fail-safe：无法取得 diff 基线（新分支 push 等）时一律视为需要跑。
+  # 变动段路由（issue #115）：三档——skip（无关变更）/ partial（仅 src 命中段）/
+  # full（tests/prompts/配置/lockfile 变更或 fail-safe）。判定逻辑收在
+  # scripts/mutation-segments.mjs（单一事实源，本地可调试），CI 只传文件清单。
   changes:
     runs-on: ubuntu-latest
     outputs:
-      mutation: ${{ steps.filter.outputs.mutation }}
+      mode: ${{ steps.route.outputs.mode }}
+      segments: ${{ steps.route.outputs.segments }}
+      segments_csv: ${{ steps.route.outputs.segments_csv }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Compute changed files vs base
-        id: filter
+        id: diff
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             base="${{ github.event.pull_request.base.sha }}"
           else
             base="${{ github.event.before }}"
           fi
-          if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            echo "mutation=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git diff --name-only "$base"..."$(git rev-parse HEAD)" > /tmp/changed-files.txt
-          if grep -qE '^(src/|tests/|prompts/|stryker\.conf\.d/|scripts/mutation-(gate|all)\.mjs$|package\.json$|pnpm-lock\.yaml$|tsconfig.*\.json$|\.github/workflows/ci\.yml$)' /tmp/changed-files.txt; then
-            echo "mutation=true" >> "$GITHUB_OUTPUT"
+          if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
+            git diff --name-only "$base"..."$(git rev-parse HEAD)" > /tmp/changed-files.txt
+            echo "diff_ok=true" >> "$GITHUB_OUTPUT"
           else
-            echo "mutation=false" >> "$GITHUB_OUTPUT"
+            # 新分支首次 push 无 before 基线：fail-safe 走全量
+            echo "diff_ok=false" >> "$GITHUB_OUTPUT"
           fi
+      - name: Route mutation segments
+        id: route
+        run: |
+          if [ "${{ steps.diff.outputs.diff_ok }}" = "true" ]; then
+            node scripts/mutation-segments.mjs /tmp/changed-files.txt > /tmp/route.json
+          else
+            node scripts/mutation-segments.mjs --all > /tmp/route.json
+          fi
+          echo "mode=$(node -p "require('/tmp/route.json').mode")" >> "$GITHUB_OUTPUT"
+          echo "segments=$(node -p "JSON.stringify(require('/tmp/route.json').segments)")" >> "$GITHUB_OUTPUT"
+          echo "segments_csv=$(node -p "require('/tmp/route.json').segments.join(',')")" >> "$GITHUB_OUTPUT"
 
   gauntlet:
     runs-on: ubuntu-latest
@@ -90,18 +98,17 @@ jobs:
       - run: pip install --disable-pip-version-check -r requirements-ci.txt
       - run: pnpm cov:patch
 
-  # 段式变异矩阵（issue #101 P4）：段清单与 stryker.conf.d/*.json 一一对应，
-  # 新增/退役段须同步此处 matrix 与 mutation-gate job 的 artifacts 清单。
+  # 动态段式变异矩阵（issue #115）：matrix 段清单由 changes 路由输出
+  # fromJson 实例化——仅 src 变更时只跑命中段，tests/配置变更时全段。
   mutation:
     needs: changes
-    # docs-only 变更跳过（issue #101 P2）；判定逻辑见 changes job 注释
-    if: needs.changes.outputs.mutation == 'true'
+    if: needs.changes.outputs.mode != 'skip'
     runs-on: ubuntu-latest
     strategy:
       # 段间互不遮蔽：一段红其余段继续跑完，聚合门禁一次性给出完整判分
       fail-fast: false
       matrix:
-        seg: [kernel, runtime-ext, handlers, plugin]
+        seg: ${{ fromJson(needs.changes.outputs.segments) }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -129,32 +136,32 @@ jobs:
           path: reports/mutation/${{ matrix.seg }}.json
           if-no-files-found: error
 
-  # 聚合判分层（issue #101 P4）：covered 口径跨段聚合 vs 阈值，fail-closed——
-  # 缺任一段报告即红。needs 失败默认跳过本 job 会漏掉「矩阵某段崩溃」，
-  # 故用 if: always() 并显式检查各前置结果。
+  # 聚合判分层（issue #101 P4 + #115 合成口径）：covered 口径跨段聚合 vs 阈值，
+  # fail-closed——缺任一实跑段报告即红；partial 形态未跑段从入库基线反推合成。
+  # needs 失败默认跳过本 job 会漏掉「矩阵某段崩溃」，故用 if: always() 显式检查。
   mutation-gate:
     needs: [changes, mutation]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      # docs-only（P2 口径）直接放行
-      - name: Skip (docs-only change)
-        if: needs.changes.outputs.mutation != 'true'
-        run: echo "docs-only 变更，变异门禁按 P2 口径跳过"
+      # 路由判定无关变更（docs-only 等）直接放行
+      - name: Skip (route mode=skip)
+        if: needs.changes.outputs.mode == 'skip'
+        run: echo "无变异面变更，变异门禁按路由口径跳过"
       # 矩阵存在失败/取消段时红掉（fail-fast: false 下其余段已跑完，不遮蔽）
       - name: Fail on matrix failure
-        if: needs.changes.outputs.mutation == 'true' && needs.mutation.result != 'success'
+        if: needs.changes.outputs.mode != 'skip' && needs.mutation.result != 'success'
         run: |
           echo "::error::mutation 矩阵存在失败段（result=${{ needs.mutation.result }}）"
           exit 1
       - uses: actions/checkout@v4
-        if: needs.changes.outputs.mutation == 'true' && needs.mutation.result == 'success'
+        if: needs.changes.outputs.mode != 'skip' && needs.mutation.result == 'success'
       - uses: actions/download-artifact@v4
-        if: needs.changes.outputs.mutation == 'true' && needs.mutation.result == 'success'
+        if: needs.changes.outputs.mode != 'skip' && needs.mutation.result == 'success'
         with:
           pattern: mutation-report-*
           path: reports/mutation
           merge-multiple: true
       - name: Aggregate covered score gate (>= 70)
-        if: needs.changes.outputs.mutation == 'true' && needs.mutation.result == 'success'
-        run: node scripts/mutation-gate.mjs
+        if: needs.changes.outputs.mode != 'skip' && needs.mutation.result == 'success'
+        run: node scripts/mutation-gate.mjs --ran "${{ needs.changes.outputs.segments_csv }}"
