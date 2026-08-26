@@ -5,12 +5,17 @@
  * 精确 pin 0.1.1-rc.2）——dsh 升级时形状变化获得编译期报警；execute 内仍自行
  * 校验参数并抛稳定 code 错误。TEAM_HOME 按主会话 id 绑定（ADR 0005 宿主绑定层），
  * 一个主会话 = 一个实例根。
+ *
+ * Wave 1a（#120 v2 计划）：工具面 handler 绑定与 HTTP 视图路由（#100/#102）
+ * 同款反查——子代理会话按成员 durable id 反查挂载主控实例，解锁 #86 问题 4
+ * 「子代理工具指向空实例」；官方形态偏差理由见 PR 描述（agents.json 是领域
+ * 团队注册表，官方 lineage API 回答的是会话谱系问题，AGENTS.md 规则 11）。
  */
 import type { Agent } from "@deepseek-ai/dsh-agent";
 import type { ToolDefinition, ToolRunContext } from "@deepseek-ai/dsh-tools";
 import type { WebRoute } from "@deepseek-ai/dsh-host-webserver";
 import { resolveTeamHome, resolveTeamHomeForView } from "./team-home.js";
-import { createHandlers, type Handlers } from "./handlers.js";
+import { createHandlers, ToolError, type Handlers } from "./handlers.js";
 import { schemas } from "./schemas.js";
 import { makeGateRoutes, makeConsoleRoute } from "./gate-console.js";
 import { makeLaunchRoutes } from "./team-launch.js";
@@ -22,9 +27,16 @@ export const name = "xiaozhuge-team";
 /** 需要的服务：tools（工具注册表）+ webServer（Gate Console 与 resolve 端点）。 */
 export const inject = ["tools", "webServer"];
 
-/** 从执行上下文解析主会话 id（缺省回退占位，保证工具不炸）。官方 Agent.id 即会话 id。 */
+/**
+ * 从执行上下文解析主会话 id。官方 Agent.id 即会话 id；工具面 agent-required：
+ * agentless 调用抛稳定错误码（对齐 dsh-tool-cordis requireAgent 先例），
+ * 不静默挂空实例（复核必改 3）。
+ */
 function sessionIdOf(agent: Agent | undefined): string {
-  return agent?.id ?? "session-unknown";
+  if (agent?.id === undefined) {
+    throw new ToolError("agent-required", "team_* tools require an agent context (exec.agent.id)");
+  }
+  return agent.id;
 }
 
 /**
@@ -41,14 +53,20 @@ export function apply(ctx: {
 }): () => void {
   void ctx.get;
   const disposers: Array<() => void> = [];
-  // 会话 -> handler 缓存：一个主会话一个实例根（TEAM_HOME 绑定）。
+  // 会话 -> handler 缓存：键 = 调用会话 id（agent.id），值 = 反查所得实例根上的
+  // handler 集。不变量：一次会话生命周期内 durableId→实例映射不变（同一会话
+  // 永远解析到同一 teamHome，缓存以会话 id 为键成立）；DSH_HOME 运行期变更 /
+  // 实例迁移不在支持范围——需重启插件进程重建（复核必改 5）。
   const handlerCache = new Map<string, Handlers>();
 
   function handlersFor(agent: Agent | undefined): Handlers {
     const sessionId = sessionIdOf(agent);
     let h = handlerCache.get(sessionId);
     if (h === undefined) {
-      h = createHandlers(resolveTeamHome(sessionId), sessionId);
+      // Wave 1a：与 HTTP 视图路由同款反查挂载主控实例根（#120 v2 计划 1a）。
+      // 主会话直查；子代理（成员 durable id）反查所属主控的 TEAM_HOME，
+      // 使工具面与视图面共享同一实例状态。
+      h = createHandlers(resolveTeamHomeForView(sessionId).teamHome, sessionId);
       handlerCache.set(sessionId, h);
     }
     return h;
