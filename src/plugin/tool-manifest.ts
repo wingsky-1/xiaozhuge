@@ -53,3 +53,5 @@ export function appendToolManifest(tier0Prompt: string): string {
   }
   return `${tier0Prompt}${TOOL_MANIFEST_SEPARATOR}${toolManifestText()}`;
 }
+
+// verify/partial-gate2: 复验动态门禁 partial（基于最新 main，仅此一处注释变更）。
