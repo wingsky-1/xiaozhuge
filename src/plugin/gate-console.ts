@@ -17,6 +17,7 @@ import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { WebRoute } from "@deepseek-ai/dsh-host-webserver";
 import { join } from "node:path";
+import { isValidSessionId } from "./session-id.js";
 import {
   listGates,
   openGate,
@@ -97,6 +98,12 @@ export function makeGateRoutes(deps: GateRouteDeps): WebRoute[] {
           writeJson(res, 400, { error: "missing session parameter" });
           return;
         }
+        // 白名单防御（issue #103）：sessionId 进入文件系统寻址前校验，
+        // 错误码对齐 overview 口径。
+        if (!isValidSessionId(sessionId)) {
+          writeJson(res, 400, { error: "invalid session parameter" });
+          return;
+        }
         const gatesDir = layout(deps.teamHomeFor(sessionId)).gatesDir;
         if (req.method === "GET") {
           writeJson(res, 200, await listGates(gatesDir));
@@ -161,6 +168,11 @@ export function makeGateRoutes(deps: GateRouteDeps): WebRoute[] {
           };
           if (!body.session || !body.gate_id || (body.decision !== "approved" && body.decision !== "denied")) {
             writeJson(res, 400, { error: "session, gate_id and decision(approved|denied) required" });
+            return;
+          }
+          // 白名单防御（issue #103）：对齐 overview 口径。
+          if (!isValidSessionId(body.session)) {
+            writeJson(res, 400, { error: "invalid session parameter" });
             return;
           }
           const teamHome = deps.teamHomeFor(body.session);

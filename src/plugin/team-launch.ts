@@ -22,6 +22,7 @@ import { resolveTeamHome, resolveTeamHomeForView, userTemplatesRoot, projectTemp
 import { createHandlers, PACKAGE_ROOT } from "./handlers.js";
 import { layout, listScenarios } from "../runtime/index.js";
 import { fetchSiteAllowed, originAllowed } from "./gate-console.js";
+import { isValidSessionId } from "./session-id.js";
 
 /** 独立入口页路径（保留为兜底；client 插件不再跳转此页）。 */
 export const ROUTES_LAUNCH = "/xiaozhuge/launch";
@@ -77,6 +78,12 @@ export function makeLaunchRoutes(): WebRoute[] {
         const sessionId = url.searchParams.get("session");
         if (!sessionId) {
           writeJson(res, 400, { error: "missing session parameter" });
+          return;
+        }
+        // 白名单防御（issue #103）：sessionId 进入文件系统寻址前校验，
+        // 错误码对齐 overview 口径。
+        if (!isValidSessionId(sessionId)) {
+          writeJson(res, 400, { error: "invalid session parameter" });
           return;
         }
         // 视图供数解析：主会话直查优先；子会话按成员 durable id 反查所属

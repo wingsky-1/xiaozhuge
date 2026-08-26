@@ -22,6 +22,7 @@ import type { WebRoute } from "@deepseek-ai/dsh-host-webserver";
 import { join } from "node:path";
 import type { EventRecord, TeamOverview } from "../runtime/index.js";
 import { layout, listShards, reduceOverview, Registry } from "../runtime/index.js";
+import { SESSION_PATTERN } from "./session-id.js";
 
 /** 路由路径。 */
 export const ROUTES_OVERVIEW = "/api/xiaozhuge/team/overview";
@@ -31,8 +32,7 @@ export const TAIL_WINDOW_BYTES = 256 * 1024;
 /** 投影进视图模型的尾部事件条数上限。 */
 export const TAIL_EVENT_LIMIT = 50;
 
-/** session 参数白名单：防路径拼接逃逸（存量路由未校验，本路由不得复制该隐患）。 */
-const SESSION_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+// session 参数白名单统一取自 session-id.ts（issue #103），本文件不再私有定义。
 
 function writeJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
