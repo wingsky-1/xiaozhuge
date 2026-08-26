@@ -5,6 +5,15 @@ on:
     branches: [main]
   pull_request:
 
+# 最小权限声明（issue #101 P5）：CI 只需读源码
+permissions:
+  contents: read
+
+# PR 连推取消旧跑；main push 同理（门禁以各 PR run 为准，push run 是冗余验证）
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # 变更面检测（issue #101 P2）：mutation 只回答「源码/测试/运行时数据是否被改动」，
   # docs-only 变更不可能改变任何 mutant 结果，跳过以省 ~163s 固定成本。
@@ -60,12 +69,16 @@ jobs:
       - run: pnpm test
       - name: Coverage gate (>= 70)
         run: pnpm cov
-      # 增量门禁（#30）：本次 PR 变更行覆盖率 >= 80%；自托管 diff-cover，数据不出仓库
+      # 增量门禁（#30）：本次 PR 变更行覆盖率 >= 80%；自托管 diff-cover，数据不出仓库。
+      # diff-cover 版本 pin 于 requirements-ci.txt：消除每次安装最新版的漂移风险，
+      # 并使 setup-python 的 pip cache 可用（依赖清单即缓存键）
       - name: Patch coverage gate (changed lines >= 80%)
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: pip install --disable-pip-version-check diff-cover
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+      - run: pip install --disable-pip-version-check -r requirements-ci.txt
       - run: pnpm cov:patch
 
   mutation:
@@ -87,4 +100,6 @@ jobs:
       # 增量门禁（issue #62）：只回答「本次改动是否打穿既有断言」；基线新鲜度由
       # baseline.yml 在 main 合入后全量归档负责，PR 不再校验、不再人工提交基线。
       - name: Mutation gate (score >= 70, incremental)
-        run: pnpm mutation
+        # CI 裁剪 html/progress reporter（issue #101 P5）：html 纯写盘无消费者，
+        # progress 刷屏；clear-text 供判分读数、json 供事后分析
+        run: pnpm mutation --reporters clear-text,json
