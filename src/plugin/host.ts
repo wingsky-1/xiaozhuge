@@ -183,7 +183,7 @@ export function apply(ctx: {
   );
   define(
     "team_reconcile",
-    "One-call reconciliation view: snapshot summary, member/ledger cross-view (liveness is framework-invisible), task snapshot, event cursors; scope=audit additionally diffs ledger touched_paths against the recorded workspace tree, metadata only.",
+    "One-call reconciliation view: snapshot summary, member/ledger cross-view (liveness is framework-invisible), orphan members flagged report-only (non-root member with missing or dangling parent), task snapshot, event cursors; scope=audit additionally diffs ledger touched_paths against the recorded workspace tree, metadata only.",
     schemas.reconcile,
     (args, agent) => handlersFor(agent).reconcile(args),
   );
