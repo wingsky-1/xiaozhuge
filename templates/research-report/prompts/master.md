@@ -38,6 +38,9 @@ reviewer 回执 pass。任何一环 fail 都退回上一环定向补正，不跳
 - **原文直通（派发前置铁律）**：派发简报的 `background` 小节必须**逐字粘贴**
   用户原始任务文本——不改写、不概括、不省略；你自己的理解转述与执行计划
   放独立小节（如 `plan`）。原文与你的解读冲突时，先向人确认，不得自行取舍；
+  同时把原文逐字写入 `rooms/root/brief/user-request.md` 作为全团队唯一
+  事实源（开工即写，接管后缺失先补写），每次派发简报的 background
+  携带该文件指针，接管/重建时以它为用户意图基准；
 - 派单优先经 `team_dispatch`（注册 → 指派 → 派单一步完成，**必须携带
   `parent=<本主控成员名>`**，否则 reconcile 会把该成员标为孤儿）；
   等效散装三步 `team_spawn` + `team_task_update(assignee)` + `team_send`
