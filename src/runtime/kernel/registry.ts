@@ -24,11 +24,33 @@ export class Registry {
     await writeJsonAtomic(this.file, registry);
   }
 
-  /** 登记或更新成员。 */
-  async upsertMember(record: MemberRecord): Promise<void> {
+  /**
+   * 登记或更新成员（三态判定，#79）：
+   * 1) 同 member + 同 durableId + 同 tier → 幂等成功（仅刷新 lastSeen）；
+   *    dispatch 半事务续跑与 init 重入依赖此分支。
+   * 2) 异 durableId / 异 tier 且旧记录非 dead → 拒绝（code=member-conflict）：
+   *    同名换新 durable id 必须先走接管路径把旧记录标 dead。
+   * 3) 旧记录 dead → 允许复位重登记（状态级重建的合法入口）。
+   */
+  async upsertMember(record: MemberRecord): Promise<"registered" | "idempotent" | "revived"> {
     const reg = await this.read();
+    const existing = reg.members[record.member];
+    if (existing !== undefined && existing.status !== "dead") {
+      if (existing.durableId !== record.durableId || existing.tier !== record.tier) {
+        const err = new Error(
+          `member ${record.member} already registered as ${existing.durableId} (tier ${existing.tier}); ` +
+            "mark the old record dead before re-registering with a different durable id",
+        );
+        (err as Error & { code?: string }).code = "member-conflict";
+        throw err;
+      }
+      existing.lastSeen = Date.now();
+      await this.write(reg);
+      return "idempotent";
+    }
     reg.members[record.member] = record;
     await this.write(reg);
+    return existing === undefined ? "registered" : "revived";
   }
 
   /** 读单个成员。 */
