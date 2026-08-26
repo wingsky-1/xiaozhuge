@@ -41,6 +41,7 @@ describe("team_reconcile overview", () => {
       snapshot: { source: string | null; workspace_seen?: unknown };
       members: Array<{ member: string; liveness: string; assigned_task_ids: string[] }>;
       dangling_assignees: string[];
+      orphan_members: Array<{ member: string; tier: number; parent: string | null; reason: string }>;
       task_status_counts: Record<string, number>;
       event_cursors: Array<{ room: string; seq: number }>;
       goal_binding: string;
@@ -63,6 +64,11 @@ describe("team_reconcile overview", () => {
       liveness: "framework-invisible",
     });
     expect(view.dangling_assignees).toEqual(["ghost"]);
+    // 孤儿标红（report-only）：spawn 未传 parent → coder 标 parent-missing；
+    // tier0 主控豁免（单入口原则）。
+    expect(view.orphan_members).toEqual([
+      { member: "coder", tier: 1, parent: null, reason: "parent-missing" },
+    ]);
     expect(view.task_status_counts).toEqual({ queued: 1 });
     expect(view.event_cursors[0]?.room).toBe("root");
     expect(view.event_cursors[0]!.seq).toBeGreaterThan(0);
@@ -75,6 +81,33 @@ describe("team_reconcile overview", () => {
     const view = (await handlers.reconcile({})) as { initialized: boolean; snapshot: unknown };
     expect(view.initialized).toBe(false);
     expect(view.snapshot).toBeNull();
+  });
+
+  it("孤儿标红：有 parent 且在册不标；悬空 parent 标 parent-dangling", async () => {
+    await handlers.init({ project_root: workspace });
+    // coder 带合法 parent（master 由 init 预登记）→ 不标。
+    await handlers.spawn({
+      member: "coder",
+      durable_id: "dur-coder",
+      role: "coder",
+      tier: 1,
+      parent: "master",
+    });
+    // painter 的 parent 未注册 → 标 parent-dangling。
+    await handlers.spawn({
+      member: "painter",
+      durable_id: "dur-painter",
+      role: "painter",
+      tier: 1,
+      parent: "ghost-parent",
+    });
+
+    const view = (await handlers.reconcile({})) as {
+      orphan_members: Array<{ member: string; tier: number; parent: string | null; reason: string }>;
+    };
+    expect(view.orphan_members).toEqual([
+      { member: "painter", tier: 1, parent: "ghost-parent", reason: "parent-dangling" },
+    ]);
   });
 });
 

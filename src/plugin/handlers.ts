@@ -659,6 +659,7 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
           member: m.member,
           durable_id: m.durableId,
           tier: m.tier,
+          parent: m.parent ?? null,
           status: m.status,
           liveness: "framework-invisible",
           assigned_task_ids: byAssignee.get(m.member) ?? [],
@@ -666,6 +667,19 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
         // 悬空态检测：账本指派了、但注册表无此成员。
         const registeredNames = new Set(members.map((m) => m.member));
         const dangling_assignees = [...byAssignee.keys()].filter((a) => !registeredNames.has(a));
+
+        // 孤儿检测（report-only）：非根成员缺 parent 或 parent 未在册即标出，
+        // 供主控/视图核对协作链路；硬校验待误报率数据产出后另行评审。
+        // tier=0 根主控豁免（单入口原则：有且仅有一个无父主控）。
+        const orphan_members = members
+          .filter((m) => m.tier !== 0)
+          .filter((m) => m.parent === undefined || m.parent === null || !registeredNames.has(m.parent))
+          .map((m) => ({
+            member: m.member,
+            tier: m.tier,
+            parent: m.parent ?? null,
+            reason: m.parent === undefined || m.parent === null ? "parent-missing" : "parent-dangling",
+          }));
 
         // 任务账本快照：状态分布 + 明细。
         const statusCounts: Record<string, number> = {};
@@ -709,6 +723,7 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
           },
           members: memberLedger,
           dangling_assignees,
+          orphan_members,
           task_status_counts: statusCounts,
           tasks: taskDetails,
           event_cursors: eventCursors,
