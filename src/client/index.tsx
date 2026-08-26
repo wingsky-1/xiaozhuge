@@ -12,7 +12,11 @@
  *   用户任务（空则只投递规程）。
  */
 import { useEffect, useRef, useState } from "react";
+// 运行时引用走宿主注入（dsh.client.external 已声明 runtime/conversation 包），
+// 不进发布物；createScope 为官方公开导出（agent/session 作用域 mint）。
+import { createScope } from "@deepseek-ai/dsh-client-runtime/client";
 import type { ConversationSnapshot } from "@deepseek-ai/dsh-client-runtime/client";
+import type { IConversation } from "@deepseek-ai/dsh-client-ui-conversation/client";
 import type { Context } from "@deepseek-ai/cordis";
 import type { IApiClient } from "@deepseek-ai/dsh-client-connection/client";
 import { TeamView, bindSessionsService } from "./team-view.js";
@@ -30,6 +34,37 @@ export interface InputZone {
 
 /** apply 时注入的宿主 typed API 客户端（connection.api），组件经模块级引用使用。 */
 let apiClient: IApiClient | null = null;
+
+/** apply 时注入的客户端根 ctx（createScope mint 目标会话作用域用）。 */
+let clientRootCtx: Context | null = null;
+
+/** apply 时注入的宿主 conversation 服务（官方公开面：per-session input 门面注册表）。 */
+let conversationService: IConversation | null = null;
+
+/**
+ * 清空目标会话输入框草稿（issue 81）：经官方 conversation.input 注册表解析
+ * 该会话的 SessionInput 门面，走唯一公开写路径 setDraft("")。
+ * 作用域寻址：createScope 按 sessionId mint 官方 tagged ctx（resolver.for
+ * 只读 tag 定位常驻门面；门面操作仍落在真会话 shell 上），用完即弃。
+ * 解析失败（如门面未就绪）只放弃清空，不影响已成功的建团流程。
+ */
+export function clearSessionDraft(sessionId: string): void {
+  const root = clientRootCtx;
+  const conversation = conversationService;
+  if (!root || !conversation) return;
+  let scope: { fiber: { dispose(): Promise<void> }; ctx: Context } | null = null;
+  try {
+    // SessionId 为官方 branded string；品牌构造器在不依赖的 dsh-session 运行时
+    // 包内，此处按 createScope 参数形状收窄（值本身即宿主下发的会话 id）。
+    const branded = sessionId as unknown as Parameters<typeof createScope>[1];
+    scope = createScope(root, branded);
+    conversation.input.for(scope.ctx).setDraft("");
+  } catch {
+    // 草稿残留由用户手动清理；此处静默（建团已成功）。
+  } finally {
+    void scope?.fiber.dispose();
+  }
+}
 
 /** 团队状态探测（服务端只读 GET）。 */
 interface TeamStatus {
@@ -56,8 +91,8 @@ export const BOOT_MESSAGE_HEAD =
 /** 本插件注册名（cordis 名册 id = npm 包名，经 dsh.client 契约）。 */
 export const name = "@wingsky-1/dsh-xiaozhuge";
 
-/** 需要的浏览器端服务：slots（插槽注册）+ connection（typed RPC 客户端）+ sessions（成员会话导航）。 */
-export const inject = ["slots", "connection", "sessions"];
+/** 需要的浏览器端服务：slots（插槽注册）+ connection（typed RPC 客户端）+ sessions（成员会话导航）+ conversation（草稿写路径）。 */
+export const inject = ["slots", "connection", "sessions", "conversation"];
 
 /** 浮层内固定文案。 */
 const COPY = {
@@ -70,10 +105,16 @@ const COPY = {
   creating: "创建中…",
   createFailed: "创建失败",
   projectBadge: "当前工作区",
+  pickHint: "请先选择一个团队场景",
 };
 
-/** 场景浮层（React 组件，固定在视口居中）。 */
-function ScenarioPicker(props: {
+/** 场景条目的稳定 key（radio value 与选中判定共用，唯一事实源在 selected state）。 */
+export function scenarioKey(s: { source: string; name: string }): string {
+  return `${s.source}:${s.name}`;
+}
+
+/** 场景浮层（React 组件，固定在视口居中；导出供 client 行为测试驱动）。 */
+export function ScenarioPicker(props: {
   scenarios: ScenarioEntry[];
   busy: boolean;
   error: string | null;
@@ -166,8 +207,9 @@ function ScenarioPicker(props: {
                 <input
                   type="radio"
                   name="xzg-scenario"
-                  value={`${s.source}:${s.name}`}
-                  defaultChecked={s.source === "builtin"}
+                  value={scenarioKey(s)}
+                  // 受控单选：勾选态由 selected state 派生，显示与提交严格一致。
+                  checked={props.selected !== null && scenarioKey(props.selected) === scenarioKey(s)}
                   onChange={() => props.onSelect(s)}
                 />
                 <span style={{ fontWeight: 500 }}>{s.name}</span>
@@ -187,6 +229,9 @@ function ScenarioPicker(props: {
           {props.error && props.scenarios.length > 0 ? (
             <div style={{ color: "#cf222e", fontSize: 13, marginBottom: 8 }}>{props.error}</div>
           ) : null}
+          {props.selected === null && props.scenarios.length > 0 && !props.error ? (
+            <div style={{ opacity: 0.6, fontSize: 13, marginBottom: 8 }}>{COPY.pickHint}</div>
+          ) : null}
           <button
             type="button"
             disabled={props.busy || props.selected === null}
@@ -199,7 +244,8 @@ function ScenarioPicker(props: {
               background: "var(--dsw-static-deepseek-500, #2da44e)",
               color: "#fff",
               fontSize: 14,
-              cursor: props.busy ? "wait" : "pointer",
+              cursor: props.busy ? "wait" : props.selected === null ? "not-allowed" : "pointer",
+              opacity: props.busy || props.selected === null ? 0.5 : 1,
             }}
           >
             {props.busy ? COPY.creating : COPY.go}
@@ -269,13 +315,12 @@ export function TeamCreateButton(props: InputZone) {
   function openPicker() {
     setOpen(true);
     setError(null);
+    // 不预选（issue 82）：selected 保持 null，创建按钮禁用直至用户显式点击；
+    // 唯一事实源即此 state，radio 勾选态与提交值均由它派生。
     setSelected(null);
     void loadScenarios()
       .then((list) => {
         setScenarios(list);
-        // 默认选中 builtin 首项。
-        const first = list.find((s) => s.source === "builtin") ?? list[0] ?? null;
-        setSelected(first);
       })
       .catch((e: Error) => {
         setScenarios([]);
@@ -320,6 +365,9 @@ export function TeamCreateButton(props: InputZone) {
       if (!r.result.ok) {
         throw new Error(r.result.error?.message ?? "规程投递失败");
       }
+      // ③ 成功后清空目标会话草稿（issue 81）：任务文本已随 prompt 投递，
+      // 残留易误重发；失败路径不走到这里，草稿保留便于重试。
+      clearSessionDraft(targetSession);
       setIsTeam(true);
       setOpen(false);
     } catch (e) {
@@ -377,6 +425,9 @@ export function apply(ctx: Context): void {
   // 注入宿主 typed API 客户端（connection.api）：组件经模块级引用使用。
   const connection = ctx.get("connection") as { api: IApiClient } | undefined;
   apiClient = connection?.api ?? null;
+  // 根 ctx 与 conversation 服务（issue 81：成功建团后清目标会话草稿）。
+  clientRootCtx = ctx;
+  conversationService = (ctx.get("conversation") as IConversation | undefined) ?? null;
   // 成员「打开会话」导航面（ISessions 公开契约子集：open/openSubagent/
   // subagentAddress/refreshSubagents）。
   bindSessionsService(
