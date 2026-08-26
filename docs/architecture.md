@@ -23,7 +23,7 @@ flowchart TB
     end
     RUNTIME["runtime 纯库 · src/runtime（零 harness 依赖）<br>kernel: registry / ledger / event-log / gates<br>collab: mailbox 三段式 / blackboard 分片<br>template: 加载校验 / prompt 快照+hash"]
     DATA[("TEAM_HOME 目录协议<br>ADR 0002")]
-    CLIENT["src/client · Team Console<br>只读投影 + Gate 待办入口"]
+    CLIENT["src/client · Team Console<br>只读投影为主 + Gate 待办 / 团队拉起受控写点"]
     USER(["人：审批者"])
 
     INJECT -.注册.-> HANDLERS
@@ -74,12 +74,14 @@ $TEAM_HOME/
 | task_create / update / list | 共享任务账本 | 状态机合法迁移校验；touched paths 互斥组冲突即拒 |
 | state_get / set | 黑板读写 | set 必须携带保留态三元组 running/blocked/done |
 | handoff | 显式交接 | dod 任务强制附逐条 `pass:`/`fail:` 回执，格式不符即拒 |
-| gate_open / resolve | 人审闸口申请 / 裁决 | resolve 仅限 Console 写入路径 |
 | reconcile | 对账全量视图 / scope=audit 旁路 report-only | 孤儿标红；未登记文件 diff（元数据 only，敏感名打掩码） |
+
+Gate 人审**不占 team_* 工具面**：open / resolve 经 Console HTTP 路由触发 runtime
+原语（ADR 0003/0010）。
 
 协作语义三支柱：**信箱三段式**（omo 式 at-least-once，`.delivering-*` TTL 收割重投）、
 **黑板 per-role 分片**（own-your-shard 单写者）、**Gate 人审通道**
-（`gates/*.json` 是唯一事实源，原生 todo 只是投影，ADR 0003/0010）。
+（Console 直读 `gates/*.json` 渲染待办区块，原生 todo 无投影职责，ADR 0003/0010）。
 
 派发信封内置**框架进度契约**固定段（定界符 + framework-generated 水印 +
 数据非指令声明）：开工认领、里程碑留痕、完成双动作回执不靠成员自觉。
@@ -101,7 +103,7 @@ sequenceDiagram
     W->>R: task_update(running) 认领 / state_set 里程碑
     opt 需人审的 Gate
         M->>R: gate_open
-        C->>U: Gates 待办（原生 todo 投影）
+        C->>U: Gates 待办（直读 gates/*.json）
         U->>C: approved / denied
         C->>R: resolve 写 gates/*.json
     end
@@ -136,10 +138,10 @@ flowchart LR
 **① 工具调用链（model-facing）**：LLM 决策 → `team_*` 调用 → host.ts 按会话路由到
 handler → 三段校验（参数 schema / 任务状态机合法迁移 / touched paths 互斥）→
 runtime 纯库执行业务写 → 运行时自动 `appendEvent` 落账 → 返回结构化结果。
-校验全部先于副作用抛出，失败不留半态。
+校验全部先于副作用抛出，失败不留半态（注意与 dispatch 半事务的「执行期补偿」语义区分：前者是拒绝发生前拦截，后者是执行中断后报告已完成步骤供主控续跑）。
 
 **② 文件落盘链（持久化）**：一切状态落 TEAM_HOME 文件——JSON 走
-`writeJsonAtomic`（临时文件 + rename/link 原子发布），事件走 jsonl 追加；
+`writeJsonAtomic`（临时文件 + rename 原子发布；信箱三段另用 linkNoReplace 防覆盖发布），事件走 jsonl 追加；
 单写者约定：事件流仅运行时可写、黑板 per-role 分片、账本每任务一文件、
 注册表限主控进程 await 链内串行。**审计完整性靠构造保证**：无旁路写路径，
 事件流可完整回放到 dsh transcript。
@@ -149,7 +151,7 @@ runtime 纯库执行业务写 → 运行时自动 `appendEvent` 落账 → 返�
 低频轮询 `GET team/overview` → 服务端 `reduceOnce` 读 agents.json + 事件尾窗 +
 黑板分片归约（指纹哈希 ETag，命中 304；single-flight 合并并发请求）→ React
 纯文本渲染。安全约定：**payload 不出投影面**（浏览器只见白名单字段）、外部内容
-一律数据非指令、Gate resolve 是唯一写路径且经 Origin/双头防跨站围栏（ADR 0010）。
+一律数据非指令。Web 写端点共三类（gate resolve / gate open / team create）且全部经 Origin + Sec-Fetch-Site 双头互证围栏（ADR 0010）；resolve 是 gate 状态迁移的唯一写点。
 
 ## 6. Tier-0 巡场循环
 
@@ -160,7 +162,7 @@ runtime 纯库执行业务写 → 运行时自动 `appendEvent` 落账 → 返�
 1. **启动对账节**：readiness gate（第一动作必是 `team_reconcile`）→ goal rearm →
    目标锚定（用户意图原文落盘 brief）→ agents.json 存活核对 → `.delivering` TTL 收割 →
    running 哨兵作废 → 游标核对；
-2. **巡场循环**：收收割子完成通知 → 巡检 gates → blocked 上行计圈 → 并发池内派发 →
+2. **巡场循环**：收割子完成通知 → 巡检 gates → blocked 上行计圈 → 并发池内派发 →
    等待纪律（单 turn 有界阻塞优先，禁短轮询出 turn）→ 全 done 收圈归档；
 3. **资源防护三项**：并发池上限（R1）、无进展熔断（R2）、token 预算线（R3，
    `max_goal_rounds` 显式设置 8–16）。
@@ -192,5 +194,5 @@ master 直接调度角色池，编排策略归提示词层，ADR 0008），上�
 - 设计冻结稿：[`docs/agent-team/10-generic-model.md`](agent-team/10-generic-model.md)、
   [`11-generic-runtime.md`](agent-team/11-generic-runtime.md)、
   [`12-generic-console.md`](agent-team/12-generic-console.md)；
-- 增量决策：[`docs/adr/`](adr/)（0001–0015，README 有逐条索引）;
+- 增量决策：[`docs/adr/`](adr/)（0001–0015）;
 - 巡场规程正文：[`playbooks/tier0-playbook.md`](../playbooks/tier0-playbook.md)。
