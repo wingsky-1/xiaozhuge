@@ -9,7 +9,10 @@
 
 - 每条目按 spec / impl 双任务登记（`team_task_create`），touched paths 与
   互斥组如实声明；spec 任务经 qa 核验通过后才创建 impl 任务；
-- 派单给角色成员（`team_send` + `send_message` 唤醒）；
+- 派单给角色成员：优先 `team_dispatch`（**必须携带
+  `parent=<一级主控成员名>`**，否则 reconcile 会把该成员标为孤儿）+
+  `send_message` 唤醒；等效散装路径（`team_spawn` +
+  `team_task_update(assignee)` + `team_send`）亦可，同样不得省略 parent；
 - 子完成通知先核对 dod 回执再关闭任务，处理完的信封立即确认。
 
 ## 边界（Adjustments）
