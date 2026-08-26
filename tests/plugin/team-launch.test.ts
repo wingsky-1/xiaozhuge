@@ -246,6 +246,15 @@ describe("team/status 团队会话探测", () => {
     expect(r.status).toBe(400);
   });
 
+  it("session 白名单（issue #103）：路径逃逸/超长 → 400 invalid session parameter", async () => {
+    const base = await listen();
+    for (const evil of ["../../etc", "a/b", "s".repeat(129)]) {
+      const r = await fetch(`${base}/api/xiaozhuge/team/status?session=${encodeURIComponent(evil)}`);
+      expect(r.status, `evil=${evil}`).toBe(400);
+      expect((await r.json()).error, `evil=${evil}`).toBe("invalid session parameter");
+    }
+  });
+
   it("成员子会话反查命中 → is_team=true 且附归属（#97 问题 3）", async () => {
     // 在 DSH_HOME 会话根下落一个已初始化实例，注册成员 durable id。
     const rootDir = join(home, "dsh-home", "xiaozhuge", "sessions", "s-root");

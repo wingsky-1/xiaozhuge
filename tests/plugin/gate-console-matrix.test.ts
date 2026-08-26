@@ -133,6 +133,36 @@ describe("gate-console 路由穷举", () => {
     expect(out().body && JSON.parse(out().body).error).toContain("session, gate_id and decision");
   });
 
+  // session 白名单（issue #103）：路径逃逸/分隔符/多字节/超长一律 400。
+  it("session 白名单：GET gates 非法 session → 400 invalid session parameter", async () => {
+    for (const evil of ["../../etc", "a/b", "含中文", "a".repeat(129), "s\0"]) {
+      const { res, out } = capture();
+      await gatesRoute.handler(
+        mockReq({ url: `/api/xiaozhuge/gates?session=${encodeURIComponent(evil)}` }),
+        res as never,
+      );
+      expect(out().status, `evil=${evil}`).toBe(400);
+      expect(out().body && JSON.parse(out().body).error, `evil=${evil}`).toBe("invalid session parameter");
+    }
+  });
+
+  it("session 白名单：resolve 非法 session → 400 invalid session parameter", async () => {
+    for (const evil of ["../../etc", "a b", "x".repeat(200)]) {
+      const { res, out } = capture();
+      await resolveRoute.handler(
+        mockReq({
+          method: "POST",
+          url: "/api/xiaozhuge/gates/resolve",
+          headers: { origin: "http://h", host: "h" },
+          body: JSON.stringify({ session: evil, gate_id: "g", decision: "approved" }),
+        }),
+        res as never,
+      );
+      expect(out().status, `evil=${evil}`).toBe(400);
+      expect(out().body && JSON.parse(out().body).error, `evil=${evil}`).toBe("invalid session parameter");
+    }
+  });
+
   it("console 页路由直出 HTML", async () => {
     const consoleRoute = makeConsoleRoute();
     const chunks: string[] = [];
