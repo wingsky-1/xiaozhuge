@@ -6,3 +6,7 @@ dod:
   - fail 结论附具体修改项（定位到章节），供主控定向退回 writer
 max_hops: 3
 as_judge: true
+briefing:
+  format: structured
+  sections_required:
+    - background

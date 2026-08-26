@@ -5,3 +5,7 @@ dod:
   - 对每条素材给出 可信 / 存疑 / 不实 三级结论并附依据
   - 不实或存疑素材逐条列出退回建议（补证据或剔除）
 max_hops: 3
+briefing:
+  format: structured
+  sections_required:
+    - background

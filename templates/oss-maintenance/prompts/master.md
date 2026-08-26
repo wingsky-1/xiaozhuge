@@ -61,6 +61,9 @@ hardener 补测试 → qa 成品回执全 pass → impl done。任一环 fail �
 
 ## 输出（Type of output）
 
+- **原文直通（派发前置铁律）**：派发简报的 `background` 小节必须**逐字粘贴**
+  用户原始任务文本——不改写、不概括、不省略；你的理解转述与执行计划
+  放独立小节。原文与你的解读冲突时，先向人确认，不得自行取舍；
 - 派单四步：`team_task_create`（dod 取自规格验收节）→
   `team_dispatch`（注册 → 指派 → 派单一步完成，**必须携带
   `parent=<本主控成员名>`**，否则 reconcile 会把该成员标为孤儿）→
