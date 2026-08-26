@@ -41,6 +41,11 @@ const registrations = [];
 const slotsStub = stubModule("@deepseek-ai/dsh-client-ui-slots", {});
 const cordisStub = stubModule("@deepseek-ai/cordis", {});
 const runtimeStub = stubModule("@deepseek-ai/dsh-client-runtime", {});
+// runtime/client 子路径：createScope（issue 81 会话作用域寻址用）。
+const runtimeClientStub = stubModule("@deepseek-ai/dsh-client-runtime/client", {
+  createScope: () => ({ fiber: { dispose: async () => {} }, ctx: {} }),
+  scopeOf: () => undefined,
+});
 const connectionStub = stubModule("@deepseek-ai/dsh-client-connection", {});
 const conversationStub = stubModule("@deepseek-ai/dsh-client-ui-conversation", {});
 
@@ -50,6 +55,7 @@ const table = new Map([
   ["@deepseek-ai/cordis", cordisStub],
   ["@deepseek-ai/dsh-client-ui-slots", slotsStub],
   ["@deepseek-ai/dsh-client-runtime", runtimeStub],
+  ["@deepseek-ai/dsh-client-runtime/client", runtimeClientStub],
   ["@deepseek-ai/dsh-client-connection", connectionStub],
   ["@deepseek-ai/dsh-client-ui-conversation", conversationStub],
 ]);
@@ -99,7 +105,7 @@ const mod = registered?.factory ? loader.factories.get(registered.id) : null;
 assert(mod !== null, "factory 产物已注册");
 assert(typeof mod?.apply === "function", "exports.apply 是函数");
 assert(Array.isArray(mod?.inject), "exports.inject 是数组");
-assert(JSON.stringify(mod?.inject) === JSON.stringify(["slots", "connection", "sessions"]), "inject = [slots, connection, sessions]");
+assert(JSON.stringify(mod?.inject) === JSON.stringify(["slots", "connection", "sessions", "conversation"]), "inject = [slots, connection, sessions, conversation]");
 
 // ---- apply(ctx) 插槽注册 ----
 const ctxStub = {
@@ -113,6 +119,10 @@ const ctxStub = {
           },
         },
       };
+    }
+    if (key === "conversation") {
+      // IConversation 公开面子集：apply 只存 input resolver 句柄（issue 81）。
+      return { input: { for: () => ({ setDraft: noop }) } };
     }
     if (key === "sessions") {
       // ISessions 导航子集（团队视图「打开会话」用）。
