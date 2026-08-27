@@ -4,7 +4,7 @@
  * 账本/信箱/事件流状态。负路径（非法迁移/越权发送/互斥冲突）一并入集。
  */
 import { describe, expect, it, beforeEach } from "vitest";
-import { existsSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHandlers, rootCaller, type Handlers } from "../../src/plugin/handlers.js";
@@ -116,8 +116,9 @@ describe("golden 场景一：init → spawn → task 全链路", () => {
 describe("golden 场景二：send/inbox 信箱协作", () => {
   it("投递→认领→确认，越权发送被拒", async () => {
     await handlers.init({});
-    await handlers.spawn({ member: "coder", durable_id: "d1", role: "coder", tier: 1 });
-    await handlers.spawn({ member: "qa", durable_id: "d2", role: "qa", tier: 1 });
+    // 健康树：coder/qa 均为 master 直接子（#138 可达性判定依赖 parent 链）。
+    await handlers.spawn({ member: "coder", durable_id: "d1", role: "coder", tier: 1, parent: "master" });
+    await handlers.spawn({ member: "qa", durable_id: "d2", role: "qa", tier: 1, parent: "master" });
 
     // 未注册成员不可达
     await expect(handlers.send({ to: "ghost", from: "master", type: "info", body: {} })).rejects.toMatchObject({
@@ -129,7 +130,11 @@ describe("golden 场景二：send/inbox 信箱协作", () => {
       from: "master",
       type: "task-assign",
       body: { task: "x" },
-    })) as { envelope_id: string };
+    })) as { envelope_id: string; warnings: string[] };
+
+    // #138 report-only 过渡档：可达且树健康 → warnings 恒在场且为空数组
+    // （固定输出 schema，ADR 0015:48 契约）。
+    expect(sent.warnings).toEqual([]);
 
     const inbox = (await handlers.inbox({ member: "coder" })) as {
       unread: Array<{ id: string; body: unknown }>;
@@ -149,6 +154,74 @@ describe("golden 场景二：send/inbox 信箱协作", () => {
     const evs = await readEvents();
     expect(evs.filter((e) => e.type === "mailbox/deliver")).toHaveLength(1);
     expect(evs.filter((e) => e.type === "mailbox/ack")).toHaveLength(1);
+  });
+
+  it("#138 report-only：跨分支兄弟不可达 → 照常投递且 warnings 含原因（T3 RO 支）", async () => {
+    await handlers.init({});
+    // coder 与 qa 同为 master 直接子（跨分支兄弟），auto 树边语义不可达。
+    await handlers.spawn({ member: "coder", durable_id: "d1", role: "coder", tier: 1, parent: "master" });
+    await handlers.spawn({ member: "qa", durable_id: "d2", role: "qa", tier: 1, parent: "master" });
+
+    const sent = (await handlers.send({
+      to: "qa",
+      from: "coder",
+      type: "info",
+      body: null,
+    })) as { envelope_id: string; warnings: string[] };
+
+    // 过渡档语义：投递已发生（envelope 在场）。
+    expect(sent.envelope_id).toBeTruthy();
+    const inbox = (await handlers.inbox({ member: "qa" })) as { unread: unknown[] };
+    expect(inbox.unread).toHaveLength(1);
+    // warnings 恒在场且含不可达原因。
+    expect(Array.isArray(sent.warnings)).toBe(true);
+    expect(sent.warnings.join(" ")).toContain("not ancestor-descendant");
+  });
+
+  it("#138 report-only：parent-missing 成员向上发 → 触发违规标注（T6 RO 支）", async () => {
+    await handlers.init({});
+    // 孤儿成员：spawn 不传 parent（parent-missing）。
+    await handlers.spawn({ member: "orphan", durable_id: "d-orphan", role: "orphan", tier: 1 });
+
+    const sent = (await handlers.send({
+      to: "master",
+      from: "orphan",
+      type: "info",
+      body: null,
+    })) as { envelope_id: string; warnings: string[] };
+
+    expect(sent.envelope_id).toBeTruthy();
+    expect(sent.warnings.join(" ")).toContain("tree violation: parent-missing");
+  });
+
+  it("#138 explicit 端到端：快照白名单判定 send 可达性（T5 RO 支，覆盖快照 comm 解析）", async () => {
+    await handlers.init({});
+    // 健康树：coder/qa 均为 master 直接子。
+    await handlers.spawn({ member: "coder", durable_id: "d1", role: "coder", tier: 1, parent: "master" });
+    await handlers.spawn({ member: "qa", durable_id: "d2", role: "qa", tier: 1, parent: "master" });
+    // 改写 team.yaml 快照为 explicit 白名单：仅 master→coder 可通（收窄）。
+    writeFileSync(
+      layout(home).teamYaml,
+      JSON.stringify({
+        name: "oss-maintenance",
+        comm_mode: "explicit",
+        comm: [{ from: "master", to: "coder" }],
+      }),
+    );
+
+    // 白名单内：master→coder 可达且 warnings=[]。
+    const ok = (await handlers.send({
+      to: "coder", from: "master", type: "info", body: null,
+    })) as { envelope_id: string; warnings: string[] };
+    expect(ok.envelope_id).toBeTruthy();
+    expect(ok.warnings).toEqual([]);
+
+    // 白名单外（树相邻但未声明）：master→qa 不可达，投递仍发生 + warning 含原因。
+    const out = (await handlers.send({
+      to: "qa", from: "master", type: "info", body: null,
+    })) as { envelope_id: string; warnings: string[] };
+    expect(out.envelope_id).toBeTruthy();
+    expect(out.warnings.join(" ")).toContain("explicit whitelist has no master->qa edge");
   });
 });
 
