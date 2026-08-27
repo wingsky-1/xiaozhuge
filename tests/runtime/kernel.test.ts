@@ -351,6 +351,48 @@ describe("注册表", () => {
       code: "member-conflict",
     });
   });
+
+  it("touchMember 刷新 lastSeen；未登记静默跳过；其余字段保形（#97）", async () => {
+    const reg = new Registry(tmpHome());
+    await reg.upsertMember({
+      member: "coder", durableId: "dur-1", parent: "master", tier: 1,
+      status: "running", lastSeen: 1_000,
+    });
+    const now = Date.now();
+    await reg.touchMember("coder");
+    const after = await reg.getMember("coder");
+    expect(after?.lastSeen).toBeGreaterThanOrEqual(now);
+    // 保形：心跳只动 lastSeen，身份三元组与业务态原样。
+    expect(after).toMatchObject({ durableId: "dur-1", parent: "master", tier: 1, status: "running" });
+    // 未登记成员静默跳过（无账可刷，可达性校验归 handler）。
+    await expect(reg.touchMember("ghost")).resolves.toBeUndefined();
+    expect((await reg.read()).members["ghost"]).toBeUndefined();
+  });
+
+  it("touchMember 与 upsert 顺序内联交错无丢失更新（串行约束下的 RMW 完整性，#97）", async () => {
+    // 终稿硬伤修正①的回归护栏：handler await 链内串行约束成立时，交替
+    // touch/upsert 的每一次 read-modify-write 都完整落盘，无记录丢失。
+    const reg = new Registry(tmpHome());
+    await reg.upsertMember({
+      member: "coder", durableId: "dur-1", parent: null, tier: 1,
+      status: "spawned", lastSeen: Date.now(),
+    });
+    for (let i = 0; i < 10; i++) {
+      if (i % 2 === 0) {
+        await reg.touchMember("coder");
+      } else {
+        await reg.upsertMember({
+          member: `peer-${i}`, durableId: `dur-peer-${i}`, parent: null, tier: 1,
+          status: "spawned", lastSeen: Date.now(),
+        });
+      }
+    }
+    const data = await reg.read();
+    const names = Object.keys(data.members);
+    // coder + peer-1/3/5/7/9 全员在册，无一被后续写覆盖丢失。
+    expect(names).toEqual(["coder", "peer-1", "peer-3", "peer-5", "peer-7", "peer-9"]);
+    expect(data.members["coder"]!.durableId).toBe("dur-1");
+  });
 });
 
 describe("gates", () => {

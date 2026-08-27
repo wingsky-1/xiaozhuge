@@ -5,6 +5,13 @@
  * 零 harness 依赖。宿主绑定层（把 TEAM_HOME 解析到具体落点）不在此处。
  */
 
+/**
+ * ── 协议常量区（#97 起，ADR 0016）──────────────────────────
+ * 跨进程契约取值（状态机、来源标记、时限阈值等）：各方按同一数值解释
+ * 行为，全仓只在此处定义；运行时逻辑直接消费本节常量。protocol.ts 为
+ * 文档性单一事实源不参与运行时判断，仅按需 re-export（口径见彼处注释）。
+ */
+
 /** 框架保留态三元组——通用归约唯一认可的阶段锚点（业务子状态仅展示）。 */
 export const RESERVED_STAGES = ["running", "blocked", "done"] as const;
 
@@ -42,6 +49,18 @@ export const TASK_TRANSITIONS: Readonly<Record<TaskStatus, readonly TaskStatus[]
 export function canTransition(from: TaskStatus, to: TaskStatus): boolean {
   return TASK_TRANSITIONS[from].includes(to);
 }
+
+/**
+ * stale 判定阈值（#97 lastSeen 心跳，ADR 0016）：成员 lastSeen 距今超过该
+ * 时长即视为静默，由 team_reconcile 输出 master_idle / stale_members /
+ * awaiting_input 标注（report-only 展示信号，不产生任何行为卡点）。
+ *
+ * 取值锚点：= 3× 投递中收割时限（recovery.ts DEFAULT_DELIVERING_TTL_MS
+ * = 10min），且匹配冻结版定稿 §11 明文的「分钟级续轮节奏、非实时系统」。
+ * 判定为严格大于（恰达阈值仍算新鲜——宁少标勿错标）。待真实运行误标率
+ * 数据产出后以增量 ADR 调参（Wave 3 数据驱动，见 issue #120 计划）。
+ */
+export const STALE_THRESHOLD_MS = 30 * 60 * 1000;
 
 /** 共享任务账本单条记录（每任务一文件，原子写）。 */
 export interface TaskRecord {

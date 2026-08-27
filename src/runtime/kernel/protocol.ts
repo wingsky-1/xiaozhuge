@@ -5,7 +5,13 @@
 /** 信箱三段位。 */
 export const MAILBOX_SEGMENTS = ["unread", "delivering", "processed"] as const;
 
-export { TEMPLATE_SOURCES } from "./types.js";
+export { TEMPLATE_SOURCES, STALE_THRESHOLD_MS } from "./types.js";
+
+/**
+ * re-export 口径（#97 起，ADR 0016）：本文件是文档性单一事实源——运行时
+ * 判断一律消费 types.js 协议常量区原件；此处仅按需 re-export 供测试与
+ * 规程文本统一引用点。STALE_THRESHOLD_MS 的定义与取值锚点见 types.js。
+ */
 
 /**
  * 「投递 + 唤醒」配对矩阵：谁投递、谁负责唤醒、被唤醒后先做什么。
