@@ -75,6 +75,7 @@ export type {
   OverviewRoomInput,
   OverviewInput,
 } from "./view/overview.js";
+export * from "./view/detail.js";
 export {
   validateTeamTemplate,
   validateRoleSpec,
