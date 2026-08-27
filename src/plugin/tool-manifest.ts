@@ -26,7 +26,7 @@ export const TEAM_TOOL_MANIFEST: ReadonlyArray<readonly [string, string]> = [
   ["team_task_list", "任务账本查询"],
   ["team_state_get", "黑板读"],
   ["team_state_set", "黑板写（running|blocked|done）"],
-  ["team_reconcile", "对账全量视图（scope=audit 为旁路 report-only）"],
+  ["team_reconcile", "对账全量视图（scope=audit 为旁路 report-only；overview 含互斥冲突标注）"],
   ["team_handoff", "显式交接（dod 回执核验）"],
 ];
 

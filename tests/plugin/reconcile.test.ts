@@ -120,6 +120,141 @@ describe("team_reconcile overview", () => {
       { member: "painter", tier: 1, parent: "ghost-parent", reason: "parent-dangling" },
     ]);
   });
+
+  it("互斥冲突标注恒在场（空数组形态）——T10 契约断言（#137）", async () => {
+    await handlers.init({ project_root: workspace });
+    const view = (await handlers.reconcile({})) as {
+      active_mutex_conflicts: Array<{ a: string; b: string; reason: string }>;
+    };
+    expect(view.active_mutex_conflicts).toEqual([]);
+  });
+
+  it("T1 单任务 queued→running 无邻居 → 不标冲突", async () => {
+    await handlers.init({ project_root: workspace });
+    const t = (await handlers.taskCreate({
+      title: "T1",
+      room: "root",
+      touched_paths: ["src/a.ts"],
+      mutex_groups: ["g1"],
+    })) as { task_id: string };
+    await handlers.taskUpdate({ task_id: t.task_id, status: "running" });
+    const view = (await handlers.reconcile({})) as {
+      active_mutex_conflicts: Array<{ a: string; b: string; reason: string }>;
+    };
+    expect(view.active_mutex_conflicts).toEqual([]);
+  });
+
+  it("T3 同组先后 create 均 queued 共存 → 不标（尚非 running）", async () => {
+    await handlers.init({ project_root: workspace });
+    const t1 = (await handlers.taskCreate({
+      title: "T3a", room: "root", mutex_groups: ["g1"],
+    })) as { task_id: string };
+    const t2 = (await handlers.taskCreate({
+      title: "T3b", room: "root", mutex_groups: ["g1"],
+    })) as { task_id: string };
+    void t1;
+    void t2;
+    const view = (await handlers.reconcile({})) as {
+      active_mutex_conflicts: Array<{ a: string; b: string; reason: string }>;
+    };
+    expect(view.active_mutex_conflicts).toEqual([]);
+  });
+
+  it("T4-RO B 转 running 撞 running 的 A（同组）→ 冲突对入标注", async () => {
+    await handlers.init({ project_root: workspace });
+    const a = (await handlers.taskCreate({
+      title: "A", room: "root", mutex_groups: ["g1"],
+    })) as { task_id: string };
+    const b = (await handlers.taskCreate({
+      title: "B", room: "root", mutex_groups: ["g1"],
+    })) as { task_id: string };
+    await handlers.taskUpdate({ task_id: a.task_id, status: "running" });
+    await handlers.taskUpdate({ task_id: b.task_id, status: "running" });
+    const view = (await handlers.reconcile({})) as {
+      active_mutex_conflicts: Array<{ a: string; b: string; reason: string }>;
+    };
+    expect(view.active_mutex_conflicts).toHaveLength(1);
+    expect(view.active_mutex_conflicts[0]!.reason).toContain("shared mutex group: g1");
+    // 冲突对双方为 A/B（次序无关）。
+    const pair = [view.active_mutex_conflicts[0]!.a, view.active_mutex_conflicts[0]!.b].sort();
+    expect(pair).toEqual([a.task_id, b.task_id].sort());
+  });
+
+  it("T5-RO touched 字面交集撞车 → 冲突对入标注", async () => {
+    await handlers.init({ project_root: workspace });
+    const a = (await handlers.taskCreate({
+      title: "A", room: "root", touched_paths: ["src/x.ts"],
+    })) as { task_id: string };
+    const b = (await handlers.taskCreate({
+      title: "B", room: "root", touched_paths: ["src/x.ts"],
+    })) as { task_id: string };
+    await handlers.taskUpdate({ task_id: a.task_id, status: "running" });
+    await handlers.taskUpdate({ task_id: b.task_id, status: "running" });
+    const view = (await handlers.reconcile({})) as {
+      active_mutex_conflicts: Array<{ a: string; b: string; reason: string }>;
+    };
+    expect(view.active_mutex_conflicts).toHaveLength(1);
+    expect(view.active_mutex_conflicts[0]!.reason).toContain("touched path overlap: src/x.ts");
+  });
+
+  it("T5-盲 A 双字段并存：判定次序先 mutexGroups 后 touched，reason 固定为 mutex（#137）", async () => {
+    await handlers.init({ project_root: workspace });
+    const a = (await handlers.taskCreate({
+      title: "A", room: "root",
+      touched_paths: ["src/x.ts"], mutex_groups: ["g1"],
+    })) as { task_id: string };
+    const b = (await handlers.taskCreate({
+      title: "B", room: "root",
+      touched_paths: ["src/x.ts"], mutex_groups: ["g1"],
+    })) as { task_id: string };
+    await handlers.taskUpdate({ task_id: a.task_id, status: "running" });
+    await handlers.taskUpdate({ task_id: b.task_id, status: "running" });
+    const view = (await handlers.reconcile({})) as {
+      active_mutex_conflicts: Array<{ a: string; b: string; reason: string }>;
+    };
+    expect(view.active_mutex_conflicts).toHaveLength(1);
+    expect(view.active_mutex_conflicts[0]!.reason).toContain("shared mutex group: g1");
+  });
+
+  it("T7 异 room 共享组 → 不冲突（room 隔离）", async () => {
+    await handlers.init({ project_root: workspace });
+    const a = (await handlers.taskCreate({
+      title: "A", room: "root", mutex_groups: ["g1"],
+    })) as { task_id: string };
+    const b = (await handlers.taskCreate({
+      title: "B", room: "work", mutex_groups: ["g1"],
+    })) as { task_id: string };
+    await handlers.taskUpdate({ task_id: a.task_id, status: "running" });
+    await handlers.taskUpdate({ task_id: b.task_id, status: "running" });
+    const view = (await handlers.reconcile({})) as {
+      active_mutex_conflicts: Array<{ a: string; b: string; reason: string }>;
+    };
+    expect(view.active_mutex_conflicts).toEqual([]);
+  });
+
+  it("T8 done/cancelled/blocked 作参照方 → 不入比较集", async () => {
+    await handlers.init({ project_root: workspace });
+    const running = (await handlers.taskCreate({
+      title: "running", room: "root", mutex_groups: ["g1"],
+    })) as { task_id: string };
+    const done = (await handlers.taskCreate({
+      title: "done", room: "root", mutex_groups: ["g1"],
+    })) as { task_id: string };
+    const blocked = (await handlers.taskCreate({
+      title: "blocked", room: "root", mutex_groups: ["g1"],
+    })) as { task_id: string };
+    await handlers.taskUpdate({ task_id: running.task_id, status: "running" });
+    // done 也只能由 running 迁入（queued→done 非法，types.ts:40-46）。
+    await handlers.taskUpdate({ task_id: done.task_id, status: "running" });
+    await handlers.taskUpdate({ task_id: done.task_id, status: "done" });
+    // blocked 同理。
+    await handlers.taskUpdate({ task_id: blocked.task_id, status: "running" });
+    await handlers.taskUpdate({ task_id: blocked.task_id, status: "blocked" });
+    const view = (await handlers.reconcile({})) as {
+      active_mutex_conflicts: Array<{ a: string; b: string; reason: string }>;
+    };
+    expect(view.active_mutex_conflicts).toEqual([]);
+  });
 });
 
 describe("team_reconcile stale 心跳标注（#97 ADR 0016）", () => {
