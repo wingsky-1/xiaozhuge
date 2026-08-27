@@ -2,8 +2,7 @@
  * #97 白名单心跳触点单测（ADR 0016）：白名单工具调用成功后刷新对应成员
  * lastSeen，归属 = 事件流 actor 镜像口径；forbidden 前置失败与纯读不刷。
  * 时钟由 fake timers 控制，lastSeen 精确等于调用时刻 Date.now()。
- * 注意：send 的 body 一律传对象——schema 允许 null 但 handler 计账行对
- * null 解引用崩溃为既有缺陷（非本 issue 范围，另行立项修复）。
+ * send 的 body=null 已随 #131 修复支持（null 合法负载，计账行不携带 task_id）。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync } from "node:fs";
