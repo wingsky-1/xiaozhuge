@@ -369,9 +369,10 @@ describe("注册表", () => {
     expect((await reg.read()).members["ghost"]).toBeUndefined();
   });
 
-  it("touchMember 与 upsert 顺序内联交错无丢失更新（串行约束下的 RMW 完整性，#97）", async () => {
-    // 终稿硬伤修正①的回归护栏：handler await 链内串行约束成立时，交替
-    // touch/upsert 的每一次 read-modify-write 都完整落盘，无记录丢失。
+  it("touchMember 与 upsert 交替顺序落盘无记录丢失（串行调用回归护栏，#97）", async () => {
+    // 终稿硬伤修正①的回归护栏：同一实例 await 内联顺序交替 touch/upsert，
+    // 每次 RMW 完整落盘；真实并发窗口＝跨进程/多实例写者，开放于
+    // ADR 0016 备选节 file-lock 暂缓裁决与 ADR 0017，非本用例覆盖面。
     const reg = new Registry(tmpHome());
     await reg.upsertMember({
       member: "coder", durableId: "dur-1", parent: null, tier: 1,
