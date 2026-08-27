@@ -1,14 +1,17 @@
 /**
  * team_reconcile 对账原语单测（ADR 0015 决策 1，#66）。
  * 覆盖：overview 全量视图（成员对照 / 悬空指派 / 状态分布 / 事件游标 /
- * goal 占位）、scope=audit 旁路 report-only（未登记文件 / 过期登记 /
- * 敏感名掩码 / 无工作区不可用）、参数校验。
+ * goal 占位）、stale 心跳标注矩阵（master_idle / stale_members /
+ * awaiting_input，#97 ADR 0016）、scope=audit 旁路 report-only（未登记
+ * 文件 / 过期登记 / 敏感名掩码 / 无工作区不可用）、参数校验。
  */
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHandlers, rootCaller, type Handlers } from "../../src/plugin/handlers.js";
+import { Registry, STALE_THRESHOLD_MS } from "../../src/index.js";
+import type { MemberRecord } from "../../src/runtime/kernel/types.js";
 
 let home: string;
 let handlers: Handlers;
@@ -42,6 +45,9 @@ describe("team_reconcile overview", () => {
       members: Array<{ member: string; liveness: string; assigned_task_ids: string[] }>;
       dangling_assignees: string[];
       orphan_members: Array<{ member: string; tier: number; parent: string | null; reason: string }>;
+      master_idle: boolean;
+      stale_members: Array<{ member: string; last_seen_age_ms: number }>;
+      awaiting_input: Array<{ member: string; last_seen_age_ms: number }>;
       task_status_counts: Record<string, number>;
       event_cursors: Array<{ room: string; seq: number }>;
       goal_binding: string;
@@ -69,6 +75,10 @@ describe("team_reconcile overview", () => {
     expect(view.orphan_members).toEqual([
       { member: "coder", tier: 1, parent: null, reason: "parent-missing" },
     ]);
+    // stale 心跳标注默认态（#97）：全员新鲜时零标注（golden 契约同步锚点）。
+    expect(view.master_idle).toBe(false);
+    expect(view.stale_members).toEqual([]);
+    expect(view.awaiting_input).toEqual([]);
     expect(view.task_status_counts).toEqual({ queued: 1 });
     expect(view.event_cursors[0]?.room).toBe("root");
     expect(view.event_cursors[0]!.seq).toBeGreaterThan(0);
@@ -108,6 +118,112 @@ describe("team_reconcile overview", () => {
     expect(view.orphan_members).toEqual([
       { member: "painter", tier: 1, parent: "ghost-parent", reason: "parent-dangling" },
     ]);
+  });
+});
+
+describe("team_reconcile stale 心跳标注（#97 ADR 0016）", () => {
+  const NOW = 1_700_000_000_000;
+  const STALE_TS = NOW - STALE_THRESHOLD_MS - 60_000; // 超阈一分钟
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** 直接改写 agents.json 中某成员记录（绕过工具面构造任意 lastSeen/status）。 */
+  async function seedMember(name: string, patch: Partial<MemberRecord>): Promise<void> {
+    const reg = new Registry(home);
+    const data = await reg.read();
+    if (data.members[name] === undefined) throw new Error(`member ${name} not seeded`);
+    Object.assign(data.members[name]!, patch);
+    await reg.write(data);
+  }
+
+  async function reconcile(): Promise<{
+    master_idle: boolean;
+    stale_members: Array<{ member: string; last_seen_age_ms: number }>;
+    awaiting_input: Array<{ member: string; last_seen_age_ms: number }>;
+  }> {
+    return (await handlers.reconcile({})) as never;
+  }
+
+  it("全员新鲜 → master_idle=false 且两档名册皆空", async () => {
+    await handlers.init({});
+    await handlers.spawn({ member: "coder", durable_id: "dur-coder", role: "coder", tier: 1 });
+    await seedMember("coder", { status: "running" });
+    const view = await reconcile();
+    expect(view.master_idle).toBe(false);
+    expect(view.stale_members).toEqual([]);
+    expect(view.awaiting_input).toEqual([]);
+  });
+
+  it("running 成员超阈入 stale_members 并携带静默时长；主控不入名册", async () => {
+    await handlers.init({});
+    await handlers.spawn({ member: "coder", durable_id: "dur-coder", role: "coder", tier: 1 });
+    await seedMember("coder", { status: "running", lastSeen: STALE_TS });
+    const view = await reconcile();
+    expect(view.stale_members).toEqual([{ member: "coder", last_seen_age_ms: NOW - STALE_TS }]);
+    expect(view.stale_members.map((m) => m.member)).not.toContain("master");
+    expect(view.master_idle).toBe(false);
+  });
+
+  it("tier0 主控超阈仅亮 master_idle（消除自刷矛盾与续命放大通道）", async () => {
+    await handlers.init({});
+    await handlers.spawn({ member: "coder", durable_id: "dur-coder", role: "coder", tier: 1 });
+    await seedMember("master", { lastSeen: STALE_TS });
+    const view = await reconcile();
+    expect(view.master_idle).toBe(true);
+    expect(view.stale_members).toEqual([]);
+  });
+
+  it("dead / spawned / stopped 一律不收录（lost 与非干活中豁免）", async () => {
+    await handlers.init({});
+    for (const m of ["dead-one", "spawned-one", "stopped-one"]) {
+      await handlers.spawn({ member: m, durable_id: `dur-${m}`, role: m, tier: 1 });
+    }
+    await seedMember("dead-one", { status: "dead", lastSeen: STALE_TS });
+    await seedMember("spawned-one", { status: "spawned", lastSeen: STALE_TS });
+    await seedMember("stopped-one", { status: "stopped", lastSeen: STALE_TS });
+    const view = await reconcile();
+    expect(view.stale_members).toEqual([]);
+    expect(view.awaiting_input).toEqual([]);
+  });
+
+  it("超阈且黑板任一分片 blocked 归 awaiting_input 免责档，不再双列", async () => {
+    await handlers.init({});
+    await handlers.spawn({ member: "waiter", durable_id: "dur-waiter", role: "waiter", tier: 1 });
+    // 先置 blocked 分片再回拨时钟：state_set 会刷 waiter lastSeen 到当前。
+    await handlers.stateSet({ room: "root", role: "waiter", status: "blocked" });
+    await seedMember("waiter", { status: "running", lastSeen: STALE_TS });
+    const view = await reconcile();
+    expect(view.awaiting_input).toEqual([{ member: "waiter", last_seen_age_ms: NOW - STALE_TS }]);
+    expect(view.stale_members).toEqual([]);
+  });
+
+  it("恰达阈值不标（严格大于，宁少标勿错标）；未来时间戳（挂钟回拨）同样不标", async () => {
+    await handlers.init({});
+    await handlers.spawn({ member: "edge", durable_id: "dur-edge", role: "edge", tier: 1 });
+    await handlers.spawn({ member: "future", durable_id: "dur-future", role: "future", tier: 1 });
+    await seedMember("edge", { status: "running", lastSeen: NOW - STALE_THRESHOLD_MS }); // age 恰等于阈值
+    await seedMember("future", { status: "running", lastSeen: NOW + 600_000 });
+    const view = await reconcile();
+    expect(view.stale_members).toEqual([]);
+  });
+
+  it("多名册按 member 字典序稳定输出（不随注册顺序漂移）", async () => {
+    await handlers.init({});
+    // 故意以逆字典序登记。
+    for (const m of ["zeta", "mid", "alpha"]) {
+      await handlers.spawn({ member: m, durable_id: `dur-${m}`, role: m, tier: 1 });
+      await seedMember(m, { status: "running", lastSeen: STALE_TS });
+    }
+    const view = await reconcile();
+    expect(view.stale_members.map((m) => m.member)).toEqual(["alpha", "mid", "zeta"]);
+    // age 一致（同 lastSeen），形态完整。
+    expect(view.stale_members.every((m) => m.last_seen_age_ms === NOW - STALE_TS)).toBe(true);
   });
 });
 
