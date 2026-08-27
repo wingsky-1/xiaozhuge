@@ -193,7 +193,7 @@ export interface Handlers {
   stateSet: (args: Record<string, unknown>) => Promise<unknown>;
   /** team_handoff：显式交接（dod 回执核验）。 */
   handoff: (args: Record<string, unknown>) => Promise<unknown>;
-  /** team_reconcile（ADR 0015）：对账全量视图 / scope=audit 旁路 report-only。 */
+  /** team_reconcile（ADR 0015）：对账全量视图 / scope=audit 旁路 report-only；overview 含互斥冲突标注（#137）。 */
   reconcile: (args: Record<string, unknown>) => Promise<unknown>;
 }
 
@@ -912,6 +912,10 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
           members: memberLedger,
           dangling_assignees,
           orphan_members,
+          // 互斥冲突标注（#137，report-only）：findConflicts 对当前账本全量
+          // running 任务对按 room + mutexGroups/touched 判定；空数组合法态
+          // 恒输出——固定输出 schema 供契约测试断言（ADR 0015 先例）。
+          active_mutex_conflicts: findConflicts(tasks),
           master_idle,
           stale_members,
           awaiting_input,
