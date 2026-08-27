@@ -217,7 +217,8 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
     const who = caller?.kind === "member" ? `member ${caller.member}` : "unauthenticated session";
     throw new ToolError("forbidden", `${who} is not allowed to ${tool}`);
   }
-  /** root 或任务当前持有者（assignee 归属校验，需读账本）。 */
+  /** root 或任务当前持有者（assignee 归属校验，需读账本）。返回任务记录，
+   *  调用方应把 rev 透传为 update 的 expectRev——读-判-写原子化，防 TOCTOU。 */
   async function requireHolder(tool: string, taskId: string): Promise<TaskRecord> {
     const task = await led().get(taskId);
     if (task === undefined) {
@@ -599,7 +600,9 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
     async taskUpdate(args) {
       try {
         const taskId = reqStr(args, "task_id");
-        await requireHolder("team_task_update", taskId);
+        // Wave 1b（#123）：仅持有者（或主控）可更新；authz 读回 rev 作为
+        // 乐观锁基线透传 expectRev——读-判-写原子化，防 root 改派竞态（TOCTOU）。
+        const held = await requireHolder("team_task_update", taskId);
         // Wave 1b（#123）：assignee 变更仅主控（或 handoff 路径）可操作——
         // 子代理 patch assignee 可绕过 handoff 的 dod 回执校验，必须禁止。
         if (caller?.kind === "member" && args.assignee !== undefined) {
@@ -607,7 +610,8 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
         }
         const status = optStr(args, "status");
         const rounds = optNum(args, "rounds");
-        const expectRev = optNum(args, "expect_rev");
+        // 调用方显式 expectRev 优先（显式乐观锁语义）；缺省用 authz 基线。
+        const expectRev = optNum(args, "expect_rev") ?? held.rev;
         const updated = await led().update(
           taskId,
           {
@@ -620,7 +624,7 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
               ? { artifact: optStr(args, "artifact") as string }
               : {}),
           },
-          { ...(expectRev !== undefined ? { expectRev } : {}) },
+          { expectRev },
         );
         await appendEvent(updated.assignee ?? "system", "task/update", {
           task_id: taskId,
@@ -664,6 +668,9 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
       try {
         const room = reqStr(args, "room");
         const role = reqStr(args, "role");
+        // Wave 1b（#123）：限自身 = 分片 key（role）必须等于调用者成员名。
+        // room 是组织单元不参与归属判定——成员可写自身分片到任意 room
+        // （含 root），属设计口径：room 仅作命名空间，非权限边界。
         requireSelf("team_state_set", role);
         const status = reqStr(args, "status");
         const ext = args.ext;
@@ -682,10 +689,9 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
       try {
         const taskId = reqStr(args, "task_id");
         const toRole = reqStr(args, "to_role");
-        // Wave 1b（#123）：仅当前持有者可交接；主控可代管。
-        await requireHolder("team_handoff", taskId);
-        const task = await led().get(taskId);
-        if (task === undefined) throw new ToolError("task-not-found", `task ${taskId} does not exist`);
+        // Wave 1b（#123）：仅当前持有者可交接；主控可代管。requireHolder
+        // 返回任务记录（含 rev），复用避免二次读账本。
+        const task = await requireHolder("team_handoff", taskId);
         // Wave 1b（#123）：to_role 必须是已登记成员——防 dangling assignee 出厂。
         if ((await reg().getMember(toRole)) === undefined) {
           throw new ToolError("unknown-member", `handoff target ${toRole} is not registered`);
@@ -717,10 +723,11 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
         }
         // handoff 只换持有者；任务在 blocked 时随交接恢复 running，其余态不变
         // （running→running 是非法迁移，交给状态机校验兜底）。
+        // 透传 authz 读回的 rev 作乐观锁基线（TOCTOU 防护，同 taskUpdate）。
         const updated = await led().update(taskId, {
           assignee: toRole,
           ...(task.status === "blocked" ? { status: "running" as TaskStatus } : {}),
-        });
+        }, { expectRev: task.rev });
         await appendEvent(toRole, "handoff", { task_id: taskId, to_role: toRole, receipt: receipt ?? null });
         return { ok: true, task_id: taskId, assignee: updated.assignee, rev: updated.rev };
       } catch (error) {

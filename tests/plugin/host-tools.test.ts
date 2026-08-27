@@ -251,6 +251,58 @@ describe("Wave 1b 写面收敛矩阵（#123）", () => {
     ).rejects.toMatchObject({ code: "forbidden" });
   });
 
+  it("host.execute 端到端：子代理写操作 forbidden、未登记会话写操作 forbidden、子代理合法流可达", async () => {
+    const { registered } = makeHost();
+    await createHandlers(resolveTeamHome(SESSION_MASTER), SESSION_MASTER, rootCaller()).init({});
+    // 主控建任务 + dispatch 登记 dur-q1。
+    const created = (await registered.get("team_task_create")!.execute(
+      { title: "t", room: "root" },
+      { agent: { id: SESSION_MASTER } },
+    )) as { ok: boolean; task_id: string };
+    await registered.get("team_dispatch")!.execute(
+      { member: MEMBER, durable_id: DUR_X, role: MEMBER, tier: 1, task_id: created.task_id },
+      { agent: { id: SESSION_MASTER } },
+    );
+    // 子代理经 execute：spawn / taskCreate / send-from-他人 → forbidden。
+    await expect(
+      registered.get("team_spawn")!.execute(
+        { member: "coder", durable_id: "d2", role: "coder", tier: 1 },
+        { agent: { id: DUR_X } },
+      ),
+    ).rejects.toMatchObject({ code: "forbidden" });
+    await expect(
+      registered.get("team_task_create")!.execute(
+        { title: "x", room: "root" },
+        { agent: { id: DUR_X } },
+      ),
+    ).rejects.toMatchObject({ code: "forbidden" });
+    await expect(
+      registered.get("team_send")!.execute(
+        { to: "master", from: "master", type: "info", body: { n: 1 } },
+        { agent: { id: DUR_X } },
+      ),
+    ).rejects.toMatchObject({ code: "forbidden" });
+    // 子代理经 execute 合法流：inbox 自己 + taskUpdate 自己任务可达。
+    const inbox = (await registered.get("team_inbox")!.execute(
+      { member: MEMBER },
+      { agent: { id: DUR_X } },
+    )) as { ok: boolean; unread: Array<{ id: string }> };
+    expect(inbox.ok).toBe(true);
+    await expect(
+      registered.get("team_task_update")!.execute(
+        { task_id: created.task_id, status: "running", rounds: 1 },
+        { agent: { id: DUR_X } },
+      ),
+    ).resolves.toMatchObject({ ok: true });
+    // 未登记会话经 execute：写操作 forbidden。
+    await expect(
+      registered.get("team_task_create")!.execute(
+        { title: "x", room: "root" },
+        { agent: { id: "dur-ghost" } },
+      ),
+    ).rejects.toMatchObject({ code: "forbidden" });
+  });
+
   it("子代理合法流：inbox 自己 / ack 自己 / taskUpdate 自己任务 / stateSet 自己分片 / send from 自己 / handoff 自己任务", async () => {
     const { sub, taskId } = await makeTeam();
     // inbox 自己的未读信封并认领。
