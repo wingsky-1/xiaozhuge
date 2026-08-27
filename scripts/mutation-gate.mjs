@@ -140,12 +140,23 @@ function loadBaselineSource(seg, root) {
  * 纯聚合：各段明细 + 全局合成结果（CLI 与等价性单测共用）。
  * @param ran Set<string>|null 实跑段集合；null 视为全部实跑（full 形态）。
  */
+/** 解析聚合用 ran 集合（null → 全段）；未知段名 fail-closed 立即拒绝（#126 P1-3）——
+ * 静默忽略会让「段名拼错却以为在跑段」的调用假绿（未知段既无报告也无基线）。 */
+function resolveRanSet(ran, segments) {
+  const ranSet = ran ?? new Set(segments);
+  const unknownSegments = [...ranSet].filter((seg) => !segments.includes(seg));
+  if (unknownSegments.length > 0) {
+    bail(`ran 含未知段名：${unknownSegments.join(",")}（已知段：${segments.join("、") || "无"}）`);
+  }
+  return ranSet;
+}
+
 export function aggregate(ran = null, dirs = {}) {
   const segments = discoverSegments(dirs.confDir);
   if (segments.length === 0) {
     bail(`${dirs.confDir ?? CONF_DIR} 下没有任何段配置`);
   }
-  const ranSet = ran ?? new Set(segments);
+  const ranSet = resolveRanSet(ran, segments);
 
   let detected = 0;
   let covered = 0;
