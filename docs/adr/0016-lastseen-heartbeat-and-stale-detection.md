@@ -54,7 +54,9 @@ task_create / task_list / state_get / reconcile 不刷（无明确成员 actor �
 - 成员不存在静默跳过：非登记成员无账可刷，可达性校验由 handler 负责；
 - heartbeat 插入点统一在该工具全部业务写成功之后（观测信号排最末），且
   **best-effort 吞错**：lastSeen 是可再生观测信号，刷新失败不得放大为调用
-  失败（宁漏刷不错杀主事务；下轮成功调用自愈）。
+  失败（宁漏刷不错杀主事务；下轮成功调用自愈）；
+- heartbeat() 对 `"system"` 字面量显式早退是决策 1「`system` 与无归属不刷」
+  裁决的实现层固化（防御性分支，正常调用不会传入），不得当作死码删除。
 
 ### 4. STALE_THRESHOLD_MS = 30min（types.ts 协议常量区）
 
@@ -75,8 +77,9 @@ reconcile 自身不 touch 任何成员）：
 - `stale_members: Array<{member, last_seen_age_ms}>`——status=running 且
   超阈且未被黑板豁免的非主控成员（dead 一律不收录：lost 着色已表达防双计；
   spawned/stopped 非干活中不参与标注）；按 member 字典序稳定排序；
-- `awaiting_input: Array<{member, last_seen_age_ms}>`——超阈但该房间黑板
-  任一分片 blocked 的成员（等待输入 ≠ 停摆的免责档，避免误标触发误干预）；
+- `awaiting_input: Array<{member, last_seen_age_ms}>`——超阈但其自属分片
+  （blackboard 归属角色＝该成员）在任一房间 blocked 的成员（等待输入 ≠
+  停摆的免责档，避免误标触发误干预）；
 - 判定为**严格大于**阈值（恰达阈值仍算新鲜，宁少标勿错标）；时钟回拨致负
   age 天然不超阈，无需特判。
 
