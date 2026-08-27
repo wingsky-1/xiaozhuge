@@ -22,6 +22,7 @@ import { schemas } from "./schemas.js";
 import { makeGateRoutes, makeConsoleRoute } from "./gate-console.js";
 import { makeLaunchRoutes } from "./team-launch.js";
 import { makeOverviewRoute } from "./team-overview.js";
+import { makeDetailRoute } from "./team-detail.js";
 
 /** 稳定的 cordis 插件名。 */
 export const name = "xiaozhuge-team";
@@ -248,6 +249,7 @@ export function apply(ctx: {
       makeConsoleRoute(),
       ...makeLaunchRoutes(),
       makeOverviewRoute(teamHomeFor),
+      makeDetailRoute(teamHomeFor),
     ]) {
       disposers.push(ws.register(route));
     }
