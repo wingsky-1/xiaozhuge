@@ -6,13 +6,13 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createHandlers, type Handlers } from "../../src/plugin/handlers.js";
+import { createHandlers, rootCaller, type Handlers } from "../../src/plugin/handlers.js";
 
 let home: string;
 let h: Handlers;
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), "xzg-hm-"));
-  h = createHandlers(home, "session-hm");
+  h = createHandlers(home, "session-hm", rootCaller());
 });
 
 /** 对每个 handler 枚举必填键：缺任一键即 invalid-arguments + 精确消息。 */

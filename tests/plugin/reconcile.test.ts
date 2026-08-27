@@ -8,7 +8,7 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createHandlers, type Handlers } from "../../src/plugin/handlers.js";
+import { createHandlers, rootCaller, type Handlers } from "../../src/plugin/handlers.js";
 
 let home: string;
 let handlers: Handlers;
@@ -18,7 +18,7 @@ const SESSION = "session-reconcile-1";
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), "xzg-rec-home-"));
   workspace = mkdtempSync(join(tmpdir(), "xzg-rec-ws-"));
-  handlers = createHandlers(home, SESSION);
+  handlers = createHandlers(home, SESSION, rootCaller());
 });
 
 describe("team_reconcile overview", () => {

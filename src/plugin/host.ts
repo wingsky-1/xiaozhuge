@@ -17,7 +17,7 @@ import type { WebRoute } from "@deepseek-ai/dsh-host-webserver";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { resolveTeamHome, resolveTeamHomeForView } from "./team-home.js";
-import { createHandlers, ToolError, type Handlers } from "./handlers.js";
+import { createHandlers, ToolError, type Caller, type Handlers } from "./handlers.js";
 import { schemas } from "./schemas.js";
 import { makeGateRoutes, makeConsoleRoute } from "./gate-console.js";
 import { makeLaunchRoutes } from "./team-launch.js";
@@ -70,7 +70,16 @@ export function apply(ctx: {
       // 主会话直查；子代理（成员 durable id）反查所属主控的 TEAM_HOME，
       // 使工具面与视图面共享同一实例状态。
       const resolution = resolveTeamHomeForView(sessionId);
-      h = createHandlers(resolution.teamHome, sessionId);
+      // Wave 1b（#123）写面收敛：由反查结果解析调用者身份注入 handler——
+      // membership 非空 = 子代理（成员名随反查获得）；主会话自身根有
+      // team.yaml = 主控；其余（未登记/未初始化）= 无身份（写操作被拒）。
+      const caller: Caller =
+        resolution.membership !== null
+          ? { kind: "member", member: resolution.membership.member }
+          : existsSync(join(resolveTeamHome(sessionId), "team.yaml"))
+            ? { kind: "root" }
+            : undefined;
+      h = createHandlers(resolution.teamHome, sessionId, caller);
       // 缓存不变量（复核必改 5）：键 = 调用会话 id，值 = 反查所得实例根上的
       // handler 集；一次会话生命周期内 durableId→实例映射不变。DSH_HOME 运行期
       // 变更 / 实例迁移不在支持范围——需重启插件进程重建。
