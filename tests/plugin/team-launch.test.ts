@@ -176,6 +176,22 @@ describe("team/create 一键建团", () => {
     expect(other.json.home).not.toBe(first.json.home);
   });
 
+  it("已登记成员自建 root 被拒（Wave 1b 提权防护，HTTP 409 member-conflict）", async () => {
+    // 预置一个已登记成员实例：<sessions>/<root>/team.yaml + agents.json 登记 dur-m1。
+    const root = join(home, "dsh-home", "xiaozhuge", "sessions", "s-root");
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(root, "team.yaml"), JSON.stringify({ name: "demo", playbook_digest: "x" }));
+    writeFileSync(
+      join(root, "agents.json"),
+      JSON.stringify({ members: { coder: { member: "coder", durableId: "dur-m1" } } }),
+    );
+    const base = await listen();
+    // dur-m1 已是 s-root 的成员 → 不允许再以主控建团。
+    const { status, json } = await post(base, { session: "dur-m1" });
+    expect(status).toBe(409);
+    expect((json.error as { code: string }).code).toBe("member-conflict");
+  });
+
   it("user 层模板经 source=user 实例化，返回携带 source 标记", async () => {
     makeScenario(userTplRoot(), "my-scenario");
     const base = await listen();

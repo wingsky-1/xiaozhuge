@@ -7,7 +7,7 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createHandlers, type Handlers } from "../../src/plugin/handlers.js";
+import { createHandlers, rootCaller, type Handlers } from "../../src/plugin/handlers.js";
 import { EventLog } from "../../src/runtime/kernel/event-log.js";
 import { layout } from "../../src/runtime/kernel/paths.js";
 import { readUnread } from "../../src/runtime/collab/mailbox.js";
@@ -18,7 +18,7 @@ const SESSION = "session-golden-1";
 
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), "xzg-golden-"));
-  handlers = createHandlers(home, SESSION);
+  handlers = createHandlers(home, SESSION, rootCaller());
 });
 
 async function readEvents(room = "root"): Promise<Array<{ type: string; actor: string; seq: number }>> {

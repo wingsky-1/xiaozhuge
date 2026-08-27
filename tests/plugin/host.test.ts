@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { apply, name, inject } from "../../src/plugin/host.js";
 import { schemas } from "../../src/plugin/schemas.js";
 import { resolveTeamHome } from "../../src/plugin/team-home.js";
-import { createHandlers } from "../../src/plugin/handlers.js";
+import { createHandlers, rootCaller } from "../../src/plugin/handlers.js";
 
 interface RegisteredTool {
   name: string;
@@ -127,6 +127,9 @@ describe("execute 路由与输出包装", () => {
   it("team_spawn 经 execute 走到 handler 并包装 ok 输出", async () => {
     const { registered } = makeHost();
     const spawn = registered.get("team_spawn")!;
+    // Wave 1b（#123）：主控身份需团队态在场（team.yaml）——先经 HTTP 面
+    // init 建实例，再以主会话 execute spawn。
+    await createHandlers(resolveTeamHome("session-h1"), "session-h1", rootCaller()).init({});
     const result = (await spawn.execute(
       { member: "qa", durable_id: "d-q", role: "qa", tier: 1 },
       { agent: { id: "session-h1" } },
@@ -159,7 +162,7 @@ describe("execute 路由与输出包装", () => {
     const { registered } = makeHost();
     const exec = { agent: { id: "session-route" } };
     // 实例化经 HTTP 面（#51）；此处直接驱动 handler 建团队态。
-    await createHandlers(resolveTeamHome("session-route"), "session-route").init({});
+    await createHandlers(resolveTeamHome("session-route"), "session-route", rootCaller()).init({});
     await registered.get("team_spawn")!.execute(
       { member: "qa", durable_id: "d-q", role: "qa", tier: 1 },
       exec,

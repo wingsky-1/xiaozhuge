@@ -148,6 +148,26 @@ function optRoleInline(args: Record<string, unknown>): Record<string, unknown> |
   return inline;
 }
 
+/**
+ * 调用者身份（Wave 1b 写面收敛，#123）：root = 主控；member = 已登记成员；
+ * undefined = 无团队身份（未登记/未初始化，写操作一律拒绝）。
+ * host.ts 装配层经 resolveTeamHomeForView 反查解析后注入。
+ */
+export type Caller =
+  | { kind: "root" }
+  | { kind: "member"; member: string }
+  | undefined;
+
+/** 主控身份（测试/HTTP 路径显式构造用）。 */
+export function rootCaller(): Exclude<Caller, undefined> {
+  return { kind: "root" };
+}
+
+/** 已登记成员身份（测试构造用）。 */
+export function memberCaller(member: string): Exclude<Caller, undefined> {
+  return { kind: "member", member };
+}
+
 /** 一个团队实例的 handler 集（绑定到某主会话的 TEAM_HOME）。 */
 export interface Handlers {
   /** team_init：建目录结构 + agents.json 骨架 + room.lock 幂等占位。 */
@@ -175,12 +195,39 @@ export interface Handlers {
   reconcile: (args: Record<string, unknown>) => Promise<unknown>;
 }
 
-export function createHandlers(teamHome: string, sessionId: string): Handlers {
+export function createHandlers(teamHome: string, sessionId: string, caller: Caller = undefined): Handlers {
   const l = layout(teamHome);
   let ledger: Ledger | undefined;
   let registry: Registry | undefined;
   // 按 room 缓存 EventLog：不同房间各自独立文件，互不串写。
   const eventLogs = new Map<string, EventLog>();
+
+  // Wave 1b 写面收敛（#123）：副作用前强制权限校验。错误码 forbidden 与
+  // 既有稳定错误码体系一致；消息仅含调用者自身身份，无信息泄漏。
+  function requireRoot(tool: string): void {
+    if (caller?.kind !== "root") {
+      const who = caller?.kind === "member" ? `member ${caller.member}` : "unauthenticated session";
+      throw new ToolError("forbidden", `${who} is not allowed to ${tool}`);
+    }
+  }
+  /** root 或指定成员本人（参数携带的目标身份与调用者一致）。 */
+  function requireSelf(tool: string, target: string): void {
+    if (caller?.kind === "root") return;
+    if (caller?.kind === "member" && caller.member === target) return;
+    const who = caller?.kind === "member" ? `member ${caller.member}` : "unauthenticated session";
+    throw new ToolError("forbidden", `${who} is not allowed to ${tool}`);
+  }
+  /** root 或任务当前持有者（assignee 归属校验，需读账本）。 */
+  async function requireHolder(tool: string, taskId: string): Promise<TaskRecord> {
+    const task = await led().get(taskId);
+    if (task === undefined) {
+      throw new ToolError("task-not-found", `task ${taskId} does not exist`);
+    }
+    if (caller?.kind === "root") return task;
+    if (caller?.kind === "member" && caller.member === task.assignee) return task;
+    const who = caller?.kind === "member" ? `member ${caller.member}` : "unauthenticated session";
+    throw new ToolError("forbidden", `${who} is not allowed to ${tool}`);
+  }
 
   // 惰性单例：同一实例根内复用事件游标等内存状态。
   function led(): Ledger {
@@ -326,6 +373,7 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
 
     async spawn(args) {
       try {
+        requireRoot("team_spawn");
         const member = reqStr(args, "member");
         const durableId = reqStr(args, "durable_id");
         const role = reqStr(args, "role");
@@ -357,6 +405,7 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
 
     async dispatch(args) {
       try {
+        requireRoot("team_dispatch");
         const member = reqStr(args, "member");
         const durableId = reqStr(args, "durable_id");
         const role = reqStr(args, "role");
@@ -462,6 +511,7 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
       try {
         const to = reqStr(args, "to");
         const from = reqStr(args, "from");
+        requireSelf("team_send", from);
         const type = reqStr(args, "type");
         const body = args.body ?? null;
         if ((await reg().getMember(to)) === undefined) {
@@ -490,6 +540,7 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
     async inbox(args) {
       try {
         const member = reqStr(args, "member");
+        requireSelf("team_inbox", member);
         const uuid = optStr(args, "envelope_id");
         if (uuid !== undefined) {
           const claimed = await claim(teamHome, member, uuid);
@@ -504,6 +555,7 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
     async ack(args) {
       try {
         const member = reqStr(args, "member");
+        requireSelf("team_ack", member);
         const uuid = reqStr(args, "envelope_id");
         await acknowledge(teamHome, member, uuid);
         await appendEvent(member, "mailbox/ack", { envelope_id: uuid });
@@ -515,6 +567,7 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
 
     async taskCreate(args) {
       try {
+        requireRoot("team_task_create");
         const title = reqStr(args, "title");
         const room = reqStr(args, "room");
         const assignee = optStr(args, "assignee");
@@ -546,6 +599,12 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
     async taskUpdate(args) {
       try {
         const taskId = reqStr(args, "task_id");
+        await requireHolder("team_task_update", taskId);
+        // Wave 1b（#123）：assignee 变更仅主控（或 handoff 路径）可操作——
+        // 子代理 patch assignee 可绕过 handoff 的 dod 回执校验，必须禁止。
+        if (caller?.kind === "member" && args.assignee !== undefined) {
+          throw new ToolError("forbidden", `member ${caller.member} is not allowed to reassign task`);
+        }
         const status = optStr(args, "status");
         const rounds = optNum(args, "rounds");
         const expectRev = optNum(args, "expect_rev");
@@ -605,6 +664,7 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
       try {
         const room = reqStr(args, "room");
         const role = reqStr(args, "role");
+        requireSelf("team_state_set", role);
         const status = reqStr(args, "status");
         const ext = args.ext;
         const shard = await setShard(teamHome, room, role, {
@@ -622,9 +682,15 @@ export function createHandlers(teamHome: string, sessionId: string): Handlers {
       try {
         const taskId = reqStr(args, "task_id");
         const toRole = reqStr(args, "to_role");
-        const receipt = optStrArray(args, "receipt");
+        // Wave 1b（#123）：仅当前持有者可交接；主控可代管。
+        await requireHolder("team_handoff", taskId);
         const task = await led().get(taskId);
         if (task === undefined) throw new ToolError("task-not-found", `task ${taskId} does not exist`);
+        // Wave 1b（#123）：to_role 必须是已登记成员——防 dangling assignee 出厂。
+        if ((await reg().getMember(toRole)) === undefined) {
+          throw new ToolError("unknown-member", `handoff target ${toRole} is not registered`);
+        }
+        const receipt = optStrArray(args, "receipt");
         if (receipt === undefined && task.dod.length > 0) {
           throw new ToolError(
             "receipt-required",

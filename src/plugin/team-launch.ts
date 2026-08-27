@@ -19,7 +19,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 import type { WebRoute } from "@deepseek-ai/dsh-host-webserver";
 import { resolveTeamHome, resolveTeamHomeForView, userTemplatesRoot, projectTemplatesRoot } from "./team-home.js";
-import { createHandlers, PACKAGE_ROOT } from "./handlers.js";
+import { createHandlers, PACKAGE_ROOT, rootCaller } from "./handlers.js";
 import { layout, listScenarios } from "../runtime/index.js";
 import { fetchSiteAllowed, originAllowed } from "./gate-console.js";
 import { isValidSessionId } from "./session-id.js";
@@ -145,8 +145,20 @@ export function makeLaunchRoutes(): WebRoute[] {
             writeJson(res, 400, { error: "session required" });
             return;
           }
+          // Wave 1b（#123）：拒绝已登记成员自建 root 提权——该会话已是某
+          // 实例的成员（agents.json 反查命中）时，不允许再当主控建团。
+          const existing = resolveTeamHomeForView(body.session);
+          if (existing.membership !== null) {
+            writeJson(res, 409, {
+              error: {
+                code: "member-conflict",
+                message: `session is already a member (${existing.membership.member}) of ${existing.membership.root_session}; cannot create a new team`,
+              },
+            });
+            return;
+          }
           // handler 层负责 scenario 校验（unknown-scenario / ambiguous-scenario 稳定错误码）。
-          const handlers = createHandlers(resolveTeamHome(body.session), body.session);
+          const handlers = createHandlers(resolveTeamHome(body.session), body.session, rootCaller());
           const value = (await handlers.init({
             scenario: body.scenario,
             source: body.source,

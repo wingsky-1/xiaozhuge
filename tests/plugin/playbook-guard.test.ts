@@ -24,7 +24,7 @@ import {
   TIER0_PLAYBOOK_FILE,
   TIER0_PLAYBOOK_SEPARATOR,
 } from "../../src/index.js";
-import { createHandlers, type Handlers } from "../../src/plugin/handlers.js";
+import { createHandlers, rootCaller, type Handlers } from "../../src/plugin/handlers.js";
 import { appendToolManifest, TOOL_MANIFEST_SEPARATOR } from "../../src/plugin/tool-manifest.js";
 
 const REPO_ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..");
@@ -73,7 +73,7 @@ describe("正向组装：tier0_prompt = 规程全文 + 分隔符 + 场景段", (
   let handlers: Handlers;
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), "xzg-pb-"));
-    handlers = createHandlers(home, "session-playbook-1");
+    handlers = createHandlers(home, "session-playbook-1", rootCaller());
   });
 
   it("init 组装结果逐字节等于公式（ADR 0015：尾部追加工具面自述保留段），快照记录 playbook_digest", async () => {
