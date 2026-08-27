@@ -53,6 +53,93 @@ interface TeamOverview {
   rooms: RoomView[];
 }
 
+/* ---------------- 团队详情投影镜像（issue #130；与 /api/xiaozhuge/team/detail 响应形状一致） ---------------- */
+
+/** 客户端本地 TaskStatus 五值镜像（client 为浏览器 bundle 不 import runtime；
+ * 与 runtime types.ts TASK_STATUSES 五值冻结同步——新增状态值须同步此处）。 */
+type TaskStatus = "queued" | "running" | "blocked" | "done" | "cancelled";
+
+/** 任务状态计数 chips 文案（cancelled 终态非告警：中性灰 opacity，不复用 lost 红）。 */
+const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  queued: "排队",
+  running: "进行中",
+  blocked: "阻塞",
+  done: "已完成",
+  cancelled: "已取消",
+};
+
+/** 信箱信封三段状态文案（服务端只产出三态；未知键兜底显示原文，防脏值渲染成 undefined）。 */
+const ENVELOPE_STATE_LABELS: Record<string, string> = {
+  unread: "待读",
+  claimed: "认领中",
+  acked: "已确认",
+};
+
+/** 与服务端 detail 归约一致的客户端镜像（纯文本渲染，payload 不出投影面）。 */
+interface TeamDetailView {
+  isTeam: boolean;
+  tasks: TaskLedgerView[];
+  corruptTaskFiles: string[];
+  taskCounts: Record<TaskStatus, number>;
+  envelopes: MailboxHeadView[];
+  shardBadges: ShardBadgeView[];
+  masterIdle: boolean;
+  staleMembers: StaleAnnotation[];
+  awaitingInput: StaleAnnotation[];
+}
+
+interface TaskLedgerView {
+  id: string;
+  title: string;
+  room: string;
+  status: string;
+  assignee: string | null;
+  rounds: number;
+  maxRounds: number | null;
+  touched: string[];
+  rev: number;
+  createdAt: number;
+  updatedAt: number;
+  artifact: string | null;
+}
+
+interface MailboxHeadView {
+  id: string;
+  to: string;
+  from: string;
+  type: string;
+  state: string;
+  createdAt: number;
+}
+
+interface ShardBadgeView {
+  room: string;
+  role: string;
+  status: string;
+  updatedAt: number;
+  currentActivity: string | null;
+}
+
+interface StaleAnnotation {
+  member: string;
+  lastSeenAgeMs: number;
+}
+
+function detailUrl(sessionId: string): string {
+  return `/api/xiaozhuge/team/detail?session=${encodeURIComponent(sessionId)}`;
+}
+
+/** 本地黑板保留态集合（client 不 import runtime；与 types.ts RESERVED_STAGES 三值冻结同步）。
+ * 分片 status 读侧容忍脏值：保留态走徽标样式，脏值走中性 opacity 文本——
+ * 直接 cast NodeTone 会令 TONE_LEGEND 越界抛错，故双分支处理。 */
+const RESERVED_STAGE_SET = new Set(["running", "blocked", "done"]);
+
+function shardStatusStyle(status: string): React.CSSProperties {
+  return RESERVED_STAGE_SET.has(status)
+    ? { ...badgeStyle(status as NodeTone), fontSize: 11 }
+    : { opacity: 0.55, fontSize: 11, fontVariantNumeric: "tabular-nums" };
+}
+
 /** 着色语义 → 图例文案与几何图标（色值经 toneColors 随主题解析）。 */
 const TONE_LEGEND: Record<NodeTone, { icon: string; label: string; light: string; dark: string }> = {
   running: { icon: "▶", label: "运行中", light: "#1a7f37", dark: "#3fb950" },
@@ -62,9 +149,10 @@ const TONE_LEGEND: Record<NodeTone, { icon: string; label: string; light: string
   lost: { icon: "×", label: "失联", light: "#cf222e", dark: "#f85149" },
 };
 
-/** 轮询间隔（ms）：画布基础低频；抽屉展开高频。失败指数退避封顶。 */
+/** 轮询间隔（ms）：画布基础低频；抽屉展开高频；detail 抽屉展开中频（指纹缓存命中 304 廉价）。失败指数退避封顶。 */
 const POLL_CANVAS_MS = 5000;
 const POLL_DRAWER_MS = 2000;
+const POLL_DETAIL_MS = 5000;
 const POLL_BACKOFF_CAP_MS = 30000;
 
 /** 宿主暗色主题标记（dsh-web 前端在 body 上维护）。 */
@@ -241,6 +329,9 @@ export function TeamView(props: { sessionId?: string }): React.ReactNode {
   const [narrow, setNarrow] = useState(isNarrowViewport());
   const [dark, setDark] = useState(isDarkTheme());
   const backoffRef = useRef(POLL_CANVAS_MS);
+  const [detail, setDetail] = useState<TeamDetailView | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const detailBackoffRef = useRef(POLL_DETAIL_MS);
 
   injectFlowStylesOnce();
 
@@ -277,6 +368,26 @@ export function TeamView(props: { sessionId?: string }): React.ReactNode {
     }
   }, [sessionId]);
 
+  // detail 拉取（与 load 同构）：成功复位退避并刷新快照；失败只置独立错误位、
+  // 不清最后 detail 快照；退避走 detailBackoffRef（不与 overview 共用，单点失败互不拖累）。
+  const loadDetail = useCallback(async (): Promise<void> => {
+    if (sessionId.length === 0) return;
+    try {
+      const r = await fetch(detailUrl(sessionId));
+      if (!r.ok && r.status !== 304) throw new Error(`HTTP ${r.status}`);
+      if (r.ok) {
+        const d = (await r.json()) as TeamDetailView;
+        setDetail(d);
+      }
+      setDetailError(null);
+      detailBackoffRef.current = POLL_DETAIL_MS;
+    } catch (e) {
+      // 断网降级：保留最后一次 detail 快照（不清空），仅提示重试。
+      setDetailError((e as Error).message ?? "network error");
+      detailBackoffRef.current = Math.min(detailBackoffRef.current * 2, POLL_BACKOFF_CAP_MS);
+    }
+  }, [sessionId]);
+
   // 首载 + 画布低频轮询（失败指数退避：以退避间隔自重排定时器）。
   useEffect(() => {
     if (sessionId.length === 0) return;
@@ -301,6 +412,24 @@ export function TeamView(props: { sessionId?: string }): React.ReactNode {
     const timer = window.setInterval(() => void load(), POLL_DRAWER_MS);
     return () => window.clearInterval(timer);
   }, [drawerOpen, load]);
+
+  // detail 独立轮询：仅抽屉展开时运行，以 detailBackoffRef 自重排实现独立指数退避
+  // （失败拉长重试间隔封顶 30s，成功复位 5s；不占用 overview 的 backoffRef）。
+  useEffect(() => {
+    if (!drawerOpen) return;
+    let timer = 0;
+    let disposed = false;
+    const tick = (): void => {
+      void loadDetail().then(() => {
+        if (!disposed) timer = window.setTimeout(tick, detailBackoffRef.current);
+      });
+    };
+    tick();
+    return () => {
+      disposed = true;
+      window.clearTimeout(timer);
+    };
+  }, [drawerOpen, loadDetail]);
 
   // 抽屉状态同步 URL query（issue 正文目标 ?room=&actor=）：replaceState 不新增
   // 历史项；卸载时清理，避免把团队视图的 query 泄漏进宿主会话 URL。
@@ -362,6 +491,23 @@ export function TeamView(props: { sessionId?: string }): React.ReactNode {
       .slice(-8)
       .reverse() ?? [];
 
+  // 抽屉四区块派生（渲染内 filter，数据量 <= 数十条无需 memo）。
+  const drawerMember = selected?.member ?? "";
+  const myTasks = (detail?.tasks ?? []).filter((t) => t.assignee === drawerMember);
+  // 服务端已按每成员每 state 各 5 条截断，客户端不做二次 slice。
+  const myEnvelopes = (detail?.envelopes ?? []).filter((e) => e.to === drawerMember);
+  const myShards = (detail?.shardBadges ?? []).filter((s) => s.role === drawerMember);
+  const staleMemberHit =
+    selected === null || detail === null ? undefined : detail.staleMembers.find((a) => a.member === selected.member);
+  const awaitingInputHit =
+    selected === null || detail === null ? undefined : detail.awaitingInput.find((a) => a.member === selected.member);
+  const staleNote =
+    staleMemberHit !== undefined
+      ? `心跳陈旧 ${Math.round(staleMemberHit.lastSeenAgeMs / 60000)} 分钟`
+      : awaitingInputHit !== undefined
+        ? "心跳超阈，等待输入（blocked 分片）"
+        : null;
+
   if (sessionId.length === 0) return null;
 
   return (
@@ -390,6 +536,18 @@ export function TeamView(props: { sessionId?: string }): React.ReactNode {
             </span>
           );
         })}
+        {/* 任务账本计数 chips（#130）：taskCounts 五键恒全量（空账本全 0）；cancelled 中性灰非告警 */}
+        {detail !== null ? (
+          <span style={{ display: "inline-flex", gap: 10, alignItems: "center" }}>
+            {(Object.keys(TASK_STATUS_LABELS) as TaskStatus[]).map((s) => (
+              <span key={s} style={{ opacity: s === "cancelled" ? 0.55 : 1 }}>
+                {TASK_STATUS_LABELS[s]}
+                <strong style={{ marginLeft: 3 }}>{detail.taskCounts[s]}</strong>
+              </span>
+            ))}
+            {detail.masterIdle ? <span style={{ color: "#9a6700" }}>主控心跳超阈</span> : null}
+          </span>
+        ) : null}
         {error !== null ? (
           <span style={{ marginLeft: "auto", display: "inline-flex", gap: 8, alignItems: "center" }}>
             <span style={{ color: "#cf222e" }}>刷新失败（展示最后快照）</span>
@@ -497,7 +655,7 @@ export function TeamView(props: { sessionId?: string }): React.ReactNode {
               {selected.lastSeen === null ? "—" : new Date(selected.lastSeen).toLocaleString()}
             </Row>
             <div>
-              <div style={labelStyle}>最近凭据</div>
+              <div style={labelStyle}>最近协作事件</div>
               {memberEvents.length === 0 ? (
                 <div style={{ opacity: 0.55 }}>暂无事件记录</div>
               ) : (
@@ -511,6 +669,73 @@ export function TeamView(props: { sessionId?: string }): React.ReactNode {
                 ))
               )}
             </div>
+            {/* #130 协作数据四区块：detail 快照优先展示；服务端不可达时降级提示并保留重试入口 */}
+            {detail !== null ? (
+              <>
+                <div>
+                  <div style={labelStyle}>承担任务</div>
+                  {myTasks.length === 0 ? (
+                    <div style={{ opacity: 0.55 }}>暂无任务</div>
+                  ) : (
+                    myTasks.map((t) => (
+                      <div key={t.id} style={{ display: "flex", gap: 8, padding: "3px 0", alignItems: "baseline" }}>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{t.title}</span>
+                        <span style={{ opacity: 0.55, fontVariantNumeric: "tabular-nums" }}>
+                          {t.status}
+                          {t.maxRounds !== null ? ` ${t.rounds}/${t.maxRounds}` : ""}
+                          {t.artifact !== null ? " · 产物✓" : ""}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div>
+                  <div style={labelStyle}>最近协作信件</div>
+                  {myEnvelopes.length === 0 ? (
+                    <div style={{ opacity: 0.55 }}>暂无信件</div>
+                  ) : (
+                    myEnvelopes.map((e) => (
+                      <div key={e.id} style={{ display: "flex", gap: 8, padding: "3px 0" }}>
+                        <span style={{ opacity: 0.55, fontVariantNumeric: "tabular-nums" }}>
+                          {new Date(e.createdAt).toLocaleTimeString()}
+                        </span>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                          {e.type} · 来自 {e.from}
+                        </span>
+                        <span style={{ opacity: 0.55 }}>{ENVELOPE_STATE_LABELS[e.state] ?? e.state}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div>
+                  <div style={labelStyle}>黑板状态</div>
+                  {myShards.length === 0 ? (
+                    <div style={{ opacity: 0.55 }}>无分片</div>
+                  ) : (
+                    myShards.map((s) => (
+                      <div key={`${s.room}:${s.role}`} style={{ display: "flex", gap: 8, padding: "3px 0" }}>
+                        <span style={shardStatusStyle(s.status)}>{s.status}</span>
+                        <span style={{ opacity: 0.75, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {s.room}
+                          {s.currentActivity !== null ? ` · ${s.currentActivity}` : ""}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div>
+                  <div style={labelStyle}>运行态标注</div>
+                  {staleNote === null ? <div style={{ opacity: 0.55 }}>心跳正常</div> : <div>{staleNote}</div>}
+                </div>
+              </>
+            ) : detailError !== null ? (
+              <div style={{ opacity: 0.6, display: "flex", gap: 8, alignItems: "center" }}>
+                协作数据暂不可用（展示最后快照）
+                <button type="button" onClick={() => void loadDetail()} style={retryButtonStyle}>
+                  重试
+                </button>
+              </div>
+            ) : null}
             <button
               type="button"
               disabled={selected.durableId === null}
