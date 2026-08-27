@@ -11,8 +11,12 @@
  * 着色语义（对抗性评审修订：liveness 优先于活动态——黑板可能是死者遗留的
  * 陈旧数据，注册表终局态一票否决）：
  *   lost（dead 成员） > 黑板 running/blocked/done > idle（spawned/stopped/
- *   无分片等静默态）。stopped 不并入运行类着色（明确不是排队）；lastSeen
- *   陈旧横切不做——协议无心跳间隔定义，任意阈值都会把长任务静默期误标。
+ *   无分片等静默态）。stopped 不并入运行类着色（明确不是排队）。
+ *   lastSeen 陈旧横切原以「协议无心跳间隔定义」为由在本投影不做；#97 落地
+ *   后该理由已被 STALE_THRESHOLD_MS 心跳语义取代（ADR 0016）：stale 标注由
+ *   team_reconcile 的 master_idle / stale_members / awaiting_input 承载
+ *   （report-only）。本视图仍不做时长横切——着色反映即时活动态，静默时长
+ *   语义归对账输出，二者职责正交。
  */
 import type { EventRecord, MemberRecord, TeamRegistry } from "../kernel/types.js";
 import type { Shard } from "../collab/blackboard.js";

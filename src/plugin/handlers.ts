@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
+  MemberRecord,
   TaskRecord,
   TaskStatus,
   TemplateSource,
@@ -38,6 +39,7 @@ import {
   deliver,
   readUnread,
   PROGRESS_CONTRACT,
+  STALE_THRESHOLD_MS,
   acquireCas,
 } from "../runtime/index.js";
 import { userTemplatesRoot, projectTemplatesRoot } from "./team-home.js";
@@ -251,6 +253,22 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
     const eventLog = log(room);
     await eventLog.init();
     await eventLog.append({ session_id: sessionId, actor, type, payload });
+  }
+
+  // 心跳刷新（#97，ADR 0016）：归属采事件流 actor 镜像口径——凡调用以成员
+  // X 的名义产生账面写副作用（登记/投递/交接）即刷 X 的 lastSeen；"system"
+  // 与无归属不刷。caller 权威身份仅承担 forbidden 门（Wave 1b 写面收敛），
+  // 不复用于账面归属——对照裁决见 issue #97 评论区 Wave 2 准备段。
+  // best-effort：lastSeen 是可再生观测信号，刷新失败不得放大为调用失败
+  // （宁漏刷不错杀主事务；下轮成功调用自愈），裁决记录于 ADR 0016。
+  async function heartbeat(member: string | undefined): Promise<void> {
+    if (member === undefined || member === "system") return;
+    try {
+      await reg().touchMember(member);
+    } catch {
+      // 吞错：观测信号一档陈旧不值得告警通道；插入点位于全部业务写成功
+      // 之后，此处失败不影响本次调用的语义结果。
+    }
   }
 
   async function assertNoTaskConflict(taskId: string, room: string, touched: string[], mutexGroups: string[]): Promise<void> {
@@ -532,6 +550,8 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
           msg_type: type,
           ...(bodyTaskId !== undefined ? { task_id: bodyTaskId } : {}),
         });
+        // #97 心跳：发件是最廉价可靠的活性信号（白名单 team_send(from)）。
+        await heartbeat(from);
         return { ok: true, envelope_id: envelopeId };
       } catch (error) {
         wrap(error);
@@ -545,6 +565,9 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
         const uuid = optStr(args, "envelope_id");
         if (uuid !== undefined) {
           const claimed = await claim(teamHome, member, uuid);
+          // #97 心跳：认领是成员自己完成的投递写副作用（白名单仅 claim 分支；
+          // readUnread 是纯读不刷——宁漏刷不可错刷）。
+          await heartbeat(member);
           return { ok: true, envelope: claimed };
         }
         return { ok: true, unread: await readUnread(teamHome, member) };
@@ -560,6 +583,8 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
         const uuid = reqStr(args, "envelope_id");
         await acknowledge(teamHome, member, uuid);
         await appendEvent(member, "mailbox/ack", { envelope_id: uuid });
+        // #97 心跳：确认处理完成是成员活性信号（白名单 ack(member)）。
+        await heartbeat(member);
         return { ok: true };
       } catch (error) {
         wrap(error);
@@ -631,6 +656,9 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
           status: updated.status,
           rev: updated.rev,
         });
+        // #97 心跳：归属取 assignee 字段（事件流 actor 镜像）而非调用者——
+        // 主控代管更新给被代管者续命，列为 ADR 0016 已接受限制（有事件流审计痕迹）。
+        await heartbeat(updated.assignee);
         return { ok: true, task_id: taskId, status: updated.status, rev: updated.rev };
       } catch (error) {
         wrap(error);
@@ -679,6 +707,8 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
           ...(ext !== undefined ? { ext } : {}),
         });
         await appendEvent(role, "blackboard/set", { room, status: shard.status });
+        // #97 心跳：分片自写是成员活性信号（白名单 state_set(role)）。
+        await heartbeat(role);
         return { ok: true, role, status: shard.status };
       } catch (error) {
         wrap(error);
@@ -729,6 +759,9 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
           ...(task.status === "blocked" ? { status: "running" as TaskStatus } : {}),
         }, { expectRev: task.rev });
         await appendEvent(toRole, "handoff", { task_id: taskId, to_role: toRole, receipt: receipt ?? null });
+        // #97 心跳：归属取交接目标（事件流 actor 镜像，白名单 handoff(toRole)）
+        // 而非调用者——同 taskUpdate 代管口径（ADR 0016 已接受限制）。
+        await heartbeat(toRole);
         return { ok: true, task_id: taskId, assignee: updated.assignee, rev: updated.rev };
       } catch (error) {
         wrap(error);
@@ -801,8 +834,11 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
           touched_paths: t.touched,
         }));
 
-        // 事件游标：逐房间独立打开日志读末笔 seq（不经单写者缓存的 log()）。
+        // 事件游标 + 黑板 blocked 免责索引：逐房间独立打开日志读末笔 seq
+        // （不经单写者缓存的 log()）；同时收集该房间黑板分片的 blocked 角色
+        // （#97 ADR 0016：任一分片 blocked 即豁免 stale——等待输入非停摆）。
         const eventCursors: Array<{ room: string; seq: number }> = [];
+        const blockedIndex = new Map<string, boolean>();
         if (existsSync(l.roomsDir)) {
           for (const room of readdirSync(l.roomsDir)) {
             try {
@@ -815,8 +851,51 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
               // 房间目录存在但事件文件不可读：游标记 0
               eventCursors.push({ room, seq: 0 });
             }
+            try {
+              for (const shard of await listShards(teamHome, room)) {
+                if (shard.status === "blocked") blockedIndex.set(shard.role, true);
+              }
+            } catch {
+              // 黑板不可读按无免责数据处理（罕见 fs 异常路径；report-only
+              // 输出宁缺勿滥，不做二次兜底读）。
+            }
           }
         }
+
+        // stale 心跳标注（#97，ADR 0016，report-only）：阈值与判定规则见
+        // types.ts STALE_THRESHOLD_MS（严格大于；dead 一律不收录——lost 着色
+        // 已表达防双计；tier0 主控不入名册，其静默独立走 master_idle 单项，
+        // 消除自刷矛盾与 reconcile 全员可调的续命放大通道；仅 status=running
+        // 的成员参与标注——spawned/stopped 非干活中；超阈且黑板任一分片
+        // blocked 者归 awaiting_input 免责档（等待输入 ≠ 停摆，避免误标触发
+        // 误干预）。时钟回拨致负 age 时天然不超阈，无需特判。
+        const now = Date.now();
+        const heartbeatCandidates = members.filter(
+          (m) => m.tier !== 0 && m.status === "running" && Number.isFinite(m.lastSeen),
+        );
+        const isOverThreshold = (m: MemberRecord): boolean =>
+          now - m.lastSeen > STALE_THRESHOLD_MS;
+        const formatStale = (m: MemberRecord): { member: string; last_seen_age_ms: number } => ({
+          member: m.member,
+          last_seen_age_ms: now - m.lastSeen,
+        });
+        const byNameAsc = (
+          a: { member: string },
+          b: { member: string },
+        ): number => a.member.localeCompare(b.member);
+        const stale_members = heartbeatCandidates
+          .filter((m) => isOverThreshold(m) && blockedIndex.get(m.member) !== true)
+          .map(formatStale)
+          .sort(byNameAsc);
+        const awaiting_input = heartbeatCandidates
+          .filter((m) => isOverThreshold(m) && blockedIndex.get(m.member) === true)
+          .map(formatStale)
+          .sort(byNameAsc);
+        const tier0Master = members.find((m) => m.tier === 0);
+        const master_idle =
+          tier0Master !== undefined &&
+          Number.isFinite(tier0Master.lastSeen) &&
+          now - tier0Master.lastSeen > STALE_THRESHOLD_MS;
 
         const overview = {
           initialized: snapshot !== null,
@@ -830,6 +909,9 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
           members: memberLedger,
           dangling_assignees,
           orphan_members,
+          master_idle,
+          stale_members,
+          awaiting_input,
           task_status_counts: statusCounts,
           tasks: taskDetails,
           event_cursors: eventCursors,

@@ -24,6 +24,7 @@ export {
   TASK_TRANSITIONS,
   GATE_STATUSES,
   RESERVED_STAGES,
+  STALE_THRESHOLD_MS,
   TEMPLATE_SOURCES,
   canTransition,
   isReservedStage,
