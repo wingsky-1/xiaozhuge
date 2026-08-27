@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHandlers, rootCaller, type Handlers } from "../../src/plugin/handlers.js";
 import { Registry, STALE_THRESHOLD_MS } from "../../src/index.js";
+import { DEFAULT_DELIVERING_TTL_MS } from "../../src/runtime/kernel/recovery.js";
 import type { MemberRecord } from "../../src/runtime/kernel/types.js";
 
 let home: string;
@@ -203,6 +204,26 @@ describe("team_reconcile stale 心跳标注（#97 ADR 0016）", () => {
     expect(view.stale_members).toEqual([]);
   });
 
+  it("自属分片跨房间聚合：第二房间 blocked 同样免责；无分片对照者照常入 stale_members", async () => {
+    await handlers.init({});
+    await handlers.spawn({ member: "w1", durable_id: "dur-w1", role: "w1", tier: 1 });
+    await handlers.spawn({
+      member: "bystander", durable_id: "dur-bystander", role: "bystander", tier: 1,
+    });
+    // w1 的自属 blocked 分片写入第二房间（非 root）：豁免语义＝其分片在
+    // 任一房间 blocked 即免责（blockedIndex 按角色跨房间聚合）；room 仅
+    // 命名空间非权限边界（#123 口径），stateSet 可直接构造新房间。
+    // state_set 会刷 lastSeen 到当前，先写分片再回拨时钟。
+    await handlers.stateSet({ room: "work", role: "w1", status: "blocked" });
+    await seedMember("w1", { status: "running", lastSeen: STALE_TS });
+    await seedMember("bystander", { status: "running", lastSeen: STALE_TS });
+    const view = await reconcile();
+    expect(view.awaiting_input).toEqual([{ member: "w1", last_seen_age_ms: NOW - STALE_TS }]);
+    expect(view.stale_members).toEqual([
+      { member: "bystander", last_seen_age_ms: NOW - STALE_TS },
+    ]);
+  });
+
   it("恰达阈值不标（严格大于，宁少标勿错标）；未来时间戳（挂钟回拨）同样不标", async () => {
     await handlers.init({});
     await handlers.spawn({ member: "edge", durable_id: "dur-edge", role: "edge", tier: 1 });
@@ -211,6 +232,12 @@ describe("team_reconcile stale 心跳标注（#97 ADR 0016）", () => {
     await seedMember("future", { status: "running", lastSeen: NOW + 600_000 });
     const view = await reconcile();
     expect(view.stale_members).toEqual([]);
+  });
+
+  it("STALE_THRESHOLD_MS 锚点恒等：3× delivering TTL（协议常量区与 recovery 层不漂移脱钩）", () => {
+    // types.ts 受 kernel 零反向依赖约束不能 import recovery.ts，
+    // 锚点关系只能在测试层锁定（审核建议 1）。
+    expect(STALE_THRESHOLD_MS).toBe(3 * DEFAULT_DELIVERING_TTL_MS);
   });
 
   it("多名册按 member 字典序稳定输出（不随注册顺序漂移）", async () => {
