@@ -18,7 +18,7 @@ export const TOOL_MANIFEST_SEPARATOR =
 export const TEAM_TOOL_MANIFEST: ReadonlyArray<readonly [string, string]> = [
   ["team_spawn", "登记成员 durable id 入注册表"],
   ["team_dispatch", "注册 → 指派 → 派单复合原语（半事务，失败报告已完成步骤）"],
-  ["team_send", "定向信箱投递"],
+  ["team_send", "定向信箱投递（含可达性 report-only 标注）"],
   ["team_inbox", "读未读 / 认领指定信封"],
   ["team_ack", "确认信封处理完成"],
   ["team_task_create", "任务账本建账（mutex 预检）"],

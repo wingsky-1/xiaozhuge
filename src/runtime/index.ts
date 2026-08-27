@@ -49,6 +49,14 @@ export {
 } from "./kernel/cas-lock.js";
 export { Ledger, findConflicts } from "./kernel/ledger.js";
 export type { NewTask, TaskPatch, UpdateOptions } from "./kernel/ledger.js";
+export {
+  reachable,
+  checkTree,
+  ancestorsOf,
+  descendantsOf,
+  childrenOf,
+} from "./kernel/reachable.js";
+export type { ReachabilityResult, TreeViolation, CommMode, CommEdge } from "./kernel/reachable.js";
 export { EventLog, WRITER_LOCK_SUFFIX } from "./kernel/event-log.js";
 export type { AppendInput, ReadResult } from "./kernel/event-log.js";
 export { Registry } from "./kernel/registry.js";

@@ -41,6 +41,7 @@ import {
   PROGRESS_CONTRACT,
   STALE_THRESHOLD_MS,
   acquireCas,
+  reachable,
 } from "../runtime/index.js";
 import { userTemplatesRoot, projectTemplatesRoot } from "./team-home.js";
 import { appendToolManifest } from "./tool-manifest.js";
@@ -178,7 +179,7 @@ export interface Handlers {
   spawn: (args: Record<string, unknown>) => Promise<unknown>;
   /** team_dispatch（ADR 0015，#67）：spawn → 指派 → 派单复合原语，半事务。 */
   dispatch: (args: Record<string, unknown>) => Promise<unknown>;
-  /** team_send：定向信箱投递（可达性 = 注册表存在性，MVP auto 模式）。 */
+  /** team_send：定向信箱投递（含可达性校验 report-only——返回值 warnings 标注，不阻断投递，#138）。 */
   send: (args: Record<string, unknown>) => Promise<unknown>;
   /** team_inbox：读未读 / 认领指定信封。 */
   inbox: (args: Record<string, unknown>) => Promise<unknown>;
@@ -536,6 +537,36 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
         if ((await reg().getMember(to)) === undefined) {
           throw new ToolError("unknown-member", `recipient ${to} is not registered`);
         }
+        // 可达性校验（#138，report-only 过渡档）：unknown-member 在册检查
+        // 保持首位；此后从 team.yaml 快照读 comm_mode/comm（缺省 auto；
+        // 旧快照无此字段按缺省容忍），对注册表成员树做可达性判定。
+        // 过渡档语义：不可达**照常投递**，原因经返回值 warnings 当场呈现
+        // （ADR 0015 report-only 先例——投递已发生，事后标注价值弱于
+        // mutex 案，故警告放返回值而非仅事件流）。
+        let commMode: "auto" | "explicit" = "auto";
+        let comm: Array<{ from: string; to: string }> = [];
+        if (existsSync(l.teamYaml)) {
+          try {
+            const snap = JSON.parse(readFileSync(l.teamYaml, "utf8")) as {
+              comm_mode?: unknown;
+              comm?: unknown;
+            };
+            if (snap.comm_mode === "explicit") commMode = "explicit";
+            if (Array.isArray(snap.comm)) {
+              comm = snap.comm.filter(
+                (e): e is { from: string; to: string } =>
+                  typeof e === "object" && e !== null &&
+                  typeof (e as { from?: unknown }).from === "string" &&
+                  typeof (e as { to?: unknown }).to === "string",
+              );
+            }
+          } catch {
+            // 快照损坏：按 auto 缺省判定，不阻断投递（report-only 兜底）。
+          }
+        }
+        const registry = await reg().read();
+        const members = Object.values(registry.members ?? {});
+        const verdict = reachable(members, from, to, commMode, comm);
         const envelopeId = await deliver(teamHome, to, { from, type, body });
         // 计账增补 task_id（若 body 为对象且携带非空字符串）：对账时「哪封信对应
         // 哪个任务」不必再开信封比对，机械可得。body 无类型约束（schemas 声明
@@ -555,7 +586,9 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
         });
         // #97 心跳：发件是最廉价可靠的活性信号（白名单 team_send(from)）。
         await heartbeat(from);
-        return { ok: true, envelope_id: envelopeId };
+        // warnings 恒在场（固定输出 schema，ADR 0015:48）：可达且树健康时
+        // 为空数组，不可达/违规时携带原因（report-only，不阻断投递）。
+        return { ok: true, envelope_id: envelopeId, warnings: verdict.warnings };
       } catch (error) {
         wrap(error);
       }
