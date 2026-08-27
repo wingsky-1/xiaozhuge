@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   Handle,
+  Panel,
   Position,
   ReactFlow,
   type Edge,
@@ -225,11 +226,18 @@ export function buildTree(members: readonly MemberNodeView[]): TreeMember[] {
   return roots;
 }
 
-/** 树 → dagre TB 布局后的 React Flow nodes/edges。 */
-export function layoutTree(roots: readonly TreeMember[]): { nodes: Node[]; edges: Edge[] } {
+/** 树 → dagre 布局后的 React Flow nodes/edges（A4-7 响应式 rankdir：宽视口 LR / 窄视口 TB）。 */
+export function layoutTree(
+  roots: readonly TreeMember[],
+  opts: { rankdir?: "TB" | "LR" } = {},
+): { nodes: Node[]; edges: Edge[] } {
+  const rankdir = opts.rankdir ?? "TB";
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: "TB", nodesep: 28, ranksep: 56 });
+  // dagre 语义：TB 下 nodesep=同级垂直间距、ranksep=层级水平间距；
+  // LR 下 x=层级方向、y=同级分布——nodesep/ranksep 语义互换，数值沿用
+  // 现状（测试锁定，A4-7 S1）。
+  g.setGraph({ rankdir, nodesep: 28, ranksep: 56 });
   const NODE_W = 216;
   const NODE_H = 76;
   const nodes: Node[] = [];
@@ -241,7 +249,7 @@ export function layoutTree(roots: readonly TreeMember[]): { nodes: Node[]; edges
       id: member.member,
       type: "team",
       position: { x: 0, y: 0 },
-      data: { ...member, depth },
+      data: { ...member, depth, rankdir },
       draggable: false,
       selectable: true,
     });
@@ -264,8 +272,11 @@ export function layoutTree(roots: readonly TreeMember[]): { nodes: Node[]; edges
 /* ---------------- 自定义节点（L1：角色名 + 状态徽标 + current_activity） ---------------- */
 
 function MemberNodeCard({ data }: NodeProps): React.ReactNode {
-  const m = data as unknown as MemberNodeView & { depth: number };
+  const m = data as unknown as MemberNodeView & { depth: number; rankdir: "TB" | "LR" };
   const { fg, bg } = toneColors(m.tone);
+  // A4-7：LR 布局主轴水平——边锚点左入右出；TB 维持上入下出（H5）。
+  const targetPos = m.rankdir === "LR" ? Position.Left : Position.Top;
+  const sourcePos = m.rankdir === "LR" ? Position.Right : Position.Bottom;
   return (
     <div
       style={{
@@ -306,9 +317,9 @@ function MemberNodeCard({ data }: NodeProps): React.ReactNode {
       <div style={{ opacity: 0.75, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {m.currentActivity ?? "—"}
       </div>
-      {/* 边锚点：父→子连线必需（隐藏视觉，仅提供拓扑连接位） */}
-      <Handle type="target" position={Position.Top} style={{ opacity: 0 }} isConnectable={false} />
-      <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} isConnectable={false} />
+      {/* 边锚点：父→子连线必需（隐藏视觉，仅提供拓扑连接位；方向随 rankdir） */}
+      <Handle type="target" position={targetPos} style={{ opacity: 0 }} isConnectable={false} />
+      <Handle type="source" position={sourcePos} style={{ opacity: 0 }} isConnectable={false} />
     </div>
   );
 }
@@ -474,7 +485,12 @@ export function TeamView(props: { sessionId?: string }): React.ReactNode {
   }, [overview]);
 
   const tree = useMemo(() => buildTree(overview?.members ?? []), [overview]);
-  const { nodes, edges } = useMemo(() => layoutTree(tree), [tree]);
+  // A4-7 响应式树布局：宽视口 LR（根左叶右，宽屏利用率高）；窄视口 TB
+  // （纵向滚动友好，移动端不需横向平移）——复用 narrow 响应式判定。
+  const { nodes, edges } = useMemo(
+    () => layoutTree(tree, { rankdir: narrow ? "TB" : "LR" }),
+    [tree, narrow],
+  );
 
   // 选中成员随轮询刷新（保持引用最新）。
   useEffect(() => {
@@ -604,6 +620,20 @@ export function TeamView(props: { sessionId?: string }): React.ReactNode {
             onPaneClick={() => setSelected(null)}
           >
             <Background />
+            {/* A4-3 自动布局明示：只读画布提示（半透明底防暗色不可读，S2） */}
+            <Panel
+              position="top-right"
+              style={{
+                background: "rgba(127,127,127,.12)",
+                borderRadius: 6,
+                padding: "4px 8px",
+                fontSize: 11,
+                color: "var(--dsw-alias-label-secondary, rgba(127,127,127,.75))",
+                pointerEvents: "none",
+              }}
+            >
+              自动布局 · 只读画布（可平移缩放）
+            </Panel>
           </ReactFlow>
         )}
       </div>
