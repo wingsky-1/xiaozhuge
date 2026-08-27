@@ -1,0 +1,3 @@
+[submodule ".dsh/skills/dsh-dev-utils"]
+	path = .dsh/skills/dsh-dev-utils
+	url = https://github.com/wingsky-1/dsh-dev-utils.git
