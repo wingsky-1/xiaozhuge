@@ -248,4 +248,21 @@ describe("team_dispatch role_inline 校验", () => {
       }),
     ).rejects.toMatchObject({ code: "invalid-arguments" });
   });
+
+  it("send body=null 是合法负载：成功投递且计账行不含 task_id（#131 回归）", async () => {
+    await handlers.init({});
+    await handlers.spawn({ member: "qa", durable_id: "dur-qa", role: "qa", tier: 1 });
+    const result = (await handlers.send({
+      to: "qa",
+      from: "master",
+      type: "note",
+      body: null,
+    })) as { ok: boolean; envelope_id: string };
+    expect(result.ok).toBe(true);
+    const events = await readEvents();
+    const deliver = events.find((e) => e.type === "mailbox/deliver");
+    expect(deliver).toBeDefined();
+    // null 负载不携带任务关联：task_id 键必须整体缺席而非以 undefined 值出现
+    expect((deliver!.payload as Record<string, unknown>).task_id).toBeUndefined();
+  });
 });

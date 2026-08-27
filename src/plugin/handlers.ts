@@ -537,13 +537,16 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
           throw new ToolError("unknown-member", `recipient ${to} is not registered`);
         }
         const envelopeId = await deliver(teamHome, to, { from, type, body });
-        // 计账增补 task_id（若 body 为对象且携带）：对账时「哪封信对应哪个任务」
-        // 不必再开信封比对，机械可得。
-        const rawTaskId = (body as { task_id?: unknown }).task_id;
-        const bodyTaskId =
-          body !== null && typeof body === "object" && typeof rawTaskId === "string" && rawTaskId.length > 0
-            ? rawTaskId
+        // 计账增补 task_id（若 body 为对象且携带非空字符串）：对账时「哪封信对应
+        // 哪个任务」不必再开信封比对，机械可得。body 无类型约束（schemas 声明
+        // any JSON value），null 是合法负载——必须先收窄再取值（#131：解引用
+        // 先行会把可预期的输入态伪装成 internal-error 故障）。
+        const rawTaskId =
+          body !== null && typeof body === "object"
+            ? (body as { task_id?: unknown }).task_id
             : undefined;
+        const bodyTaskId =
+          typeof rawTaskId === "string" && rawTaskId.length > 0 ? rawTaskId : undefined;
         await appendEvent(from, "mailbox/deliver", {
           to,
           envelope_id: envelopeId,
