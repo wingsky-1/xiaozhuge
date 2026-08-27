@@ -655,7 +655,7 @@ export function TeamView(props: { sessionId?: string }): React.ReactNode {
               {selected.lastSeen === null ? "—" : new Date(selected.lastSeen).toLocaleString()}
             </Row>
             <div>
-              <div style={labelStyle}>最近凭据</div>
+              <div style={labelStyle}>最近协作事件</div>
               {memberEvents.length === 0 ? (
                 <div style={{ opacity: 0.55 }}>暂无事件记录</div>
               ) : (
