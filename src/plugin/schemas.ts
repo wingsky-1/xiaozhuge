@@ -109,6 +109,9 @@ export const schemas = {
       required: ["to", "from", "type", "body"],
       additionalProperties: false,
     },
+    // 返回值固定 schema（#138，report-only）：warnings 恒在场——可达且树
+    // 健康时为空数组，不可达/树违规时携带原因（不阻断投递）。
+    description: "Deliver a message into another member's mailbox. Returns { ok, envelope_id, warnings }; warnings (always present) flags unreachable peers / tree violations (report-only).",
   },
   taskCreate: {
     parameters: {

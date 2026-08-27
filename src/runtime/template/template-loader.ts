@@ -153,6 +153,10 @@ export function instantiateSnapshot(
     playbook_digest: playbookDigest ?? null,
     // 工作区持久化（ADR 0015）：audit 子命令的扫描根来源；旧快照无此字段为 null。
     workspace: workspace ?? null,
+    // 通讯模式与 explicit 白名单（#138）：运行时可达性判定的载体；旧快照无
+    // 此字段按缺省容忍（只增不改）——读取侧以 `comm_mode ?? "auto"` 归一。
+    comm_mode: loaded.template.comm_mode ?? "auto",
+    comm: Array.isArray(loaded.template.comm) ? loaded.template.comm : [],
     tiers: loaded.template.tiers,
     roles: Object.values(loaded.roles).map((r) => ({
       id: r.id,
