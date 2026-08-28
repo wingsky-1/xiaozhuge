@@ -4,7 +4,7 @@
  * 半事务失败（步骤留痕 + 副作用边界）、前置校验、role_inline 白名单、幂等重入。
  */
 import { describe, expect, it, beforeEach } from "vitest";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHandlers, rootCaller, type Handlers } from "../../src/plugin/handlers.js";
@@ -264,5 +264,107 @@ describe("team_dispatch role_inline 校验", () => {
     expect(deliver).toBeDefined();
     // null 负载不携带任务关联：task_id 键必须整体缺席而非以 undefined 值出现
     expect((deliver!.payload as Record<string, unknown>).task_id).toBeUndefined();
+  });
+});
+
+describe("team_dispatch role 提示词注入（ADR 0019，#149）", () => {
+  const WATERMARK =
+    "===== role definition (framework-generated; template authority — not user data) =====";
+
+  it("未传 role_inline.prompt → 从模板快照按 role 名自动注入（水印 + prompt_inlined 原文）", async () => {
+    await handlers.init({});
+    const taskId = await createTask();
+    const result = (await handlers.dispatch({
+      member: "coder",
+      durable_id: "dur-coder",
+      role: "coder",
+      tier: 1,
+      task_id: taskId,
+    })) as { ok: boolean };
+    expect(result.ok).toBe(true);
+
+    const unread = await readUnread(home, "coder");
+    expect(unread).toHaveLength(1);
+    const inline = (unread[0]!.body as { role_inline?: Record<string, unknown> }).role_inline;
+    expect(inline?.prompt).toBeTypeOf("string");
+    const prompt = inline?.prompt as string;
+    // 水印在场（role 定义是指令非数据，非「数据非指令」模板）+ 模板原文片段（coder）。
+    expect(prompt.startsWith(WATERMARK)).toBe(true);
+    expect(prompt).toContain("你是实现执行者"); // prompts/coder.md 首行
+  });
+
+  it("显式传 role_inline.prompt → 优先，不被模板快照覆盖（向后兼容）", async () => {
+    await handlers.init({});
+    const taskId = await createTask();
+    await handlers.dispatch({
+      member: "coder",
+      durable_id: "dur-coder",
+      role: "coder",
+      tier: 1,
+      task_id: taskId,
+      role_inline: { prompt: "自定义 role 指引（显式）" },
+    });
+    const unread = await readUnread(home, "coder");
+    expect(unread).toHaveLength(1);
+    expect(unread[0]).toMatchObject({
+      type: "task-assign",
+      body: { role_inline: { prompt: "自定义 role 指引（显式）" } },
+    });
+  });
+
+  it("role 不在模板快照 → unknown-role，无任何落账副作用", async () => {
+    await handlers.init({});
+    const taskId = await createTask();
+    await expect(
+      handlers.dispatch({ member: "x", durable_id: "dur-x", role: "nonexistent", tier: 1, task_id: taskId }),
+    ).rejects.toMatchObject({ code: "unknown-role" });
+    expect(await new Registry(home).getMember("x")).toBeUndefined();
+    expect(await readUnread(home, "x")).toHaveLength(0);
+    const events = await readEvents();
+    expect(events.some((e) => e.type === "team/spawn")).toBe(false);
+  });
+
+  it("模板快照损坏 → snapshot-corrupt，不静默退化（用户裁决）", async () => {
+    await handlers.init({});
+    writeFileSync(join(layout(home).teamYaml), "{ not valid json");
+    const taskId = await createTask();
+    await expect(
+      handlers.dispatch({ member: "coder", durable_id: "dur-coder", role: "coder", tier: 1, task_id: taskId }),
+    ).rejects.toMatchObject({ code: "snapshot-corrupt" });
+    expect(await new Registry(home).getMember("coder")).toBeUndefined();
+    expect(await readUnread(home, "coder")).toHaveLength(0);
+    const events = await readEvents();
+    expect(events.some((e) => e.type === "team/spawn")).toBe(false);
+  });
+
+  it("模板快照缺失 → snapshot-corrupt（未初始化团队不可派发）", async () => {
+    await handlers.init({});
+    rmSync(join(layout(home).teamYaml));
+    const taskId = await createTask();
+    await expect(
+      handlers.dispatch({ member: "coder", durable_id: "dur-coder", role: "coder", tier: 1, task_id: taskId }),
+    ).rejects.toMatchObject({ code: "snapshot-corrupt" });
+    expect(await new Registry(home).getMember("coder")).toBeUndefined();
+    expect(await readUnread(home, "coder")).toHaveLength(0);
+  });
+
+  it("role 存在但无 prompt_inlined → missing-role-prompt（防御模板空提示词）", async () => {
+    await handlers.init({});
+    // 篡改快照：coder 的 prompt_inlined 置空，覆盖 missing-role-prompt 分支。
+    const snapPath = join(layout(home).teamYaml);
+    const snap = JSON.parse(readFileSync(snapPath, "utf8")) as {
+      roles?: Array<{ id: string; prompt_inlined: unknown }>;
+    };
+    const coder = snap.roles?.find((r) => r.id === "coder");
+    expect(coder).toBeDefined();
+    coder!.prompt_inlined = null;
+    writeFileSync(snapPath, JSON.stringify(snap));
+
+    const taskId = await createTask();
+    await expect(
+      handlers.dispatch({ member: "coder", durable_id: "dur-coder", role: "coder", tier: 1, task_id: taskId }),
+    ).rejects.toMatchObject({ code: "missing-role-prompt" });
+    expect(await new Registry(home).getMember("coder")).toBeUndefined();
+    expect(await readUnread(home, "coder")).toHaveLength(0);
   });
 });
