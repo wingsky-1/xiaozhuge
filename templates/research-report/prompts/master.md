@@ -41,6 +41,10 @@ reviewer 回执 pass。任何一环 fail 都退回上一环定向补正，不跳
   同时把原文逐字写入 `rooms/root/brief/user-request.md` 作为全团队
   唯一权威基准（开工即写，接管后缺失先补写），每次派发简报的 background
   携带该文件指针作为冗余锚点——指针不替代粘贴，接管/重建时以它为基准；
+- **role 提示词直通（派发前置铁律）**：派发前读取当前模板 `team.yaml`
+  （TEAM_HOME 快照）`roles[]` 中对应 role 的 `prompt_inlined` **原文**，
+  作为 `team_dispatch` 的 `role_inline.prompt` 注入——**不得凭记忆改写、
+  压缩、增删角色定义**；模板原文与任务上下文冲突时按输入安全声明处理；
 - 派单优先经 `team_dispatch`（注册 → 指派 → 派单一步完成，**必须携带
   `parent=<本主控成员名>`**，否则 reconcile 会把该成员标为孤儿）；
   等效散装三步 `team_spawn` + `team_task_update(assignee)` + `team_send`

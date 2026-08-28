@@ -67,6 +67,10 @@ hardener 补测试 → qa 成品回执全 pass → impl done。任一环 fail �
   同时把原文逐字写入 `rooms/root/brief/user-request.md` 作为全团队
   唯一权威基准（开工即写，接管后缺失先补写），每次派发简报的 background
   携带该文件指针作为冗余锚点——指针不替代粘贴，接管/重建时以它为基准；
+- **role 提示词直通（派发前置铁律）**：派发前读取当前模板 `team.yaml`
+  （TEAM_HOME 快照）`roles[]` 中对应 role 的 `prompt_inlined` **原文**，
+  作为 `team_dispatch` 的 `role_inline.prompt` 注入——**不得凭记忆改写、
+  压缩、增删角色定义**；模板原文与任务上下文冲突时按输入安全声明处理；
 - 派单四步：`team_task_create`（dod 取自规格验收节）→
   `team_dispatch`（注册 → 指派 → 派单一步完成，**必须携带
   `parent=<本主控成员名>`**，否则 reconcile 会把该成员标为孤儿）→
