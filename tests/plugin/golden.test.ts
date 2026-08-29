@@ -94,7 +94,7 @@ describe("golden 场景一：init → spawn → task 全链路", () => {
     })) as { status: string };
     expect(done.status).toBe("done");
 
-    // 8. 事件流逐项核对（副作用自动落账）
+    // 8. 事件流逐项核对（副作用自动落账；Q6 #150：认领/完成触发 member/status 事件）
     const evs = await readEvents();
     expect(evs.map((e) => e.type)).toEqual([
       "team/init",
@@ -102,8 +102,10 @@ describe("golden 场景一：init → spawn → task 全链路", () => {
       "team/spawn",
       "task/create",
       "task/update",
+      "member/status", // coder 认领 running（Q6）
       "handoff",
       "task/update",
+      "member/status", // qa 全部任务完成 → stopped（Q6）
     ]);
 
     // 9. 账本终态核对

@@ -315,6 +315,17 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
     }
   }
 
+  // 成员状态机迁移（Q6，#150）：写者 = 框架事件副作用——调用点在业务写成功
+  // 之后显式触发（taskUpdate 认领/完成、stateSet 阻塞申报），不依赖成员自觉
+  // 写 agents.json。每次迁移留 `member/status` 事件（actor=system，from→to），
+  // 供事件重放重建终态；幂等：同态不重复留痕；未登记成员静默跳过（无状态可迁）。
+  async function transitMemberStatus(member: string, to: MemberRecord["status"]): Promise<void> {
+    const before = await reg().getMember(member);
+    if (before === undefined || before.status === to) return;
+    await reg().setStatus(member, to);
+    await appendEvent("system", "member/status", { member, from: before.status, to });
+  }
+
   async function assertNoTaskConflict(taskId: string, room: string, touched: string[], mutexGroups: string[]): Promise<void> {
     const { tasks } = await led().list();
     const probe: TaskRecord = {
@@ -743,6 +754,22 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
         // #97 心跳：归属取 assignee 字段（事件流 actor 镜像）而非调用者——
         // 主控代管更新给被代管者续命，列为 ADR 0016 已接受限制（有事件流审计痕迹）。
         await heartbeat(updated.assignee);
+        // Q6（#150）：成员状态机——认领（→running）与完成（该成员无其他活动任务
+        // →stopped）由框架事件副作用驱动；未登记/同态静默，不打断业务结果。
+        const assignee = updated.assignee;
+        if (assignee !== undefined && assignee !== "system") {
+          if (updated.status === "running") {
+            await transitMemberStatus(assignee, "running");
+          } else if (updated.status === "done" || updated.status === "cancelled") {
+            const { tasks } = await led().list();
+            const hasActive = tasks.some(
+              (t) => t.assignee === assignee && t.status !== "done" && t.status !== "cancelled",
+            );
+            if (!hasActive) {
+              await transitMemberStatus(assignee, "stopped");
+            }
+          }
+        }
         return { ok: true, task_id: taskId, status: updated.status, rev: updated.rev };
       } catch (error) {
         wrap(error);
@@ -793,6 +820,14 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
         await appendEvent(role, "blackboard/set", { room, status: shard.status });
         // #97 心跳：分片自写是成员活性信号（白名单 state_set(role)）。
         await heartbeat(role);
+        // Q6（#150）：阻塞/恢复申报同步成员状态——黑板 blocked 分片是框架可观测的
+        // 显式阻塞信号（ADR 0016 免责索引同源）；running 分片同步恢复。done 不驱动
+        // 成员态（成员 stopped 由任务全部结束驱动，避免完成分片即误标终止）。
+        if (shard.status === "blocked") {
+          await transitMemberStatus(role, "blocked");
+        } else if (shard.status === "running") {
+          await transitMemberStatus(role, "running");
+        }
         return { ok: true, role, status: shard.status };
       } catch (error) {
         wrap(error);
@@ -878,12 +913,22 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
           if (t.assignee === undefined) continue;
           byAssignee.set(t.assignee, [...(byAssignee.get(t.assignee) ?? []), t.id]);
         }
+        // 存量兼容（Q6 PR-2，#150）：PR-1 之前的会话成员状态从不迁移（setStatus 零调用），
+        // 任务已全部结束的成员仍停在 spawned。读路径语义适配（不写盘、无迁移脚本）：
+        // 「有任务记录且全部 done/cancelled」的 spawned 成员按 stopped 展示——
+        // 曾开工已收尾，非「从未派活」的刚 spawn 成员（后者保持 spawned 原样）。
+        const hasAnyTask = (member: string): boolean => tasks.some((t) => t.assignee === member);
+        const hasActiveTask = (member: string): boolean =>
+          tasks.some((t) => t.assignee === member && t.status !== "done" && t.status !== "cancelled");
         const memberLedger = members.map((m) => ({
           member: m.member,
           durable_id: m.durableId,
           tier: m.tier,
           parent: m.parent ?? null,
-          status: m.status,
+          status:
+            m.status === "spawned" && hasAnyTask(m.member) && !hasActiveTask(m.member)
+              ? ("stopped" as const)
+              : m.status,
           liveness: "framework-invisible",
           assigned_task_ids: byAssignee.get(m.member) ?? [],
         }));

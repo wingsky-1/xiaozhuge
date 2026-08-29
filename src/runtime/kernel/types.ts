@@ -113,7 +113,15 @@ export interface MemberRecord {
   parent?: string | null;
   /** 所处层级（0 = Tier-0 主控）。 */
   tier: number;
-  status: "spawned" | "running" | "stopped" | "dead";
+  /**
+   * 成员状态机（Q6，#150，评审修正）：`spawned → running → stopped/blocked → dead`，
+   * 反映成员**生命周期**，与任务状态（queued/running/blocked/done/cancelled，账本属性）分离。
+   * 语义：spawned=已登记未开工；running=干活中（首次 team_* 活动/认领）；stopped=全部任务
+   * 结束；blocked=显式申报阻塞（黑板 blocked 分片）；dead=旧记录作废（接管/复位后不可复活）。
+   * 迁移写者 = 框架事件副作用（handlers.transitMemberStatus），不依赖成员自觉；
+   * 每次迁移留 `member/status` 事件，供事件重放重建终态。
+   */
+  status: "spawned" | "running" | "stopped" | "blocked" | "dead";
   lastSeen: number;
 }
 
