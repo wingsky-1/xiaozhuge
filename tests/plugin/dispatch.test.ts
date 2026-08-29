@@ -206,6 +206,49 @@ describe("team_dispatch 前置校验（无副作用）", () => {
       handlers.dispatch({ member: "c", durable_id: "d", tier: 1, task_id: taskId }),
     ).rejects.toMatchObject({ code: "invalid-arguments" });
   });
+
+  it("重复派发拒绝（Q5，#159）：任务已指派他人 → duplicate-dispatch，无任何落账副作用", async () => {
+    await handlers.init({});
+    const taskId = await createTask();
+    await handlers.dispatch({ member: "coder", durable_id: "dur-coder", role: "coder", tier: 1, task_id: taskId });
+
+    // 同 role 第二个实例（多实例场景）再派同一任务 → 拒。
+    await expect(
+      handlers.dispatch({ member: "coder-inst2", durable_id: "dur-c2", role: "coder", tier: 1, task_id: taskId }),
+    ).rejects.toMatchObject({ code: "duplicate-dispatch" });
+    // 换 role 派已分配任务同样被拒（越权面；换持有者只能走 handoff）。
+    await expect(
+      handlers.dispatch({ member: "qa", durable_id: "dur-qa", role: "qa", tier: 1, task_id: taskId }),
+    ).rejects.toMatchObject({ code: "duplicate-dispatch" });
+    // 无副作用：第二/三次 dispatch 未产生 spawn 事件、未覆盖 assignee、无新信封。
+    const events = await readEvents();
+    expect(events.filter((e) => e.type === "team/spawn")).toHaveLength(1);
+    const ledgerView = (await handlers.taskList({})) as {
+      tasks: Array<{ id: string; assignee?: string }>;
+    };
+    expect(ledgerView.tasks.find((t) => t.id === taskId)?.assignee).toBe("coder");
+    expect(await readUnread(home, "coder-inst2")).toHaveLength(0);
+    expect(await readUnread(home, "qa")).toHaveLength(0);
+  });
+
+  it("重复派发幂等放行：同 member 重派 → assignee 不变且成功（半事务重试口子，#159）", async () => {
+    await handlers.init({});
+    const taskId = await createTask();
+    await handlers.dispatch({ member: "coder", durable_id: "dur-coder", role: "coder", tier: 1, task_id: taskId });
+    // 同 member 同 task（半事务失败重跑形态）→ 放行，assignee 不变、新信封 at-least-once。
+    const retry = (await handlers.dispatch({
+      member: "coder",
+      durable_id: "dur-coder",
+      role: "coder",
+      tier: 1,
+      task_id: taskId,
+    })) as { ok: boolean };
+    expect(retry.ok).toBe(true);
+    const ledgerView = (await handlers.taskList({})) as {
+      tasks: Array<{ id: string; assignee?: string }>;
+    };
+    expect(ledgerView.tasks.find((t) => t.id === taskId)?.assignee).toBe("coder");
+  });
 });
 
 describe("team_dispatch role_inline 校验", () => {
