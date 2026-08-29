@@ -137,6 +137,7 @@ type DetailBody = Record<string, unknown> & {
   shardBadges?: Array<Record<string, unknown>>;
   staleMembers?: Array<{ member: string; lastSeenAgeMs: number }>;
   awaitingInput?: Array<{ member: string; lastSeenAgeMs: number }>;
+  recentEvents?: Array<Record<string, unknown>>;
 };
 
 const EMPTY_DETAIL_BODY: DetailBody = {
@@ -149,6 +150,7 @@ const EMPTY_DETAIL_BODY: DetailBody = {
   masterIdle: false,
   staleMembers: [],
   awaitingInput: [],
+  recentEvents: [],
 };
 
 describe("GET /api/xiaozhuge/team/detail", () => {

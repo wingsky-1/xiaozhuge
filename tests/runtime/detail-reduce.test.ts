@@ -4,7 +4,7 @@
  * STALE_THRESHOLD_MS 常量推导（防常量调参时用例漂移，R4/T10 口径）。
  */
 import { describe, expect, it } from "vitest";
-import type { MemberRecord, Shard, TaskRecord } from "../../src/runtime/index.js";
+import type { EventRecord, MemberRecord, Shard, TaskRecord } from "../../src/runtime/index.js";
 import {
   MAILBOX_PER_STATE_LIMIT,
   STALE_THRESHOLD_MS,
@@ -12,10 +12,12 @@ import {
 import type {
   DetailInput,
   MailboxHeadView,
+  RoomEvent,
   RoomShard,
   TeamDetailView,
 } from "../../src/runtime/view/detail.js";
 import {
+  projectRecentEvents,
   reduceDetail,
   staleAnnotations,
   taskCountsOf,
@@ -80,13 +82,23 @@ function input(over: Partial<DetailInput> = {}): DetailInput {
     corruptTaskFiles: [],
     mailboxes: [],
     shards: [],
+    rooms: [],
     nowMs: 1_000_000,
     ...over,
   };
 }
 
+/** 事件记录工厂（Q2/#162）。 */
+function ev(seq: number, type: string, actor = "coder", payload?: unknown): EventRecord {
+  return { seq, ts: 1000 + seq, session_id: "s", actor, type, payload } as EventRecord;
+}
+
+function room(room: string, events: EventRecord[]): RoomEvent {
+  return { room, events };
+}
+
 describe("T1 reduceDetail：空输入全形", () => {
-  it("空账本/信箱/分片 → taskCounts 五键全 0、各区空数组，形状完全确定", () => {
+  it("空账本/信箱/分片/事件 → taskCounts 五键全 0、各区空数组，形状完全确定", () => {
     const detail = reduceDetail(input());
     expect(detail).toEqual({
       isTeam: false,
@@ -98,6 +110,7 @@ describe("T1 reduceDetail：空输入全形", () => {
       masterIdle: false,
       staleMembers: [],
       awaitingInput: [],
+      recentEvents: [],
     });
   });
 });
@@ -427,5 +440,86 @@ describe("T11 isTeam 语义", () => {
     const detail = reduceDetail(input({ tasks: [rawTask({ id: "task-orphan", updatedAt: 500 })] }));
     expect(detail.isTeam).toBe(false);
     expect(detail.tasks.map((t) => t.id)).toEqual(["task-orphan"]);
+  });
+});
+
+/* ── Q2/#162 事件白名单投影矩阵 ──────────────────────────────────────── */
+
+describe("Q2 事件投影：白名单摘要", () => {
+  it("task/update / handoff / mailbox/deliver / member/status / spawn 机械摘录", () => {
+    const rows = projectRecentEvents([
+      room("root", [
+        ev(1, "task/update", "coder", { task_id: "t1", status: "running" }),
+        ev(2, "handoff", "reviewer", { task_id: "t1", to_role: "writer", receipt: ["pass: 结论通过"] }),
+        ev(3, "mailbox/deliver", "master", { to: "coder", msg_type: "task-assign" }),
+        ev(4, "member/status", "system", { member: "coder", from: "spawned", to: "running" }),
+        ev(5, "team/spawn", "system", { member: "qa", role: "qa" }),
+      ]),
+    ]);
+    expect(rows).toMatchObject([
+      { room: "root", seq: 5, type: "team/spawn", summary: "spawn qa (qa)", receiptSummary: null },
+      { room: "root", seq: 4, type: "member/status", summary: "member coder: spawned → running", receiptSummary: null },
+      { room: "root", seq: 3, type: "mailbox/deliver", summary: "deliver task-assign -> coder", receiptSummary: null },
+      { room: "root", seq: 2, type: "handoff", summary: "handoff t1 → writer", receiptSummary: ["pass: 结论通过"] },
+      { room: "root", seq: 1, type: "task/update", summary: "task t1 → running", receiptSummary: null },
+    ]);
+  });
+
+  it("未知类型 → summary=null（类型名可读，不拼多余文案）", () => {
+    const rows = projectRecentEvents([room("root", [ev(1, "blackboard/set", "coder", { room: "root", status: "done" })])]);
+    expect(rows[0]).toMatchObject({ type: "blackboard/set", summary: null });
+  });
+
+  it("payload 字段缺省/类型不符 → 该分支摘要置 null（防拼 undefined 文案）", () => {
+    expect(projectRecentEvents([room("r", [ev(1, "task/update", "c", {})])])[0]?.summary).toBeNull();
+    expect(projectRecentEvents([room("r", [ev(1, "handoff", "c", { task_id: 7, to_role: "w" })])])[0]?.summary).toBeNull();
+  });
+
+  it("排序：room asc、同 room seq desc（跨房间稳定分组）", () => {
+    const rows = projectRecentEvents([
+      room("root", [ev(1, "task/update", "c", { task_id: "t", status: "done" }), ev(2, "team/spawn", "s", { member: "x", role: "x" })]),
+      room("aa", [ev(9, "team/spawn", "s", { member: "y", role: "y" })]),
+    ]);
+    expect(rows.map((r) => `${r.room}:${r.seq}`)).toEqual(["aa:9", "root:2", "root:1"]);
+  });
+});
+
+describe("Q2 事件投影：回执读侧守卫（#162 评审 P0-3）", () => {
+  it("仅 pass:/fail: 开头行进入 receiptSummary；存在违规行 → 整条置 null（宁缺勿滥）", () => {
+    const bad = projectRecentEvents([room("r", [ev(1, "handoff", "j", { task_id: "t", to_role: "w", receipt: ["pass: ok", "garbage line"] })])]);
+    expect(bad[0]?.receiptSummary).toBeNull();
+    const good = projectRecentEvents([room("r", [ev(1, "handoff", "j", { task_id: "t", to_role: "w", receipt: ["fail: 未达标", "pass: 结论通过"] })])]);
+    expect(good[0]?.receiptSummary).toEqual(["fail: 未达标", "pass: 结论通过"]);
+  });
+
+  it("非数组/空数组 receipt → null；行超长截断至 RECEIPT_LINE_MAX", async () => {
+    expect(projectRecentEvents([room("r", [ev(1, "handoff", "j", { receipt: "nope" })])])[0]?.receiptSummary).toBeNull();
+    expect(projectRecentEvents([room("r", [ev(1, "handoff", "j", { receipt: [] })])])[0]?.receiptSummary).toBeNull();
+    const { RECEIPT_LINE_MAX } = await import("../../src/runtime/view/detail.js");
+    const long = projectRecentEvents([
+      room("r", [ev(1, "handoff", "j", { receipt: [`pass: ${"x".repeat(RECEIPT_LINE_MAX + 50)}`] })])],
+    );
+    expect(long[0]?.receiptSummary?.[0]?.length).toBe(RECEIPT_LINE_MAX);
+  });
+});
+
+describe("Q2 事件投影：脱敏负向断言（payload 不出投影面）", () => {
+  it("构造 SECRET-MARK payload，断言序列化 detail 不含——非白名单键/正文永不泄漏", () => {
+    const detail = reduceDetail(
+      input({
+        rooms: [
+          room("root", [
+            ev(1, "handoff", "reviewer", {
+              task_id: "t1",
+              to_role: "writer",
+              receipt: ["pass: SECRET-MARK 结论"],
+            }),
+          ]),
+        ],
+      }),
+    );
+    const json = JSON.stringify(detail);
+    expect(json).toContain("pass: SECRET-MARK 结论"); // 凭据结论一行是白名单（#98 步骤 3 要结论）
+    expect(json).not.toContain("role_inline");
   });
 });
