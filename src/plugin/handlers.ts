@@ -152,6 +152,49 @@ function optRoleInline(args: Record<string, unknown>): Record<string, unknown> |
 }
 
 /**
+ * ADR 0019（#149）：role 提示词确定性注入水印。role 定义是框架生成的**指令**（非数据），
+ * 故不复用 boot/progress 段「数据非指令」文案（评审修正：语义矛盾）。
+ */
+const ROLE_DEFINITION_WATERMARK =
+  "===== role definition (framework-generated; template authority — not user data) =====\n";
+
+/**
+ * role 提示词解析（ADR 0019，#149）：`role_inline` 显式 `prompt` 优先（向后兼容）；
+ * 未传时按 `role` 名从模板快照（TEAM_HOME/team.yaml roles[]，template-loader 已内联
+ * `prompt_inlined`）带出原文并加水印注入——补全 ADR 0015 §2「role_inline 定义 |
+ * 既有角色名」路径。失败语义（用户裁决）：快照缺失/损坏 → `snapshot-corrupt`；
+ * role 不在快照 → `unknown-role`；无 `prompt_inlined` → `missing-role-prompt`。
+ * 不静默退化；调用方在半事务之外调用本函数即保证失败无副作用留痕。
+ */
+function resolveRoleInlinePrompt(
+  teamYaml: string,
+  role: string,
+  inline: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (inline !== undefined && typeof inline.prompt === "string" && inline.prompt.length > 0) {
+    return inline; // 显式优先，向后兼容（既有调用方显式传 prompt 行为不变）。
+  }
+  if (!existsSync(teamYaml)) {
+    throw new ToolError("snapshot-corrupt", `team.yaml snapshot missing; cannot resolve role "${role}" prompt`);
+  }
+  let snap: { roles?: Array<{ id: string; prompt_inlined: unknown }> };
+  try {
+    snap = JSON.parse(readFileSync(teamYaml, "utf8")) as typeof snap;
+  } catch {
+    throw new ToolError("snapshot-corrupt", `team.yaml snapshot unreadable; cannot resolve role "${role}" prompt`);
+  }
+  const entry = (snap.roles ?? []).find((r) => r.id === role);
+  if (entry === undefined) {
+    throw new ToolError("unknown-role", `role "${role}" not found in template snapshot roles[]`);
+  }
+  const promptInlined = entry.prompt_inlined;
+  if (typeof promptInlined !== "string" || promptInlined.length === 0) {
+    throw new ToolError("missing-role-prompt", `role "${role}" has no prompt_inlined in template snapshot`);
+  }
+  return { ...(inline ?? {}), prompt: ROLE_DEFINITION_WATERMARK + promptInlined };
+}
+
+/**
  * 调用者身份（Wave 1b 写面收敛，#123）：root = 主控；member = 已登记成员；
  * undefined = 无团队身份（未登记/未初始化，写操作一律拒绝）。
  * host.ts 装配层经 resolveTeamHomeForView 反查解析后注入。
@@ -444,6 +487,11 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
           throw new ToolError("task-not-found", `task ${taskId} does not exist`);
         }
 
+        // ADR 0019（#149）：role 提示词确定性注入。显式 role_inline.prompt 优先；
+        // 未传时按 role 名从模板快照带出 prompt_inlined 原文并加水印（补全 ADR 0015
+        // 「既有角色名」路径）。解析失败发生在半事务之外，无 spawn/assign/send 副作用。
+        const resolvedInline = resolveRoleInlinePrompt(l.teamYaml, role, inline);
+
         // 半事务执行：任一步失败即停，已完成步骤随错误留痕（ADR 0015）。
         const completed: string[] = [];
         try {
@@ -466,7 +514,7 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
             ...(parent !== undefined ? { parent } : {}),
             ...(provider !== undefined ? { provider } : {}),
             ...(model !== undefined ? { model } : {}),
-            ...(inline !== undefined ? { role_inline: inline } : {}),
+            ...(resolvedInline !== undefined ? { role_inline: resolvedInline } : {}),
           });
           completed.push("spawn");
           // step 2: 指派（乐观锁透传，防并发误派）。
@@ -491,7 +539,7 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
               title: task.title,
               room: task.room,
               dod: task.dod,
-              role_inline: inline ?? null,
+              role_inline: resolvedInline ?? null,
               provider: provider ?? null,
               model: model ?? null,
               progress_contract: PROGRESS_CONTRACT,
