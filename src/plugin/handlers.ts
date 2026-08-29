@@ -908,9 +908,14 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
         const members = Object.values(registry.members ?? {});
 
         // 成员账本对照：assignee 视角聚合；存活列诚实标注框架不可见（V3）。
+        // Q6 PR-3a（#150）：assignee 语义 = 「当前受理人」——只聚合活动任务
+        // （非 done/cancelled），done 任务不再计入 assigned_task_ids。历史归属
+        // 由事件流 task/update 与 handoff 留痕承载，账本不承担永久归属
+        // （#147 Q6.4：master.assigned_task_ids 残留已 done 任务的实证修正）。
         const byAssignee = new Map<string, string[]>();
         for (const t of tasks) {
           if (t.assignee === undefined) continue;
+          if (t.status === "done" || t.status === "cancelled") continue;
           byAssignee.set(t.assignee, [...(byAssignee.get(t.assignee) ?? []), t.id]);
         }
         // 存量兼容（Q6 PR-2，#150）：PR-1 之前的会话成员状态从不迁移（setStatus 零调用），

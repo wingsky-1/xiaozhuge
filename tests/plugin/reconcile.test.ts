@@ -457,3 +457,59 @@ describe("team_reconcile 参数校验", () => {
     });
   });
 });
+
+describe("Q6 PR-3a assignee 当前受理人语义（#150）", () => {
+  it("任务 done 后不再计入 assignee 的 assigned_task_ids（历史归属由事件流承载）", async () => {
+    await handlers.init({});
+    await handlers.spawn({ member: "coder", durable_id: "dur-coder", role: "coder", tier: 1 });
+    const t = (await handlers.taskCreate({
+      title: "实现 X",
+      room: "root",
+      assignee: "coder",
+    })) as { task_id: string };
+    await handlers.taskUpdate({ task_id: t.task_id, status: "running" });
+    await handlers.taskUpdate({ task_id: t.task_id, status: "done" });
+
+    const view = (await handlers.reconcile({})) as {
+      members: Array<{ member: string; assigned_task_ids: string[] }>;
+    };
+    expect(view.members.find((m) => m.member === "coder")?.assigned_task_ids).toEqual([]);
+  });
+
+  it("handoff 移交后：旧持有者 assigned_task_ids 清空、新持有者含任务（当前受理人）", async () => {
+    await handlers.init({});
+    await handlers.spawn({ member: "coder", durable_id: "dur-coder", role: "coder", tier: 1 });
+    await handlers.spawn({ member: "qa", durable_id: "dur-qa", role: "qa", tier: 1 });
+    const t = (await handlers.taskCreate({
+      title: "实现 X",
+      room: "root",
+      assignee: "coder",
+      dod: ["build 绿"],
+    })) as { task_id: string };
+    await handlers.taskUpdate({ task_id: t.task_id, status: "running" });
+    await handlers.handoff({ task_id: t.task_id, to_role: "qa", receipt: ["pass: build 绿"] });
+
+    const view = (await handlers.reconcile({})) as {
+      members: Array<{ member: string; assigned_task_ids: string[] }>;
+    };
+    expect(view.members.find((m) => m.member === "coder")?.assigned_task_ids).toEqual([]);
+    expect(view.members.find((m) => m.member === "qa")?.assigned_task_ids).toEqual([t.task_id]);
+  });
+
+  it("悬空指派只对活动任务检测：done 任务的历史 assignee 不再报 dangling", async () => {
+    await handlers.init({});
+    await handlers.spawn({ member: "coder", durable_id: "dur-coder", role: "coder", tier: 1 });
+    const t = (await handlers.taskCreate({
+      title: "实现 X",
+      room: "root",
+      assignee: "coder",
+    })) as { task_id: string };
+    await handlers.taskUpdate({ task_id: t.task_id, status: "running" });
+    await handlers.taskUpdate({ task_id: t.task_id, status: "done" });
+    // done 后改派 ghost（root 可操作）：活动任务才参与悬空检测。
+    await handlers.taskUpdate({ task_id: t.task_id, assignee: "ghost" });
+
+    const view = (await handlers.reconcile({})) as { dangling_assignees: string[] };
+    expect(view.dangling_assignees).not.toContain("ghost");
+  });
+});
