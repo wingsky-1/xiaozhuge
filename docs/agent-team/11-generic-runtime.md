@@ -66,7 +66,7 @@ model-facing 工具的实例；工具 schema 经 JSON 克隆规范化进入模�
 | `team_send` | 定向信箱投递 | 校验可达性（auto 树边 / explicit 白名单）；写收件箱原子文件 |
 | `team_task_create/update/list` | 共享任务账本 | update 强制状态机合法迁移；互斥组冲突即拒绝 |
 | `team_negotiate/respond` | 跨房间结构化协商（yield/merge/file-order） | 提议与裁决入账本成为派发硬约束；无自由文本通道 |
-| `team_state_get/set` | 黑板读写 | set 必须携带保留态三元组；per-role 分片写 |
+| `team_state_get/set` | 黑板读写 | set 必须携带保留态三元组；per-member 分片写（键=成员名） |
 | `team_handoff` | 显式交接（含 judge 回执模式） | dod 回执格式校验，非法拒绝 |
 | `team_archive_write` | 归档绑定写入 | file 型 target 限位 TEAM_HOME 内 |
 | `team_gate_open/resolve` | 闸口申请/裁决 | resolve 仅限 Console 写入路径 |
@@ -86,7 +86,7 @@ $TEAM_HOME/<instance-id>/
 ├── rooms/
 │   ├── root/events.jsonl      # 事件流（仅运行时写入，无 agent 写路径）
 │   ├── <room>/events.jsonl
-│   ├── <room>/state/<role>.json   # 黑板按角色分片
+│   ├── <room>/state/<member>.json # 黑板按成员分片（键 = 成员名；Q5 #159）
 │   └── <room>/brief/
 ├── mailbox/                   # 信箱（omo 式原子文件）
 │   ├── <member>/<uuid>.json            # 待读
@@ -128,10 +128,10 @@ $TEAM_HOME/<instance-id>/
 |---|---|
 | 根会话崩溃 | goal 重启 + agents.json reattach 存活分支（新增） |
 | 重复实例化 | room.lock CAS；instance-id 幂等键 |
-| 成员死亡残片 | state/<role>.json 的 `"status":"running"` 原子哨兵，恢复时丢弃重做 |
+| 成员死亡残片 | state/<member>.json 的 `"status":"running"` 原子哨兵，恢复时丢弃重做 |
 | 投递中崩溃 | 信箱 .delivering TTL 收割（omo 模式） |
 | 任务半成品 | 任务账本记录基线与产物指针；重做前清理（git worktree 等**属 oss-maintenance 模板层约定，不入框架协议**） |
-| 并发写 | 黑板 per-role 分片；账本每任务单文件；事件流仅运行时单写者 |
+| 并发写 | 黑板 per-member 分片（键=成员名）；账本每任务单文件；事件流仅运行时单写者 |
 
 ## 6. 关键协调动作的框架断言清单（验收口径）
 
