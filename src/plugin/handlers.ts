@@ -497,6 +497,18 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
         if (task === undefined) {
           throw new ToolError("task-not-found", `task ${taskId} does not exist`);
         }
+        // 重复派发拒绝（Q5，#159，评审裁决）：任务已被**其他**成员持有即拒。
+        // 判据 = assignee 占用（`(role, task_id)` 的充分条件——同 role 二次派发
+        // 必触发 assignee 已占；顺带覆盖「换不同 role 派发已分配任务」的越权
+        // 面）；`assignee === member` 放行——半事务失败重试的幂等口子
+        // （at-least-once，与既有幂等重入测试一致）。换持有者走 team_handoff
+        // （requireHolder + update），不经 dispatch，不受影响。
+        if (task.assignee !== undefined && task.assignee !== member) {
+          throw new ToolError(
+            "duplicate-dispatch",
+            `task ${taskId} is already assigned to ${task.assignee}; hand off to change holder`,
+          );
+        }
 
         // ADR 0019（#149）：role 提示词确定性注入。显式 role_inline.prompt 优先；
         // 未传时按 role 名从模板快照带出 prompt_inlined 原文并加水印（补全 ADR 0015

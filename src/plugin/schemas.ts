@@ -30,7 +30,7 @@ export const schemas = {
     parameters: {
       type: "object",
       properties: {
-        member: str("Logical member name (role id), e.g. 'coder'."),
+        member: str("Unique member instance name, e.g. 'coder' or 'coder-<sessionId/random>' (Q5 #159); one instance per member — never reuse the bare role id for a second same-role instance."),
         durable_id: str("Durable subagent id returned by the subagent tool."),
         role: str("Role id defined in the team template."),
         tier: { type: "number", description: "Hierarchy tier (0 = Tier-0 master)." },
@@ -46,7 +46,7 @@ export const schemas = {
     parameters: {
       type: "object",
       properties: {
-        member: str("Logical member name (role id), e.g. 'coder'."),
+        member: str("Unique member instance name, e.g. 'coder' or 'coder-<sessionId/random>' (Q5 #159); one instance per member — never reuse the bare role id for a second same-role instance."),
         durable_id: str("Durable subagent id returned by the subagent tool."),
         role: str("Role id; with role_inline this is the inline role's own name."),
         tier: { type: "number", description: "Hierarchy tier (0 = Tier-0 master)." },
@@ -188,7 +188,7 @@ export const schemas = {
       type: "object",
       properties: {
         room: str("Room name."),
-        role: optStr("Single role shard; omit to list all shards in the room."),
+        role: optStr("Member shard key (a member name; default no suffix means list all shards in the room)."),
       },
       required: ["room"],
       additionalProperties: false,
@@ -199,7 +199,7 @@ export const schemas = {
       type: "object",
       properties: {
         room: str("Room name."),
-        role: str("Your member name (own your shard)."),
+        role: str("Your member name (own your shard); the shard file is named after this member, so same-role instances never collide."),
         status: {
           type: "string",
           enum: ["running", "blocked", "done"],
