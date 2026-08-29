@@ -125,6 +125,42 @@ describe("黑板分片", () => {
     expect(recovered).toEqual([{ role: "coder", action: "discarded" }]);
     expect(await getShard(home, "root", "coder")).toBeUndefined();
   });
+
+  it("多实例同 role 分片互不覆盖（Q5，#159）：member 名带实例后缀各自独立文件", async () => {
+    const home = tmpHome();
+    await setShard(home, "root", "coder-a1b2c3", { status: "running", ext: { inst: "a" } });
+    await setShard(home, "root", "coder-d4e5f6", { status: "blocked", ext: { inst: "b" } });
+    // 互不覆盖：各自读回自己的分片。
+    expect((await getShard(home, "root", "coder-a1b2c3"))?.status).toBe("running");
+    expect((await getShard(home, "root", "coder-a1b2c3"))?.ext).toEqual({ inst: "a" });
+    expect((await getShard(home, "root", "coder-d4e5f6"))?.status).toBe("blocked");
+    // listShards 双分片俱在。
+    const shards = await listShards(home, "root");
+    expect(shards.map((s) => s.role).sort()).toEqual(["coder-a1b2c3", "coder-d4e5f6"]);
+  });
+
+  it("旧分片天然兼容（Q5，#159）：纯 role 名分片可读、listShards 原样返回", async () => {
+    const home = tmpHome();
+    await setShard(home, "root", "legacy", { status: "running" });
+    // 存量会话 member 名 = 纯 role 名时，<member>.json 与旧路径 <role>.json 同名，
+    // 天然兼容（无后缀剥离回退——评审否决）。
+    expect((await getShard(home, "root", "legacy"))?.status).toBe("running");
+    const shards = await listShards(home, "root");
+    expect(shards.map((s) => s.role)).toEqual(["legacy"]);
+  });
+
+  it("member 分片键白名单（Q5，#159 评审 P2-5）：非法键拒绝，防路径注入", async () => {
+    const home = tmpHome();
+    await expect(setShard(home, "root", "../escape", { status: "running" })).rejects.toMatchObject({
+      code: "invalid-shard-key",
+    });
+    await expect(setShard(home, "root", "a/b", { status: "running" })).rejects.toMatchObject({
+      code: "invalid-shard-key",
+    });
+    await expect(getShard(home, "root", "../escape")).rejects.toMatchObject({
+      code: "invalid-shard-key",
+    });
+  });
 });
 
 describe("Team Template 校验", () => {

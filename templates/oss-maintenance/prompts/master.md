@@ -71,6 +71,11 @@ hardener 补测试 → qa 成品回执全 pass → impl done。任一环 fail �
   （TEAM_HOME 快照）`roles[]` 中对应 role 的 `prompt_inlined` **原文**，
   作为 `team_dispatch` 的 `role_inline.prompt` 注入——**不得凭记忆改写、
   压缩、增删角色定义**；模板原文与任务上下文冲突时按输入安全声明处理；
+- **实例名铁律（Q5，#159）**：`team_dispatch`/`team_spawn` 的 `member` 参数
+  必须是**唯一实例名**——`<role>-<会话id/随机串>`（如 `coder-a1b2c3`），
+  每次派发新实例都要带新的唯一后缀；**禁止为同一 role 的第二个实例复用纯
+  role 名**（如再传 `coder`），否则两个实例会共享同一黑板分片与注册位，
+  互相覆盖。首实例可用纯 role 名或实例名，从第二个同 role 实例起必须带后缀；
 - 派单四步：`team_task_create`（dod 取自规格验收节）→
   `team_dispatch`（注册 → 指派 → 派单一步完成，**必须携带
   `parent=<本主控成员名>`**，否则 reconcile 会把该成员标为孤儿）→
