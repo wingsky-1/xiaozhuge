@@ -913,12 +913,22 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
           if (t.assignee === undefined) continue;
           byAssignee.set(t.assignee, [...(byAssignee.get(t.assignee) ?? []), t.id]);
         }
+        // 存量兼容（Q6 PR-2，#150）：PR-1 之前的会话成员状态从不迁移（setStatus 零调用），
+        // 任务已全部结束的成员仍停在 spawned。读路径语义适配（不写盘、无迁移脚本）：
+        // 「有任务记录且全部 done/cancelled」的 spawned 成员按 stopped 展示——
+        // 曾开工已收尾，非「从未派活」的刚 spawn 成员（后者保持 spawned 原样）。
+        const hasAnyTask = (member: string): boolean => tasks.some((t) => t.assignee === member);
+        const hasActiveTask = (member: string): boolean =>
+          tasks.some((t) => t.assignee === member && t.status !== "done" && t.status !== "cancelled");
         const memberLedger = members.map((m) => ({
           member: m.member,
           durable_id: m.durableId,
           tier: m.tier,
           parent: m.parent ?? null,
-          status: m.status,
+          status:
+            m.status === "spawned" && hasAnyTask(m.member) && !hasActiveTask(m.member)
+              ? ("stopped" as const)
+              : m.status,
           liveness: "framework-invisible",
           assigned_task_ids: byAssignee.get(m.member) ?? [],
         }));

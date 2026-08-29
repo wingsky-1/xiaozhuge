@@ -118,4 +118,31 @@ describe("Q6 成员状态机（#150）", () => {
     const events = await readEvents();
     expect(events.filter((e) => e.type === "member/status")).toHaveLength(1);
   });
+
+  it("存量兼容：spawned 且任务全部 done → reconcile 展示 stopped（读路径，不写盘）", async () => {
+    await handlers.init({});
+    await seedCoder();
+    const taskId = await createTask();
+    await handlers.taskUpdate({ task_id: taskId, assignee: "coder" });
+    await memberHandlers("coder").taskUpdate({ task_id: taskId, status: "running" });
+    await memberHandlers("coder").taskUpdate({ task_id: taskId, status: "done" });
+    // 模拟 PR-1 前存量：状态机从不迁移，成员仍停在 spawned。
+    await new Registry(home).setStatus("coder", "spawned");
+
+    const view = (await handlers.reconcile({})) as {
+      members: Array<{ member: string; status: string }>;
+    };
+    expect(view.members.find((m) => m.member === "coder")?.status).toBe("stopped");
+    // 读路径语义适配：不写盘，agents.json 仍为 spawned。
+    expect((await new Registry(home).getMember("coder"))?.status).toBe("spawned");
+  });
+
+  it("存量兼容：spawned 且无任务记录 → 保持 spawned（从未派活）", async () => {
+    await handlers.init({});
+    await seedCoder();
+    const view = (await handlers.reconcile({})) as {
+      members: Array<{ member: string; status: string }>;
+    };
+    expect(view.members.find((m) => m.member === "coder")?.status).toBe("spawned");
+  });
 });
