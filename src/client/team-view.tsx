@@ -87,6 +87,19 @@ interface TeamDetailView {
   masterIdle: boolean;
   staleMembers: StaleAnnotation[];
   awaitingInput: StaleAnnotation[];
+  /** Q2（#162）：事件流白名单投影（摘要 + 凭据回执）。 */
+  recentEvents: RecentEventView[];
+}
+
+/** Q2（#162）：事件投影单条（服务端 RecentEventView 的客户端镜像）。 */
+interface RecentEventView {
+  room: string;
+  seq: number;
+  ts: number;
+  actor: string;
+  type: string;
+  summary: string | null;
+  receiptSummary: string[] | null;
 }
 
 interface TaskLedgerView {
@@ -500,15 +513,37 @@ export function TeamView(props: { sessionId?: string }): React.ReactNode {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overview]);
 
-  const memberEvents =
-    overview?.rooms
-      .find((r) => r.room === "root")
-      ?.recentEvents.filter((e) => e.actor === selected?.member)
-      .slice(-8)
-      .reverse() ?? [];
-
   // 抽屉四区块派生（渲染内 filter，数据量 <= 数十条无需 memo）。
   const drawerMember = selected?.member ?? "";
+
+  // 成员「最近协作事件」：详情快照优先（Q2，#162：detail.recentEvents 白名单投影，
+  // 含摘要/凭据回执）；detail 未达（首开抽屉空窗）时降级 overview.recentEvents，
+  // 避免误显示「暂无事件记录」（评审 P1-8）。两源统一归一化为同构形态
+  // （overview 四键降级源无 summary/receiptSummary → 置 null，渲染与 detail 同构）。
+  interface MemberEventRow {
+    seq: number;
+    ts: number;
+    type: string;
+    summary: string | null;
+    receiptSummary: string[] | null;
+  }
+  const normalizeEvent = (e: RecentEventView | { seq: number; ts: number; type: string }): MemberEventRow => ({
+    seq: e.seq,
+    ts: e.ts,
+    type: e.type,
+    summary: "summary" in e ? e.summary : null,
+    receiptSummary: "receiptSummary" in e ? (e.receiptSummary ?? null) : null,
+  });
+  const memberEvents: MemberEventRow[] =
+    detail !== null
+      ? (detail.recentEvents ?? []).filter((e) => e.actor === drawerMember).slice(-8).map(normalizeEvent).reverse()
+      : overview?.rooms
+          .find((r) => r.room === "root")
+          ?.recentEvents.filter((e) => e.actor === drawerMember)
+          .slice(-8)
+          .map(normalizeEvent)
+          .reverse() ?? [];
+
   const myTasks = (detail?.tasks ?? []).filter((t) => t.assignee === drawerMember);
   // 服务端已按每成员每 state 各 5 条截断，客户端不做二次 slice。
   const myEnvelopes = (detail?.envelopes ?? []).filter((e) => e.to === drawerMember);
@@ -690,11 +725,26 @@ export function TeamView(props: { sessionId?: string }): React.ReactNode {
                 <div style={{ opacity: 0.55 }}>暂无事件记录</div>
               ) : (
                 memberEvents.map((e) => (
-                  <div key={e.seq} style={{ display: "flex", gap: 8, padding: "3px 0" }}>
-                    <span style={{ opacity: 0.55, fontVariantNumeric: "tabular-nums" }}>
-                      {new Date(e.ts).toLocaleTimeString()}
-                    </span>
-                    <span>{e.type}</span>
+                  <div key={e.seq} style={{ padding: "3px 0" }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+                      <span style={{ opacity: 0.55, fontVariantNumeric: "tabular-nums" }}>
+                        {new Date(e.ts).toLocaleTimeString()}
+                      </span>
+                      {/* Q2（#162）：summary 白名单摘要（能拼则展示，否则类型名兜底） */}
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                        {e.summary !== null ? e.summary : e.type}
+                      </span>
+                    </div>
+                    {/* 凭据回执（#98 步骤 3）：handoff 事件展开逐条 pass:/fail: 结论 */}
+                    {e.receiptSummary !== null && e.receiptSummary.length > 0 ? (
+                      <div style={{ marginTop: 2, paddingLeft: 70, display: "flex", flexDirection: "column", gap: 1 }}>
+                        {e.receiptSummary.map((line, i) => (
+                          <span key={i} style={{ opacity: 0.8, fontSize: 12, wordBreak: "break-word" }}>
+                            {line}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 ))
               )}
