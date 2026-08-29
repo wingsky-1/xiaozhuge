@@ -13,6 +13,7 @@
  * 严格形状断言处失败，构成「字段泄漏即测试失败」防线。
  */
 import type { Shard } from "../collab/blackboard.js";
+import type { EventRecord } from "../kernel/types.js";
 import {
   STALE_THRESHOLD_MS,
   TASK_STATUSES,
@@ -94,6 +95,47 @@ export interface StaleAnnotation {
   lastSeenAgeMs: number;
 }
 
+/**
+ * 事件白名单投影单条（Q2，#162：事件展示层摘要渲染；payload 不出投影面——
+ * 仅白名单字段机械摘录，零语言生成）。来源：rooms/<room>/events.jsonl 尾部。
+ */
+export interface RecentEventView {
+  /** 事件所属房间（跨房间无全局唯一 seq，须 room+seq 复合 tiebreak 排序）。 */
+  room: string;
+  /** 房间内单调自增序号（EventRecord.seq）。 */
+  seq: number;
+  ts: number;
+  /** 动作主体（成员名 / "system"）。 */
+  actor: string;
+  /** 事件类型原文（team/task/spawn/mailbox/handoff/member/blackboard...）。 */
+  type: string;
+  /**
+   * 按类型白名单机械摘录的展示摘要（不满足守卫条件的类型 → null，类型名
+   * 本身已可读）。仅拼白名单标识符（task_id/status/to_role/to/msg_type/
+   * member/from/to），非法 payload 字段经 typeof 守卫后摘要置 null。
+   */
+  summary: string | null;
+  /**
+   * handoff 事件的逐条回执结论（#98 步骤 3 凭据卡片数据源）。读侧独立守卫：
+   * 仅 `pass:/fail:` 前缀行进入，其余丢弃（写路径校验不可信历史/绕过数据）；
+   * 条数与单行长度封顶防膨胀（RECEIPT_SUMMARY_LIMIT / RECEIPT_LINE_MAX）。
+   */
+  receiptSummary: string[] | null;
+}
+
+/** 单条事件输入切片：房间名 + 该房间事件流尾部（plugin 层 readEventsTail 读取）。 */
+export interface RoomEvent {
+  room: string;
+  events: readonly EventRecord[];
+}
+
+/**
+ * 回执摘要条数上限与单行长度上限（#162 评审 P1-6）：judge 大 dod 数组/长结论
+ * 不得无限膨胀响应；超限截断（保守丢弃，非报错）。
+ */
+export const RECEIPT_SUMMARY_LIMIT = 32;
+export const RECEIPT_LINE_MAX = 200;
+
 /** 团队详情视图模型（GET /api/xiaozhuge/team/detail 响应体形状）。 */
 export interface TeamDetailView {
   /** 注册表非空判定（team.yaml 在场短路在 HTTP 层先行完成）。 */
@@ -114,6 +156,8 @@ export interface TeamDetailView {
   staleMembers: StaleAnnotation[];
   /** 心跳超阈但存在任一房间 blocked 分片的执行成员（等待输入 ≠ 停摆，免责档）。 */
   awaitingInput: StaleAnnotation[];
+  /** 全房间事件流尾部白名单投影（Q2，#162），按 room asc、seq desc（同 room 内最新在前）。 */
+  recentEvents: RecentEventView[];
 }
 
 /** 归约输入整体：调用方已读的切片，与 OverviewInput 先例同构。 */
@@ -131,6 +175,8 @@ export interface DetailInput {
    * 携带房间的 RoomShard[]，TeamDetailView 及其余契约形状不受影响。
    */
   shards: readonly RoomShard[];
+  /** 各房间事件流尾部切片（plugin 层 readEventsTail 读取；Q2，#162）。 */
+  rooms: readonly RoomEvent[];
   /** 注入时钟（stale 判定与心跳年龄需要；纯函数可测）。 */
   nowMs: number;
 }
@@ -281,8 +327,103 @@ export function staleAnnotations(
 }
 
 /**
+ * 事件摘要分派（白名单机械摘录，零语言生成——与 currentActivity 同纪律）。
+ * 仅拼白名单标识符；payload 字段缺省/类型不符 → 该分支返回 null（保守投影
+ * 缺省→null 同口径，杜绝拼出 "undefined" 文案）。
+ */
+function summaryOf(type: string, payload: unknown): string | null {
+  const p = payload as Record<string, unknown> | null;
+  if (p === null || typeof p !== "object") return null;
+  const str = (v: unknown): string | null => (typeof v === "string" && v.length > 0 ? v : null);
+  switch (type) {
+    case "task/update": {
+      const id = str(p.task_id);
+      const status = str(p.status);
+      return id !== null && status !== null ? `task ${id} → ${status}` : null;
+    }
+    case "handoff": {
+      const id = str(p.task_id);
+      const to = str(p.to_role);
+      return id !== null && to !== null ? `handoff ${id} → ${to}` : null;
+    }
+    case "mailbox/deliver": {
+      const to = str(p.to);
+      const msgType = str(p.msg_type);
+      return to !== null && msgType !== null ? `deliver ${msgType} -> ${to}` : null;
+    }
+    case "member/status": {
+      // payload = { member, from, to }（handlers.ts transitMemberStatus）。
+      const member = str(p.member);
+      const from = str(p.from);
+      const to = str(p.to);
+      return member !== null && from !== null && to !== null
+        ? `member ${member}: ${from} → ${to}`
+        : null;
+    }
+    case "team/spawn": {
+      const member = str(p.member);
+      const role = str(p.role);
+      return member !== null && role !== null ? `spawn ${member} (${role})` : null;
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * 回执摘要读侧独立守卫（#162 评审 P0-3）：写路径 receipt-format 校验（handlers）
+ * 不能保证历史/绕过数据合规——此处逐条独立判断，仅 `pass:/fail:` 开头行进入，
+ * 否则整条 receiptSummary 置 null（宁缺勿滥，杜绝任意文本上投影面）。
+ */
+function receiptSummaryOf(payload: unknown): string[] | null {
+  const p = payload as Record<string, unknown> | null;
+  if (p === null || typeof p !== "object") return null;
+  const raw = p.receipt;
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const out: string[] = [];
+  for (const line of raw) {
+    if (typeof line !== "string") return null;
+    if (!/^\s*(pass|fail)\s*[:：]/i.test(line)) return null;
+    out.push(line.slice(0, RECEIPT_LINE_MAX));
+    if (out.length >= RECEIPT_SUMMARY_LIMIT) break;
+  }
+  return out.length > 0 ? out : null;
+}
+
+/**
+ * 单条事件白名单投影：{seq,ts,actor,type} 直出 + summary/receiptSummary
+ * 机械摘录；payload 原样永不入投影面。
+ */
+export function projectRecentEvent(room: string, e: EventRecord): RecentEventView {
+  return {
+    room,
+    seq: e.seq,
+    ts: e.ts,
+    actor: e.actor,
+    type: e.type,
+    summary: summaryOf(e.type, e.payload),
+    receiptSummary:
+      e.type === "handoff" ? receiptSummaryOf(e.payload) : null,
+  };
+}
+
+/**
+ * 事件投影归约：全房间事件尾部 → 白名单视图，排序（room asc, seq desc——
+ * 同 room 最新在前；跨房间按房间名稳定分组）。事件为空/坏行跳过同 readEventsTail。
+ */
+export function projectRecentEvents(rooms: readonly RoomEvent[]): RecentEventView[] {
+  const out: RecentEventView[] = [];
+  for (const { room, events } of rooms) {
+    for (const e of events) out.push(projectRecentEvent(room, e));
+  }
+  return out.sort(
+    (a, b) => a.room.localeCompare(b.room) || b.seq - a.seq,
+  );
+}
+
+/**
  * 详情总归约：任务/信箱/分片/注册表切片 → 确定性视图模型（空输入 → 全空形：
- * 五键计数全 0、各区空数组、masterIdle=false、stale/awaiting 空）。
+ * 五键计数全 0、各区空数组、masterIdle=false、stale/awaiting 空、recentEvents 空）。
  * isTeam 仅由注册表非空判定；tasks 等数据区不因空注册表丢弃（如主控登记前
  * 账本已有历史任务的边界实例仍如实展示，路由层短路与本函数分工见 plugin 层）。
  */
@@ -312,5 +453,6 @@ export function reduceDetail(input: DetailInput): TeamDetailView {
     masterIdle: annotations.masterIdle,
     staleMembers: annotations.staleMembers,
     awaitingInput: annotations.awaitingInput,
+    recentEvents: projectRecentEvents(input.rooms),
   };
 }

@@ -34,10 +34,12 @@ import {
   reduceDetail,
   Registry,
 } from "../runtime/index.js";
+import { readEventsTail } from "./team-overview.js";
 import type {
   Envelope,
   MailboxEnvelopeState,
   MailboxHeadView,
+  RoomEvent,
   RoomShard,
   TeamDetailView,
 } from "../runtime/index.js";
@@ -104,7 +106,7 @@ export async function readMailboxHeads(teamHome: string, member: string): Promis
 
 /* ── 归约输入组装（IO 与纯函数的分界）──────────────────────────────────── */
 
-/** 组装归约输入切片并投影：注册表 + 账本 + 逐房间分片 + 逐成员信箱头部。 */
+/** 组装归约输入切片并投影：注册表 + 账本 + 逐房间分片/事件尾部 + 逐成员信箱头部。 */
 export async function buildDetail(teamHome: string): Promise<TeamDetailView> {
   const l = layout(teamHome);
   const registry = await new Registry(teamHome).read();
@@ -114,10 +116,14 @@ export async function buildDetail(teamHome: string): Promise<TeamDetailView> {
     ? readdirSync(l.roomsDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort()
     : [];
   const shards: RoomShard[] = [];
+  const events: RoomEvent[] = [];
   for (const room of roomNames) {
     for (const shard of await listShards(teamHome, room)) {
       shards.push({ room, shard });
     }
+    // Q2（#162）：事件尾部走字节窗口 readEventsTail（同 overview 读法），
+    // 禁止全量 EventLog.read()（append-only 永不裁剪，长会话 O(全文件)）。
+    events.push({ room, events: await readEventsTail(join(l.roomsDir, room, "events.jsonl")) });
   }
   // 成员集 = agents.json keys：协议外垃圾目录不拖慢扫描、不入视图。
   const mailboxes: MailboxHeadView[] = [];
@@ -132,6 +138,7 @@ export async function buildDetail(teamHome: string): Promise<TeamDetailView> {
     corruptTaskFiles: ledgerList.corrupt,
     mailboxes,
     shards,
+    rooms: events,
     nowMs: Date.now(),
   });
 }
@@ -184,8 +191,10 @@ function safeReaddir(dir: string): string[] {
 
 /**
  * 输入文件集指纹：agents.json + ledger/tasks/*.json 每任务文件 +
- * rooms/<r>/state/*.json 每房间黑板分片 + mailbox/<m>/ 三段文件（未读位
- * `.json`、`.delivering-*.json`、processed/*.json）任一变化即翻转键。
+ * rooms/<r>/state/*.json 每房间黑板分片 + rooms/<r>/events.jsonl 每房间
+ * 事件流（Q2，#162：recentEvents 投影的数据源，缺失则事件更新不翻转指纹）
+ * + mailbox/<m>/ 三段文件（未读位 `.json`、`.delivering-*.json`、
+ * processed/*.json）任一变化即翻转键。
  * 全部输入 append-only / 原子写（ADR 0017），mtimeMs:size 指纹翻转可靠；
  * 枚举一律 sort 保证确定性（避免顺序抖动造成假 miss/ETag 抖动）。
  */
@@ -200,6 +209,7 @@ function fingerprint(teamHome: string): string {
     for (const entry of safeReaddir(stateDir)) {
       parts.push(`shard|${room}/${entry}=${fileStamp(join(stateDir, entry))}`);
     }
+    parts.push(`events|${room}=${fileStamp(join(l.roomsDir, room, "events.jsonl"))}`);
   }
   for (const member of safeReaddir(l.mailboxDir)) {
     const dir = join(l.mailboxDir, member);
@@ -265,6 +275,7 @@ function emptyDetailBody(): TeamDetailView {
       corruptTaskFiles: [],
       mailboxes: [],
       shards: [],
+      rooms: [],
       nowMs: 0,
     });
   }
