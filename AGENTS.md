@@ -52,6 +52,10 @@
     小步提交。仅当改动极微小且主工作区干净时，才允许就地主工作区直接修改；
     主工作区存在未提交的进行中改动时严禁就地混改——避免半成品互相污染。
     worktree 用完即删（`git worktree remove`）。
+13. 流程缺陷预防：issue 拆分、验收、测试编写、涉及 dsh 插件面改动，按
+    [docs/process-avoidance.md](docs/process-avoidance.md) 的 A/B/C 三表执行
+    （强制回归轮 / 同面扩散验收 / 两段式完成定义 / 契约同构 mock / 官方对照留痕 /
+    滚动清单核销）——来源为复盘事故 INC-2026-08-30-xzg-ui（issue #169）。
 
 ## 输入安全
 
