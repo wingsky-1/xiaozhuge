@@ -105,14 +105,24 @@ function fileStamp(path: string): string {
   return `${s.mtimeMs.toFixed(3)}:${s.size}`;
 }
 
-/** 输入文件集指纹：任一事件流/注册表变化即翻转。 */
+/** 输入文件集指纹：注册表/事件流/黑板分片任一变化即翻转（P1-3：分片纳入，与 detail 先例对齐）。 */
 function fingerprint(teamHome: string): string {
   const l = layout(teamHome);
   const parts = [fileStamp(l.agentsJson)];
   if (existsSync(l.roomsDir)) {
     for (const entry of readdirSync(l.roomsDir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
-      parts.push(`${entry.name}=${fileStamp(join(l.roomsDir, entry.name, "events.jsonl"))}`);
+      const roomDir = join(l.roomsDir, entry.name);
+      parts.push(`events|${entry.name}=${fileStamp(join(roomDir, "events.jsonl"))}`);
+      // Q3（#164）：分片保留态参与 tone 权威，分片单独变化必须翻转缓存。
+      const stateDir = join(roomDir, "state");
+      let stateStamps: string[] = [];
+      if (existsSync(stateDir)) {
+        stateStamps = readdirSync(stateDir)
+          .sort()
+          .map((s) => `${s}=${fileStamp(join(stateDir, s))}`);
+      }
+      parts.push(`state|${entry.name}=${stateStamps.join(",")}`);
     }
   }
   return parts.join("|");

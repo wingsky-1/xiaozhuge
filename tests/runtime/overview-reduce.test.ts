@@ -112,7 +112,77 @@ describe("reduceOverview：成员表与 isTeam 判定", () => {
       currentActivity: "blackboard/set",
       lastSeen: 7,
     });
-    expect(byName["master"]?.tone).toBe("idle");
+    // Q3（#164）：master 无分片但 registry=running → running 可见（不再静默）。
+    expect(byName["master"]?.tone).toBe("running");
+  });
+
+  it("Q3 等价性：无分片 registry=running 成员可见 running；spawned/stopped 落 idle；blocked 仅分片权威", () => {
+    // 无分片 + registry=running → running（核心痛点：谁写分片谁显示进度已废除）。
+    const runningNoShard = reduceOverview({
+      registry: {
+        members: {
+          coder: { member: "coder", durableId: "d-coder", tier: 1, parent: "master", status: "running", lastSeen: 7 },
+        },
+      },
+      rooms: [{ room: "root", events: [], shards: [] }],
+    });
+    expect(runningNoShard.members[0]).toMatchObject({ tone: "running", registryStatus: "running" });
+    // spawned/stopped 无分片 → idle（明确静默，非排队）。
+    const spawnedNoShard = reduceOverview({
+      registry: {
+        members: {
+          fresh: { member: "fresh", durableId: "d-f", tier: 1, parent: "master", status: "spawned", lastSeen: 2 },
+          paused: { member: "paused", durableId: "d-p", tier: 1, parent: "master", status: "stopped", lastSeen: 3 },
+        },
+      },
+      rooms: [],
+    });
+    expect(spawnedNoShard.members.map((m) => [m.member, m.tone])).toEqual([
+      ["fresh", "idle"],
+      ["paused", "idle"],
+    ]);
+    // 反例 I：registry=blocked 但无分片 → 保守 idle（blocked 唯一权威 = 黑板分片，
+    // 避免「展示 blocked 而免责索引不认」的漂移）。
+    const blockedNoShard = reduceOverview({
+      registry: {
+        members: {
+          stuck: { member: "stuck", durableId: "d-s", tier: 1, parent: "master", status: "blocked", lastSeen: 8 },
+        },
+      },
+      rooms: [],
+    });
+    expect(blockedNoShard.members[0]).toMatchObject({ tone: "idle", registryStatus: "blocked" });
+    // 分片权威覆盖 registry：registry=dead 一票否决 lost（保持既有语义）。
+    const deadWithRunningShard = reduceOverview({
+      registry: {
+        members: {
+          ghost: { member: "ghost", durableId: "d-g", tier: 1, parent: "master", status: "dead", lastSeen: 3 },
+        },
+      },
+      rooms: [{ room: "root", events: [], shards: [shard("ghost", "running")] }],
+    });
+    expect(deadWithRunningShard.members[0]).toMatchObject({ tone: "lost", registryStatus: "dead" });
+    // 分片保留态权威高于 registry（分片 blocked 优先于 registry=running）。
+    const shardOverRegistry = reduceOverview({
+      registry: {
+        members: {
+          coder: { member: "coder", durableId: "d-coder", tier: 1, parent: "master", status: "running", lastSeen: 7 },
+        },
+      },
+      rooms: [{ room: "root", events: [], shards: [shard("coder", "blocked")] }],
+    });
+    expect(shardOverRegistry.members[0]).toMatchObject({ tone: "blocked", registryStatus: "running" });
+    // 旧数据回落：无分片 + 无事件 + registry=spawned → idle 不炸（空 rooms 兼容）。
+    const legacy = reduceOverview({
+      registry: {
+        members: {
+          old: { member: "old", durableId: "d-o", tier: 1, parent: "master", status: "spawned", lastSeen: 0 },
+        },
+      },
+      rooms: [],
+    });
+    expect(legacy.members[0]).toMatchObject({ tone: "idle", registryStatus: "spawned" });
+    expect(legacy.rooms).toEqual([]);
   });
 
   it("dead 成员一票否决为 lost（liveness 优先于黑板遗留活动态）", () => {
