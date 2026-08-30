@@ -193,10 +193,11 @@ describe("GET /api/xiaozhuge/team/detail", () => {
       expect(body.tasks!.map((t) => t.id)).toEqual(["task-1", "task-2"]);
       expect(body.taskCounts).toEqual({ queued: 0, running: 1, blocked: 0, done: 1, cancelled: 0 });
       expect(body.corruptTaskFiles).toEqual([]);
-      // 信箱头部严格七键、state 映射正确、createdAt desc。
+      // 信箱头部严格八键、state 映射正确、createdAt desc；信封 body 非
+      // task_id+title 结构 → summary=null（PR-B 读侧守卫，脱敏不变）。
       expect(body.envelopes).toEqual([
-        { id: "env-p", to: "coder", from: "master", type: "task-assign", state: "acked", createdAt: 42 },
-        { id: "env-u", to: "coder", from: "master", type: "task-assign", state: "unread", createdAt: 42 },
+        { id: "env-p", to: "coder", from: "master", type: "task-assign", state: "acked", createdAt: 42, summary: null },
+        { id: "env-u", to: "coder", from: "master", type: "task-assign", state: "unread", createdAt: 42, summary: null },
       ]);
       // 分片徽标：房间维度平铺 + current_activity 单键提取。
       expect(body.shardBadges).toEqual([
@@ -208,6 +209,31 @@ describe("GET /api/xiaozhuge/team/detail", () => {
       // tier0 心跳新鲜 → 主控不怠工。
       expect("masterIdle" in body && body.masterIdle).toBe(false);
       expect(home).toBeTruthy();
+    });
+  });
+
+  it("T14b: task-assign 信封 body 带 task_id+title → 白名单摘要入投影（PR-B，#169）", async () => {
+    const home = makeHome();
+    writeAgents(home, {
+      master: memberOf("master", { tier: 0, durableId: "s-root" }),
+      coder: memberOf("coder", { parent: "master" }),
+    });
+    writeEnvelope(home, "unread", "coder", "env-assign", { task_id: "task-1", title: "实现核心模块" });
+    await withServer(home, async (port) => {
+      const body = (await (await fetch(urlOf(port))).json()) as DetailBody;
+      expect(body.envelopes).toEqual([
+        {
+          id: "env-assign",
+          to: "coder",
+          from: "master",
+          type: "task-assign",
+          state: "unread",
+          createdAt: 42,
+          summary: "task task-1：实现核心模块",
+        },
+      ]);
+      // body 仍不出投影面（仅摘要白名单单键）。
+      expect(JSON.stringify(body)).not.toContain('"body"');
     });
   });
 

@@ -51,6 +51,7 @@ function head(id: string, over: Partial<MailboxHeadView> = {}): MailboxHeadView 
     type: "task-assign",
     state: "unread",
     createdAt: 100,
+    summary: null,
     ...over,
   };
 }
@@ -128,9 +129,14 @@ describe("T2 保守投影：缺省字段 → null", () => {
     });
   });
 
-  it("在场字段如实投影（含字段值 0 的 falsy 场景不被误判为缺省）", () => {
+  it("maxRounds=0 视为未设上限 → 归一为 null（PR-D #169：旧数据 0 落盘，读侧归一）", () => {
     const detail = reduceDetail(input({ tasks: [rawTask({ id: "task-1", assignee: "qa", maxRounds: 0, artifact: "" })] }));
-    expect(detail.tasks[0]).toMatchObject({ assignee: "qa", maxRounds: 0, artifact: "" });
+    expect(detail.tasks[0]).toMatchObject({ assignee: "qa", maxRounds: null, artifact: "" });
+  });
+
+  it("maxRounds>0 如实投影（设限任务保留上限）", () => {
+    const detail = reduceDetail(input({ tasks: [rawTask({ id: "task-1", maxRounds: 3 })] }));
+    expect(detail.tasks[0]?.maxRounds).toBe(3);
   });
 });
 
@@ -176,7 +182,7 @@ describe("T4 任务计数", () => {
 });
 
 describe("T5 信封白名单投影（脱敏防线）", () => {
-  it("入参意外携带 body/payload 等多余键也不出投影面：严格七键 toEqual + 序列化负向断言", () => {
+  it("入参意外携带 body/payload 等多余键也不出投影面：严格八键 toEqual + 序列化负向断言", () => {
     const smuggled = {
       id: "env-1",
       to: "coder",
@@ -189,12 +195,36 @@ describe("T5 信封白名单投影（脱敏防线）", () => {
     } as unknown as MailboxHeadView;
     const detail = reduceDetail(input({ mailboxes: [smuggled] }));
     expect(detail.envelopes).toEqual([
-      { id: "env-1", to: "coder", from: "master", type: "task-assign", state: "unread", createdAt: 100 },
+      {
+        id: "env-1",
+        to: "coder",
+        from: "master",
+        type: "task-assign",
+        state: "unread",
+        createdAt: 100,
+        summary: null,
+      },
     ]);
     const serialized = JSON.stringify(detail);
     expect(serialized).not.toContain("SECRET-MARK");
     expect(serialized).not.toContain("PAYLOAD-MARK");
     expect(serialized).not.toContain('"body"');
+  });
+
+  it("task-assign 信封携带白名单摘要：summary 透传（读侧守卫由 plugin 层 envelopeSummary 承担）", () => {
+    const withSummary = {
+      id: "env-2",
+      to: "coder",
+      from: "master",
+      type: "task-assign",
+      state: "unread",
+      createdAt: 200,
+      summary: "task task-1：实现 X",
+    } as unknown as MailboxHeadView;
+    const detail = reduceDetail(input({ mailboxes: [withSummary] }));
+    expect(detail.envelopes[0]?.summary).toBe("task task-1：实现 X");
+    // summary 是白名单单键，body 仍不出投影面。
+    expect(JSON.stringify(detail)).not.toContain('"body"');
   });
 });
 
@@ -463,6 +493,24 @@ describe("Q2 事件投影：白名单摘要", () => {
       { room: "root", seq: 2, type: "handoff", summary: "handoff t1 → writer", receiptSummary: ["pass: 结论通过"] },
       { room: "root", seq: 1, type: "task/update", summary: "task t1 → running", receiptSummary: null },
     ]);
+  });
+
+  it("task/create 白名单分支：摘要带任务标题（PR-B，#169）", () => {
+    const rows = projectRecentEvents([
+      room("root", [ev(1, "task/create", "master", { task_id: "t1", title: "实现 X", room: "root" })]),
+    ]);
+    expect(rows[0]).toMatchObject({ type: "task/create", summary: "task t1 创建：实现 X", receiptSummary: null });
+  });
+
+  it("task/update 带 title：新格式；历史事件缺 title：退化旧格式（P0-1，#169）", () => {
+    const withTitle = projectRecentEvents([
+      room("root", [ev(1, "task/update", "coder", { task_id: "t1", status: "running", title: "实现 X" })]),
+    ]);
+    expect(withTitle[0]?.summary).toBe("task t1（实现 X）→ running");
+    const legacy = projectRecentEvents([
+      room("root", [ev(2, "task/update", "coder", { task_id: "t1", status: "running" })]),
+    ]);
+    expect(legacy[0]?.summary).toBe("task t1 → running");
   });
 
   it("未知类型 → summary=null（类型名可读，不拼多余文案）", () => {
