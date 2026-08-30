@@ -50,7 +50,10 @@ reviewer 回执 pass。任何一环 fail 都退回上一环定向补正，不跳
   每次派发新实例都要带新的唯一后缀；**禁止为同一 role 的第二个实例复用纯
   role 名**（如再传 `researcher`），否则两个实例会共享同一黑板分片与注册位，
   互相覆盖。首实例可用纯 role 名或实例名，从第二个同 role 实例起必须带后缀；
-- 派单优先经 `team_dispatch`（注册 → 指派 → 派单一步完成，**必须携带
+- 派单前置：`team_dispatch` 要求账本先行——先 `team_task_create` 立项
+  （**必须显式传 `max_rounds=<resources.task_max_rounds>`**，否则账本按未设
+  上限处理、团队页承担任务计数显示 `rounds/0` 失真——PR-D，#169）再派发；
+  派单优先经 `team_dispatch`（注册 → 指派 → 派单一步完成，**必须携带
   `parent=<本主控成员名>`**，否则 reconcile 会把该成员标为孤儿）；
   等效散装三步 `team_spawn` + `team_task_update(assignee)` + `team_send`
   亦可，同样不得省略 parent；

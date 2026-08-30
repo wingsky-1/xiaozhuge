@@ -57,6 +57,8 @@ export type MailboxEnvelopeState = "unread" | "claimed" | "acked";
 /**
  * 信箱信封头部投影。body 永不入此形状（payload 不出投影面）；本 interface 即
  * 白名单闭包——严格形状断言保证未来 Envelope 追加字段不会自动进入投影面。
+ * summary 为 plugin 层读侧独立守卫摘录的白名单摘要（task-assign 摘 task_id+title，
+ * 其余类型 null），复用 receiptSummaryOf「写路径校验不可信历史，读侧独立守卫」纪律。
  */
 export interface MailboxHeadView {
   /** 信封 id（= uuid）。 */
@@ -67,6 +69,8 @@ export interface MailboxHeadView {
   /** 三段状态：unread 待读 / claimed 认领中（瞬态过渡态）/ acked 已确认。 */
   state: MailboxEnvelopeState;
   createdAt: number;
+  /** 白名单摘要单键（task-assign → task <id>：<title>；其余类型/非法 body → null）。 */
+  summary: string | null;
 }
 
 /** 单条黑板分片输入切片：listShards 本身无 room 维度，由调用方逐房间读取时附上。 */
@@ -216,7 +220,9 @@ function projectTask(t: TaskRecord): TaskLedgerView {
     status: t.status,
     assignee: t.assignee ?? null,
     rounds: t.rounds,
-    maxRounds: t.maxRounds ?? null,
+    // P0-2（PR-D，#169）：maxRounds 旧数据落盘 0 视为未设限 → 归一为 null
+    //（0/负/null/undefined 一律不展示上限，与 ledger.update maxRounds>0 判据一致）。
+    maxRounds: t.maxRounds !== null && t.maxRounds !== undefined && t.maxRounds > 0 ? t.maxRounds : null,
     touched: [...t.touched],
     rev: t.rev,
     createdAt: t.createdAt,
@@ -244,7 +250,7 @@ function sortAndCapEnvelopes(
   const kept: MailboxHeadView[] = [];
   for (const head of sorted) {
     // 显式重建对象而非透传引用：即使未来入参意外携带 body 等多余字段，
-    // 输出形状也始终锁定七键白名单（防御性拷贝纪律的最后防线）。
+    // 输出形状也始终锁定八键白名单（防御性拷贝纪律的最后防线）。
     const projected: MailboxHeadView = {
       id: head.id,
       to: head.to,
@@ -252,6 +258,7 @@ function sortAndCapEnvelopes(
       type: head.type,
       state: head.state,
       createdAt: head.createdAt,
+      summary: head.summary ?? null,
     };
     const bucket = `${head.to}\u0000${head.state}`;
     const count = seen.get(bucket) ?? 0;
@@ -339,7 +346,16 @@ function summaryOf(type: string, payload: unknown): string | null {
     case "task/update": {
       const id = str(p.task_id);
       const status = str(p.status);
-      return id !== null && status !== null ? `task ${id} → ${status}` : null;
+      if (id === null || status === null) return null;
+      // P0-1（#169 复核）：title 是 PR-C 增强项而非必需项——历史事件无 title
+      // 字段时退化旧格式，避免「新增字段导致历史摘要整体 null 回退」。
+      const title = str(p.title);
+      return title !== null ? `task ${id}（${title}）→ ${status}` : `task ${id} → ${status}`;
+    }
+    case "task/create": {
+      const id = str(p.task_id);
+      const title = str(p.title);
+      return id !== null && title !== null ? `task ${id} 创建：${title}` : null;
     }
     case "handoff": {
       const id = str(p.task_id);

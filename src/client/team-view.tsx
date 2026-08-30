@@ -124,6 +124,8 @@ interface MailboxHeadView {
   type: string;
   state: string;
   createdAt: number;
+  /** PR-B（#169）：task-assign 信封白名单摘要（task <id>：<title>），其余类型 null。 */
+  summary: string | null;
 }
 
 interface ShardBadgeView {
@@ -783,7 +785,9 @@ export function TeamView(props: { sessionId?: string }): React.ReactNode {
                           {new Date(e.createdAt).toLocaleTimeString()}
                         </span>
                         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-                          {e.type} · 来自 {e.from}
+                          {/* PR-B（#169）：白名单摘要优先（task-assign → task <id>：<title>），
+                              其余类型/非法 body 退化「类型 · 来自」兜底。 */}
+                          {e.summary !== null ? e.summary : `${e.type} · 来自 ${e.from}`}
                         </span>
                         <span style={{ opacity: 0.55 }}>{ENVELOPE_STATE_LABELS[e.state] ?? e.state}</span>
                       </div>

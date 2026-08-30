@@ -539,7 +539,8 @@ describe("账本字段级契约", () => {
     const task = await ledger.create({ title: "最小", room: "r" });
     expect(task.touched).toEqual([]);
     expect(task.mutexGroups).toEqual([]);
-    expect(task.maxRounds).toBe(0);
+    // PR-D（#169）：未传 max_rounds → null（未设上限），不再落盘 0。
+    expect(task.maxRounds).toBeNull();
     expect(task.dod).toEqual([]);
     expect(task.rounds).toBe(0);
     expect(task.rev).toBe(1);
