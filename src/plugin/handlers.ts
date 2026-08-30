@@ -46,6 +46,22 @@ import {
 import { userTemplatesRoot, projectTemplatesRoot } from "./team-home.js";
 import { appendToolManifest } from "./tool-manifest.js";
 import { auditWorkspace } from "./workspace-audit.js";
+import { sessionIndexFor, isTeamHomeUnderSessionsRoot } from "./session-index.js";
+
+/**
+ * 反查索引登记（ADR 0021）：成员登记成功后维护 durableId→(teamHome, member)
+ * 映射，供视图反查免全目录扫描。仅 tier>0（非 tier0 主控）成员入索引——主控
+ * durableId = 主会话 id，team.yaml 直查已覆盖，入索引冗余且污染语义。
+ * best-effort：索引是派生物，失败静默（漏检由读面 miss 回扫自愈），不阻塞
+ * 主写事务。touchMember 心跳与 setStatus 不触发本函数（映射未变）。
+ * 守卫：仅目录协议形态的 teamHome（`<DSH_HOME>/xiaozhuge/sessions/<root>`）
+ * 才写索引——测试等裸 mkdtemp 临时根不入库，防污染真实 DSH_HOME。
+ */
+function indexMember(teamHome: string, durableId: string, member: string, tier: number): void {
+  if (tier <= 0) return;
+  if (!isTeamHomeUnderSessionsRoot(teamHome)) return;
+  sessionIndexFor()?.set(durableId, teamHome, member);
+}
 
 /** 统一错误形状：{ error: { code, message } }，模型可读可路由。 */
 export class ToolError extends Error {
@@ -464,6 +480,8 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
           status: "spawned",
           lastSeen: Date.now(),
         });
+        // ADR 0021：成员登记成功 → 反查索引登记（仅 tier>0；best-effort）。
+        indexMember(teamHome, durableId, member, tier);
         await appendEvent("system", "team/spawn", {
           member,
           durable_id: durableId,
@@ -529,6 +547,8 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
             status: "spawned",
             lastSeen: Date.now(),
           });
+          // ADR 0021：成员登记成功 → 反查索引登记（仅 tier>0；best-effort）。
+          indexMember(teamHome, durableId, member, tier);
           await appendEvent("system", "team/spawn", {
             member,
             durable_id: durableId,

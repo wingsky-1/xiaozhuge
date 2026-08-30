@@ -7,13 +7,14 @@
  *
  * 同时覆盖 agentless 抛错（复核必改 3）与 host.execute 反查接线。
  */
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { apply } from "../../src/plugin/host.js";
 import { createHandlers, memberCaller, rootCaller, type Handlers } from "../../src/plugin/handlers.js";
 import { resolveTeamHome, resolveTeamHomeForView } from "../../src/plugin/team-home.js";
+import { resetSessionIndex } from "../../src/plugin/session-index.js";
 
 const SESSION_MASTER = "session-master-1";
 const MEMBER = "qa";
@@ -46,6 +47,11 @@ beforeEach(() => {
   const home = mkdtempSync(join(tmpdir(), "xzg-hosttools-"));
   dshHome = join(home, "dsh-home");
   process.env.DSH_HOME = dshHome;
+});
+
+afterEach(() => {
+  // 反查索引单例按 DSH_HOME 隔离；逐用例清理防 fd/状态累积（ADR 0021）。
+  resetSessionIndex();
 });
 
 describe("Wave 1a 工具面反查挂载（子代理 → 主控实例）", () => {

@@ -2,11 +2,12 @@
  * 视图供数解析单测（#97 问题 3）：主会话直查优先；子会话按成员 durable id
  * 反查所属实例（纯读）；未初始化实例不命中、损坏注册表跳过、DSH_HOME 隔离。
  */
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveTeamHomeForView } from "../../src/plugin/team-home.js";
+import { resetSessionIndex } from "../../src/plugin/session-index.js";
 
 let home: string;
 let dshHome: string;
@@ -15,6 +16,11 @@ beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), "xzg-teamhome-"));
   dshHome = join(home, "dsh-home");
   process.env.DSH_HOME = dshHome;
+});
+
+afterEach(() => {
+  // 索引单例按 DSH_HOME 隔离；逐用例清理防 fd/状态跨用例累积（ADR 0021）。
+  resetSessionIndex();
 });
 
 /** 在 DSH_HOME 下落一个实例：<sessions>/<rootSession>/{team.yaml, agents.json}。 */
@@ -70,5 +76,20 @@ describe("resolveTeamHomeForView", () => {
   it("完全未知会话 → 回落直查路径，membership=null 不抛错", () => {
     const r = resolveTeamHomeForView("s-nowhere");
     expect(r.membership).toBeNull();
+  });
+
+  it("负缓存过期后：同一未知 id 重新全扫（TTL 窗口外不再免扫）", () => {
+    // 首次 miss 登记负缓存（短窗免扫）
+    expect(resolveTeamHomeForView("dur-exp").membership).toBeNull();
+    // 同窗内二次 miss：不重复全扫（仍回落直查 null）
+    expect(resolveTeamHomeForView("dur-exp").membership).toBeNull();
+    // 推进系统时间越过 TTL（30s）→ 过期条目被清理，重新全扫（结果不变）
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.now() + 31_000);
+    try {
+      expect(resolveTeamHomeForView("dur-exp").membership).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
