@@ -870,10 +870,12 @@ export function rootSessionOf(overview: TeamOverview | null, fallbackSessionId: 
  * （评审阻塞项修订；绝不硬编码猜测 mode）：
  *   ① subagentAddress(childId) 直接返还已发现地址（自带 mode）；
  *   ② miss → refreshSubagents(parent) 拉 catalog 后重取；
- *   ③ 仍无 → 降级 open(parent) 跳父会话（原生轨迹可见成员活动），不崩 UI。
- * @param parentSessionId 团队根会话 id（#163 P1-1：不可传当前子代理会话 id）。
+ *   ③ 仍无 → 降级 open(childId)——宿主 select() 内部 navigationAddress 会从
+ *     已刷新 catalog 反查子会话地址，**未打开过的子会话也能跳转**
+ *     （issue #169 根因修正：原降级 open(parent) 在团队页等于原地跳转）。
+ * @param parentSessionId 团队根会话 id（#163 P1-1：refresh 的 catalog parent）。
  */
-async function openSession(member: MemberNodeView, parentSessionId: string): Promise<void> {
+export async function openSession(member: MemberNodeView, parentSessionId: string): Promise<void> {
   const sessions = sessionsService;
   const childId = member.durableId;
   if (sessions === null || childId === null) return;
@@ -888,7 +890,7 @@ async function openSession(member: MemberNodeView, parentSessionId: string): Pro
   }
   try {
     if (address !== undefined) sessions.openSubagent(address);
-    else sessions.open(parentSessionId);
+    else sessions.open(childId);
   } catch {
     // fail-loud 面：兜底不白屏，保留当前视图。
   }
