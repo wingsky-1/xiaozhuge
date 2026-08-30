@@ -498,6 +498,9 @@ export function TeamView(props: { sessionId?: string }): React.ReactNode {
   }, [overview]);
 
   const tree = useMemo(() => buildTree(overview?.members ?? []), [overview]);
+  // #163 P1-1：跨成员跳转的 catalog parent 恒用团队根 id（tier0 durableId），
+  // 子代理页挂团队 tab 时 sessionId 是 child id，直接复用会 refresh/open 错位。
+  const rootSessionId = useMemo(() => rootSessionOf(overview, sessionId), [overview, sessionId]);
   // A4-7 响应式树布局：宽视口 LR（根左叶右，宽屏利用率高）；窄视口 TB
   // （纵向滚动友好，移动端不需横向平移）——复用 narrow 响应式判定。
   const { nodes, edges } = useMemo(
@@ -819,7 +822,7 @@ export function TeamView(props: { sessionId?: string }): React.ReactNode {
             <button
               type="button"
               disabled={selected.durableId === null}
-              onClick={() => void openSession(selected, sessionId)}
+              onClick={() => void openSession(selected, rootSessionId)}
               style={{
                 marginTop: 4,
                 padding: "8px 0",
@@ -851,11 +854,24 @@ function Row(props: { label: string; children: React.ReactNode }): React.ReactNo
 }
 
 /**
+ * 从总览推导「团队根会话 id」（#163 P1-1：openSession 三级链的 parent 必须是
+ * 团队根，而非当前（可能为子代理的）会话 id）。来源 = overview 中 tier0 成员的
+ * durableId（#79 注释明示 tier0 主控 = 宿主主会话 id）；master 未登记（旧实例
+ * 兼容态）时回落当前会话 id。零额外请求，复用已加载的 overview。
+ */
+export function rootSessionOf(overview: TeamOverview | null, fallbackSessionId: string): string {
+  if (overview === null) return fallbackSessionId;
+  const tier0 = overview.members.find((m) => m.tier === 0);
+  return tier0?.durableId ?? fallbackSessionId;
+}
+
+/**
  * 「打开会话」跳宿主原生回放——走 ISessions 公开导航面，mode 三级获取链
  * （评审阻塞项修订；绝不硬编码猜测 mode）：
  *   ① subagentAddress(childId) 直接返还已发现地址（自带 mode）；
  *   ② miss → refreshSubagents(parent) 拉 catalog 后重取；
  *   ③ 仍无 → 降级 open(parent) 跳父会话（原生轨迹可见成员活动），不崩 UI。
+ * @param parentSessionId 团队根会话 id（#163 P1-1：不可传当前子代理会话 id）。
  */
 async function openSession(member: MemberNodeView, parentSessionId: string): Promise<void> {
   const sessions = sessionsService;
@@ -892,6 +908,110 @@ let sessionsService: SessionsNav | null = null;
 
 export function bindSessionsService(svc: SessionsNav | null): void {
   sessionsService = svc;
+}
+
+/* ---------------- #163 子代理页「返回团队」入口（conversation.session.header.actions 官方插槽） ---------------- */
+
+/**
+ * 当前会话在团队中的身份三态（#163：header 导航入口的显隐依据）。
+ * - root：is_team=true 且非成员（主控会话自身）——团队 tab 已在 tab 栏，无需返回按钮；
+ * - member：is_team=true 且经反查命中某实例（子代理会话）——显示「返回团队」；
+ * - none：非团队会话——隐藏。
+ * 纯函数便于单测（评审 P1-4：三态判定抽离）。
+ */
+export type TeamSessionRole = "root" | "member" | "none";
+
+export function classifyTeamRole(d: TeamStatusLike): TeamSessionRole {
+  if (d.is_team !== true) return "none";
+  if (d.membership !== null && d.membership !== undefined && d.membership.root_session.length > 0) {
+    return "member";
+  }
+  return "root";
+}
+
+/** team/status 响应本地消费面（client 不 import plugin；与服务端响应形状一致）。 */
+export interface TeamStatusLike {
+  is_team: boolean;
+  membership?: { root_session: string; member: string } | null;
+}
+
+/**
+ * 子代理会话页「返回团队」入口（#163，O1 裁决）：官方 `conversation.session.header.actions`
+ * 插槽（list/session/additive）按钮——回到所属团队主会话（sessions.open(root_session)，
+ * O2 裁决：原生会话跳转，否决自造 URL 路由）。仅 member 会话显示；root/none 隐藏
+ * （团队 tab 已在 tab 栏，避免重复入口）。
+ *
+ * 跨成员跳转（验收 2）：经团队 tab 达成——TeamViewWatcher 对子代理页反查 is_team=true
+ * 已注册团队 tab（ConversationRoot 全会话统一渲染 input.right/header.actions 实证），
+ * 团队 tab 内点成员节点走 openSession(selected, rootSessionId)（parent 已修正为根 id）。
+ * 因此本按钮最小半径 = 返回根会话，不再自绘成员切换器（评审 P1-2：防过度设计）。
+ */
+export function TeamBackNavEntry(props: { sessionId?: string }): React.ReactNode {
+  const sessionId = props.sessionId ?? "";
+  const [role, setRole] = useState<TeamSessionRole>("none");
+  const [rootSession, setRootSession] = useState<string | null>(null);
+
+  // 随会话探测身份三态（仅 member 显示按钮）；fetch 失败静默降级为隐藏（不白屏）。
+  useEffect(() => {
+    let cancelled = false;
+    if (!sessionId) {
+      setRole("none");
+      return;
+    }
+    fetch(`/api/xiaozhuge/team/status?session=${encodeURIComponent(sessionId)}`)
+      .then((r) => r.json())
+      .then((d: TeamStatusLike) => {
+        if (cancelled) return;
+        setRole(classifyTeamRole(d));
+        setRootSession(d.membership?.root_session ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setRole("none");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+
+  if (role !== "member" || rootSession === null) return null;
+
+  const goBack = (): void => {
+    const sessions = sessionsService;
+    if (sessions === null) return;
+    try {
+      sessions.open(rootSession);
+    } catch {
+      // fail-loud 面：导航失败不白屏，保留当前视图。
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      id="xzg-team-back"
+      title="返回所属团队"
+      onClick={goBack}
+      style={{
+        whiteSpace: "nowrap",
+        fontSize: 12,
+        lineHeight: 1,
+        padding: "6px 10px",
+        borderRadius: 14,
+        border: "1px solid var(--dsw-static-deepseek-500, rgba(45,164,78,.5))",
+        background: "rgba(45,164,78,.12)",
+        color: "var(--dsw-static-deepseek-500, #2da44e)",
+        cursor: "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        flex: "none",
+        // 触控目标下限（WCAG 2.5.8 最小 24×24）。
+        minWidth: 24,
+        minHeight: 24,
+      }}
+    >
+      返回团队
+    </button>
+  );
 }
 
 /* ---------------- 内联小样式 ---------------- */

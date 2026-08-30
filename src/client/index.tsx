@@ -19,7 +19,7 @@ import type { ConversationSnapshot } from "@deepseek-ai/dsh-client-runtime/clien
 import type { IConversation } from "@deepseek-ai/dsh-client-ui-conversation/client";
 import type { Context } from "@deepseek-ai/cordis";
 import type { IApiClient } from "@deepseek-ai/dsh-client-connection/client";
-import { TeamView, bindSessionsService } from "./team-view.js";
+import { TeamView, TeamBackNavEntry, bindSessionsService } from "./team-view.js";
 
 /**
  * conversation.input.right 插槽 owner share（InputZone）。
@@ -462,6 +462,19 @@ export function apply(ctx: Context): void {
         order: 1,
       },
       TeamViewWatcher,
+    ),
+  );
+  // #163 Q1：子代理会话页「返回团队」入口（官方 header.actions 插槽，additive
+  // 按钮位）。仅 member 会话渲染（组件内 self-hide），root/none 零视觉占位；
+  // 与团队 tab 并存不重复——按钮定位为「返回团队主会话」快捷位。
+  slots.inject("conversation.session.header.actions", () =>
+    slots.register(
+      {
+        name: "conversation.session.header.actions",
+        id: "xiaozhuge-team-back-nav",
+        order: 0,
+      },
+      TeamBackNavEntry,
     ),
   );
 }

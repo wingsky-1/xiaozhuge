@@ -134,16 +134,26 @@ const ctxStub = {
       };
     }
     if (key === "slots") {
+      const allowedSlots = new Set([
+        "conversation.input.right",
+        "conversation.session.header.actions",
+      ]);
       return {
         inject(slotKey, callback) {
-          assert(slotKey === "conversation.input.right", `注入插槽 = conversation.input.right（实际 ${slotKey}）`);
+          assert(allowedSlots.has(slotKey), `注入插槽合法（实际 ${slotKey}）`);
           const disposer = callback();
           registrations.push({ slotKey, disposer });
         },
         register(spec, component) {
-          assert(spec.name === "conversation.input.right", "register 声明 conversation.input.right");
           assert(
-            spec.id === "xiaozhuge-team-create" || spec.id === "xiaozhuge-team-view-watcher",
+            spec.name === "conversation.input.right" ||
+              spec.name === "conversation.session.header.actions",
+            `register 声明合法插槽（实际 ${spec.name}）`,
+          );
+          assert(
+            spec.id === "xiaozhuge-team-create" ||
+              spec.id === "xiaozhuge-team-view-watcher" ||
+              spec.id === "xiaozhuge-team-back-nav",
             `register id 合法（实际 ${spec.id}）`,
           );
           assert(typeof component === "function", "组件是函数（React 组件）");
@@ -155,7 +165,7 @@ const ctxStub = {
   },
 };
 mod.apply(ctxStub);
-assert(registrations.length === 2, "apply 完成 2 次插槽注册");
+assert(registrations.length === 3, "apply 完成 3 次插槽注册");
 
 console.log(failed === 0 ? "\n全部客户端契约断言通过。" : `\n${failed} 项失败`);
 process.exit(failed === 0 ? 0 : 1);
