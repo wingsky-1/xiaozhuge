@@ -60,7 +60,7 @@ export class Ledger {
       touched: input.touched ?? [],
       mutexGroups: input.mutexGroups ?? [],
       rounds: 0,
-      maxRounds: input.maxRounds ?? 0,
+      maxRounds: input.maxRounds ?? null,
       dod: input.dod ?? [],
       ...(input.baseline !== undefined ? { baseline: input.baseline } : {}),
       rev: 1,
@@ -106,7 +106,14 @@ export class Ledger {
       rev: current.rev + 1,
       updatedAt: Date.now(),
     };
-    if (patch.rounds !== undefined && next.maxRounds > 0 && next.rounds > next.maxRounds) {
+    // P2（#169 复核）：maxRounds 可为 null（未设上限），rounds-exceeded 仅在
+    // 显式设定上限时触发——消除 `null > 0` 的歧义与 lint 告警。
+    if (
+      patch.rounds !== undefined &&
+      next.maxRounds !== null &&
+      next.maxRounds > 0 &&
+      next.rounds > next.maxRounds
+    ) {
       throw new LedgerError(
         "rounds-exceeded",
         `task ${id}: rounds ${next.rounds} exceeds max ${next.maxRounds}`,
