@@ -78,8 +78,9 @@ export interface TaskRecord {
   mutexGroups: string[];
   /** 已完成往返圈数（资源计数）。 */
   rounds: number;
-  /** 单任务往返上限（超限拒绝或转 blocked，由工具层裁决）。 */
-  maxRounds: number;
+  /** 单任务往返上限（超限拒绝或转 blocked，由工具层裁决）；
+   *  null = 未设上限（旧数据落盘 0 视为未设限，读侧归一，PR-D #169）。 */
+  maxRounds: number | null;
   /** DoD 完成判据清单（judge 回执核验依据）。 */
   dod: string[];
   /** 基线指针（如 git ref），供重做前对账。 */

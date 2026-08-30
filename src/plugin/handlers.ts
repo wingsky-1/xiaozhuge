@@ -595,6 +595,8 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
             task_id: taskId,
             status: updated.status,
             rev: updated.rev,
+            // PR-C（#169）：同 taskUpdate 路径一致，事件 payload 带 title。
+            title: updated.title,
           });
           completed.push("assign");
           // step 3: 派单信封（role_inline 与模型档位随信封投递给成员；
@@ -807,6 +809,11 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
           task_id: taskId,
           status: updated.status,
           rev: updated.rev,
+          // PR-C（#169，已 approved）：事件流 payload 增 title 白名单字段——
+          // 供 detail 事件摘要展示任务标题（summaryOf task/update 分支读侧守卫
+          // 兼容历史无 title 事件退化旧格式）。事件流写面变更，ADR 0017 串行化
+          // 写者约定不受影响（payload 形状无关，仅字段增量）。
+          title: updated.title,
         });
         // #97 心跳：归属取 assignee 字段（事件流 actor 镜像）而非调用者——
         // 主控代管更新给被代管者续命，列为 ADR 0016 已接受限制（有事件流审计痕迹）。

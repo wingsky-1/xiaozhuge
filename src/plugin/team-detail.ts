@@ -58,8 +58,26 @@ export const DETAIL_CACHE_TTL_MS = 30_000;
 /* ── 信箱三段头部读取（零写路径：不删除/移动任何文件）─────────────────── */
 
 /**
+ * 信封摘要读侧独立守卫（P1-3，#169 复核）：body 为 unknown、成员可伪造
+ * task-assign 信封（team_send 无类型约束），故摘要只摘白名单键且必须满足
+ * 「type==='task-assign' && body 为对象 && task_id/title 均为非空字符串」，
+ * 否则 null——复用 receiptSummaryOf「写路径校验不可信历史，读侧独立守卫」先例。
+ * body 原样永不出本函数（T15 脱敏断言保持）。
+ */
+function envelopeSummary(env: Envelope): string | null {
+  if (env.type !== "task-assign") return null;
+  const body = env.body;
+  if (body === null || typeof body !== "object") return null;
+  const b = body as Record<string, unknown>;
+  const taskId = typeof b.task_id === "string" && b.task_id.length > 0 ? b.task_id : null;
+  const title = typeof b.title === "string" && b.title.length > 0 ? b.title : null;
+  if (taskId === null || title === null) return null;
+  return `task ${taskId}：${title}`;
+}
+
+/**
  * 读单个信封并裁剪为白名单头部（坏 JSON 跳过——readEventsTail 坏行跳过同款，
- * 只读面不修复）；body 永不出本函数。
+ * 只读面不修复）；body 永不出本函数（仅 envelopeSummary 白名单摘录）。
  */
 async function envelopeHead(
   file: string,
@@ -72,7 +90,15 @@ async function envelopeHead(
     return undefined; // 坏 JSON：跳过该条
   }
   if (env === undefined) return undefined;
-  return { id: env.id, to: env.to, from: env.from, type: env.type, state, createdAt: env.createdAt };
+  return {
+    id: env.id,
+    to: env.to,
+    from: env.from,
+    type: env.type,
+    state,
+    createdAt: env.createdAt,
+    summary: envelopeSummary(env),
+  };
 }
 
 /**
