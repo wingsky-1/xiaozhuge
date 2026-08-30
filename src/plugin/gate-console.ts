@@ -244,12 +244,17 @@ export function consolePageHtml(nonce: string): string {
 <div id="list"><div class="empty">填入主会话 id 后刷新。</div></div>
 <script nonce="${nonce}">
 const $ = (s) => document.querySelector(s);
+// 浏览器→dsh web 一跳超时兜底（ADR 0021）：半开连接下裸 fetch 挂到 TCP 重传
+// 超时（可达 15 分钟）。AbortSignal.timeout 需 Safari 15.4+/iOS 15.4+；更旧环境
+// 不注入（低频操作，依赖浏览器自身超时）。
+const connTimeoutSignal = () =>
+  typeof AbortSignal.timeout === "function" ? { signal: AbortSignal.timeout(10000) } : {};
 // 全部插值转义：gate 内容是外部输入，防同源 XSS（#2 P0）
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 async function load() {
   const session = $("#session").value.trim();
   if (!session) return;
-  const r = await fetch(\`/api/xiaozhuge/gates?session=\${encodeURIComponent(session)}\`);
+  const r = await fetch(\`/api/xiaozhuge/gates?session=\${encodeURIComponent(session)}\`, connTimeoutSignal());
   const data = await r.json();
   render(data.gates ?? []);
 }
@@ -274,6 +279,7 @@ async function resolve(gateId, decision) {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ session, gate_id: gateId, decision, by: "human-web" }),
+    ...connTimeoutSignal(),
   });
   if (!r.ok) alert((await r.json()).error ?? "failed");
   await load();

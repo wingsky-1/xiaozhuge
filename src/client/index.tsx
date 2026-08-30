@@ -20,6 +20,7 @@ import type { IConversation } from "@deepseek-ai/dsh-client-ui-conversation/clie
 import type { Context } from "@deepseek-ai/cordis";
 import type { IApiClient } from "@deepseek-ai/dsh-client-connection/client";
 import { TeamView, TeamBackNavEntry, bindSessionsService } from "./team-view.js";
+import { fetchTimeout } from "./fetch.js";
 
 /**
  * conversation.input.right 插槽 owner share（InputZone）。
@@ -284,7 +285,7 @@ export function TeamCreateButton(props: InputZone) {
     if (!session.blank || !sessionId) return;
     loadedRef.current = true;
     let cancelled = false;
-    fetch(`/api/xiaozhuge/team/status?session=${encodeURIComponent(sessionId)}`)
+    fetchTimeout(`/api/xiaozhuge/team/status?session=${encodeURIComponent(sessionId)}`)
       .then((r) => r.json())
       .then((d: TeamStatus) => {
         if (!cancelled) setIsTeam(d.is_team === true);
@@ -308,7 +309,7 @@ export function TeamCreateButton(props: InputZone) {
       // cwd 缺失仅影响 project 层模板；builtin/user 仍可用。
     }
     const url = `/api/xiaozhuge/team/scenarios${cwdRef.current ? `?workspace=${encodeURIComponent(cwdRef.current)}` : ""}`;
-    const r = await fetch(url).then((res) => res.json());
+    const r = await fetchTimeout(url).then((res) => res.json());
     return (r.scenarios ?? []) as ScenarioEntry[];
   }
 
@@ -338,7 +339,7 @@ export function TeamCreateButton(props: InputZone) {
     setError(null);
     try {
       // ① 服务端 init 持久化（同源 REST 端点，双头断言由服务端执行）。
-      const created = await fetch("/api/xiaozhuge/team/create", {
+      const created = await fetchTimeout("/api/xiaozhuge/team/create", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -521,7 +522,7 @@ export function TeamViewWatcher(props: InputZone): null {
       setTeamViewTab(false);
       return;
     }
-    fetch(`/api/xiaozhuge/team/status?session=${encodeURIComponent(sessionId)}`)
+    fetchTimeout(`/api/xiaozhuge/team/status?session=${encodeURIComponent(sessionId)}`)
       .then((r) => r.json())
       .then((d: TeamStatus) => {
         if (!cancelled) setTeamViewTab(d.is_team === true);

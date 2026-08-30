@@ -11,7 +11,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createElement } from "react";
-import { apply } from "../../src/client/index.js";
+import { apply, setTeamViewTab, TeamViewWatcher, type InputZone } from "../../src/client/index.js";
 import {
   TeamBackNavEntry,
   bindSessionsService,
@@ -278,5 +278,51 @@ describe("apply：注册 header.actions「返回团队」插槽（#163 O1）", (
     const headerEntry = injected.find((e) => e.slot === "register:conversation.session.header.actions");
     expect(headerEntry).toBeDefined();
     expect(headerEntry?.component).toBe(TeamBackNavEntry);
+  });
+});
+
+describe("TeamViewWatcher：团队 tab 存在性协调器（issue #68/#97）", () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+    setTeamViewTab(false);
+  });
+
+  it("is_team=true → 经 fetchTimeout 探测成功（fetch 路径与响应消费正确）", async () => {
+    const fetchSpy = vi.fn(async () => Response.json(status(true)));
+    vi.stubGlobal("fetch", fetchSpy);
+    render(createElement(TeamViewWatcher, { session: { sessionId: "s-root", blank: false }, input: { draft: "" } }));
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+    const url = fetchSpy.mock.calls[0]?.[0] as string;
+    expect(url).toContain("/api/xiaozhuge/team/status?session=s-root");
+    // 响应消费路径不抛错（注册经 setTeamViewTab；slots 未绑定时静默，不白屏）
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("is_team=false → 不抛错、无 UI 残留", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json(status(false))));
+    render(createElement(TeamViewWatcher, { session: { sessionId: "s-other", blank: false }, input: { draft: "" } }));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("fetch 失败 → 静默保持现状（不误删已呈现 tab、不白屏）", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new Error("network down");
+    }));
+    render(createElement(TeamViewWatcher, { session: { sessionId: "s-root", blank: false }, input: { draft: "" } }));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("sessionId 为空 → 直接注销 tab 不 fetch", async () => {
+    const fetchSpy = vi.fn(async () => Response.json(status(false)));
+    vi.stubGlobal("fetch", fetchSpy);
+    render(createElement(TeamViewWatcher, { session: { sessionId: "", blank: false }, input: { draft: "" } }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

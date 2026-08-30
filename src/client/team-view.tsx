@@ -25,6 +25,7 @@ import {
 } from "@xyflow/react";
 import dagre from "@dagrejs/dagre";
 import flowStyles from "@xyflow/react/dist/style.css";
+import { fetchTimeout } from "./fetch.js";
 
 /* ---------------- 视图模型（与服务端投影面一致，纯文本渲染） ---------------- */
 
@@ -377,7 +378,7 @@ export function TeamView(props: { sessionId?: string }): React.ReactNode {
   const load = useCallback(async (): Promise<void> => {
     if (sessionId.length === 0) return;
     try {
-      const r = await fetch(overviewUrl(sessionId));
+      const r = await fetchTimeout(overviewUrl(sessionId));
       if (!r.ok && r.status !== 304) throw new Error(`HTTP ${r.status}`);
       if (r.ok) {
         const d = (await r.json()) as TeamOverview;
@@ -397,7 +398,7 @@ export function TeamView(props: { sessionId?: string }): React.ReactNode {
   const loadDetail = useCallback(async (): Promise<void> => {
     if (sessionId.length === 0) return;
     try {
-      const r = await fetch(detailUrl(sessionId));
+      const r = await fetchTimeout(detailUrl(sessionId));
       if (!r.ok && r.status !== 304) throw new Error(`HTTP ${r.status}`);
       if (r.ok) {
         const d = (await r.json()) as TeamDetailView;
@@ -430,11 +431,24 @@ export function TeamView(props: { sessionId?: string }): React.ReactNode {
   }, [load, sessionId]);
 
   // 抽屉展开高频轮询（独立短周期；退避仅作用于基础轮询）。
+  // ADR 0021：与基础/detail 轮询同款串行自重排——setInterval 在上一次 load
+  // 挂起（半开连接/服务端慢）时按固定周期叠加请求，占满浏览器同源连接池致
+  // 全部请求 pending；改为上一次 settle 后再排下一次，杜绝请求堆积。
   const drawerOpen = selected !== null;
   useEffect(() => {
     if (!drawerOpen) return;
-    const timer = window.setInterval(() => void load(), POLL_DRAWER_MS);
-    return () => window.clearInterval(timer);
+    let timer = 0;
+    let disposed = false;
+    const tick = (): void => {
+      void load().then(() => {
+        if (!disposed) timer = window.setTimeout(tick, POLL_DRAWER_MS);
+      });
+    };
+    tick();
+    return () => {
+      disposed = true;
+      window.clearTimeout(timer);
+    };
   }, [drawerOpen, load]);
 
   // detail 独立轮询：仅抽屉展开时运行，以 detailBackoffRef 自重排实现独立指数退避
@@ -960,7 +974,7 @@ export function TeamBackNavEntry(props: { sessionId?: string }): React.ReactNode
       setRole("none");
       return;
     }
-    fetch(`/api/xiaozhuge/team/status?session=${encodeURIComponent(sessionId)}`)
+    fetchTimeout(`/api/xiaozhuge/team/status?session=${encodeURIComponent(sessionId)}`)
       .then((r) => r.json())
       .then((d: TeamStatusLike) => {
         if (cancelled) return;
