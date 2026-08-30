@@ -3,9 +3,11 @@
  * 替换为 SQLite 单表索引，读面 O(log n) 定位，根治「每次 HTTP 请求同步枚举
  * sessions 目录 + 逐实例读 agents.json」造成的 Node 事件循环阻塞。
  *
- * - 写面：`handlers.ts` 的 init/spawn/dispatch 在成员登记（upsertMember）成功后
+ * - 写面：`handlers.ts` 的 spawn/dispatch 在成员登记（upsertMember）成功后
  *   调 `set()`，仅登记 durableId→(teamHome, member) 映射；touchMember 心跳与
- *   setStatus 不触发（映射不变，避免高频写放大）。
+ *   setStatus 不触发（映射不变，避免高频写放大）。init 登记 tier0 主控按
+ *   `tier>0` 守卫跳过（主控直查已覆盖）。登记后同 home 对账清理残留条目
+ *   （接管换 durableId 的错检防护，见 pruneTeam）。
  * - 读面：`team-home.ts` 的 `resolveTeamHomeForView` 直查 team.yaml 后先查索引，
  *   miss 才回退全目录扫描（自愈回填 + 负缓存限流）。
  * - 一致性：agents.json 是事实源（SOT），本索引是派生物；索引失效路径只能是
@@ -69,6 +71,8 @@ export class SessionIndex {
   private readonly db: DatabaseSync;
   private readonly stmtGet: StatementSync;
   private readonly stmtSet: StatementSync;
+  private readonly stmtRemove: StatementSync;
+  private readonly stmtByTeam: StatementSync;
 
   private constructor(home: string, db: DatabaseSync) {
     this.home = home;
@@ -87,6 +91,8 @@ export class SessionIndex {
       "INSERT INTO session_index (session_id, team_home, member) VALUES (?, ?, ?) " +
         "ON CONFLICT(session_id) DO UPDATE SET team_home = excluded.team_home, member = excluded.member",
     );
+    this.stmtRemove = db.prepare("DELETE FROM session_index WHERE session_id = ?");
+    this.stmtByTeam = db.prepare("SELECT session_id FROM session_index WHERE team_home = ?");
   }
 
   /** 打开（完成 schema 初始化）；失败抛错由调用方捕获转为禁用态。 */
@@ -117,13 +123,34 @@ export class SessionIndex {
     }
   }
 
-  /** 删除单条（接管换 durableId / 索引命中但实例未初始化时惰性清理）。 */
+  /** 删除单条（索引命中但实例未初始化时惰性清理）。 */
   remove(sessionId: string): void {
     if (sessionId.length === 0 || sessionId.length > INDEX_KEY_MAX) return;
     try {
-      this.db.prepare("DELETE FROM session_index WHERE session_id = ?").run(sessionId);
+      this.stmtRemove.run(sessionId);
     } catch {
       // best-effort
+    }
+  }
+
+  /**
+   * 写面对账（QA 必须修正项）：清理同 teamHome 下**不在** validDurableIds 集合中的
+   * 索引残留条目——覆盖「接管换 durableId」场景：成员换新 durableId 后 agents.json
+   * （SOT）只含新 id，旧 id 若仍留在索引会被反查误判为成员（错检 + 残留写权限）。
+   * 全量对账（而非只删旧条目）：登记是低频写操作（每任务派发一次），读一次
+   * agents.json + 按 teamHome 批量删除，量级受控。
+   */
+  pruneTeam(teamHome: string, validDurableIds: ReadonlySet<string>): void {
+    if (teamHome.length === 0) return;
+    try {
+      const rows = this.stmtByTeam.all(teamHome) as Array<{ session_id: string }>;
+      for (const row of rows) {
+        if (!validDurableIds.has(row.session_id)) {
+          this.stmtRemove.run(row.session_id);
+        }
+      }
+    } catch {
+      // best-effort：对账失败静默（漏检由 miss 回扫自愈）
     }
   }
 

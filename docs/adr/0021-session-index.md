@@ -34,11 +34,15 @@ overview/detail）与工具面 `handlersFor` 调用。原实现每次调用都**
    文件，与 events.jsonl 直白风格一致）。node:sqlite 是 Node 内置模块，不算新增
    第三方依赖；引擎声明 node>=22，22.5+ 引入、22.13+/23.4+ 默认可用（仍 experimental），
    feature-detect 降级兜底（见 3）。
-2. **写面（仅映射变化时，心跳不触发）**：`handlers.ts` 的 init/spawn/dispatch 三处
+2. **写面（仅映射变化时，心跳不触发）**：`handlers.ts` 的 spawn/dispatch 两处
    `upsertMember` 成功路径（registered/revived）后 `indexMember()`——仅 `tier>0`
-   （非 tier0 主控）成员入索引（主控 durableId = 主会话 id，team.yaml 直查已覆盖）；
-   `touchMember`（心跳，每次工具调用）与 `setStatus` **不触发**（映射未变，避免
-   高频写放大）。写失败静默（best-effort，与 ADR 0016 心跳吞错同哲学）。
+   （非 tier0 主控）成员入索引（主控 durableId = 主会话 id，team.yaml 直查已覆盖；
+   init 登记的 tier0 主控被 `tier>0` 守卫跳过，不重复入索引）；`touchMember`
+   （心跳，每次工具调用）与 `setStatus` **不触发**（映射未变，避免高频写放大）。
+   登记成功后执行**同 home 写面对账**（`pruneTeam`）：读 agents.json（SOT）在册
+   durableId 集合并清理同 teamHome 下不在册的残留条目——覆盖「接管换 durableId」
+   场景（旧 durableId 从 SOT 消失后索引残留会被反查误判为成员并残留写权限，QA
+   必须修正项）。写失败静默（best-effort，与 ADR 0016 心跳吞错同哲学）。
 3. **读面三阶段（同步语义不变）**：
    - ① 主会话直查：`<DSH_HOME>/xiaozhuge/sessions/<sessionId>/team.yaml` 在场即返回
      （O(1) stat，快路径不查索引）；

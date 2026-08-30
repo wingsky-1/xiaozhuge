@@ -2,12 +2,13 @@
  * 会话→团队反查索引单测（ADR 0021）。
  *
  * 覆盖：
- * - SessionIndex 基本读写（set/get/remove/close）；
+ * - SessionIndex 基本读写（set/get/remove/close/pruneTeam）；
  * - 写面 hook：spawn/dispatch 登记后反查命中；init tier0 主控不登记；
  * - 读面三阶段：直查 → 索引命中 → miss 回扫回填 → 索引再命中；
  * - 负缓存：最近全扫未命中的 id 短窗内不重复全扫；
  * - 索引损坏/不可用 → 降级回落旧全扫（行为正确性不破）；
- * - 索引命中分支保留 team.yaml 守卫（防错检占位实例）。
+ * - 索引命中分支保留 team.yaml 守卫（防错检占位实例）；
+ * - 接管换 durableId → 写面对账清理旧条目（QA 必须修正项）。
  */
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { mkdirSync, mkdtempSync, writeFileSync, existsSync } from "node:fs";
@@ -16,10 +17,12 @@ import { join } from "node:path";
 import { createHandlers, memberCaller, rootCaller, type Handlers } from "../../src/plugin/handlers.js";
 import { resolveTeamHome, resolveTeamHomeForView } from "../../src/plugin/team-home.js";
 import { sessionIndexFor, resetSessionIndex, SessionIndex, INDEX_REL_PATH } from "../../src/plugin/session-index.js";
+import { Registry } from "../../src/runtime/kernel/registry.js";
 
 const SESSION_MASTER = "session-idx-master";
 const MEMBER = "coder";
 const DUR_X = "dur-idx-1";
+const DUR_Y = "dur-idx-2";
 
 let home: string;
 let dshHome: string;
@@ -200,5 +203,46 @@ describe("会话关闭与隔离", () => {
     idxB!.set(DUR_X, "homeB", "mb");
     expect(idxA!.get(DUR_X)).toEqual({ teamHome: "homeA", member: "ma" });
     expect(idxB!.get(DUR_X)).toEqual({ teamHome: "homeB", member: "mb" });
+  });
+});
+
+describe("接管换 durableId：写面对账清理残留条目（QA 必须修正项）", () => {
+  it("pruneTeam 直接清理同 home 不在册条目", () => {
+    const idx = sessionIndexFor()!;
+    const homeA = join(dshHome, "xiaozhuge", "sessions", "s-root");
+    idx.set("dur-old", homeA, MEMBER);
+    idx.set("dur-new", homeA, MEMBER);
+    idx.set("dur-other", join(dshHome, "xiaozhuge", "sessions", "s-other"), MEMBER);
+    idx.pruneTeam(homeA, new Set(["dur-new"]));
+    // 同 home 旧条目被清，新条目保留；其他 home 不受影响
+    expect(idx.get("dur-old")).toBeUndefined();
+    expect(idx.get("dur-new")).toEqual({ teamHome: homeA, member: MEMBER });
+    expect(idx.get("dur-other")).toEqual({
+      teamHome: join(dshHome, "xiaozhuge", "sessions", "s-other"),
+      member: MEMBER,
+    });
+  });
+
+  it("成员接管换 durableId 后：旧 durableId 反查不再命中，新 id 命中", async () => {
+    const master = createHandlers(resolveTeamHome(SESSION_MASTER), SESSION_MASTER, rootCaller());
+    await master.init({});
+    // 首次登记 durableId=DUR_X
+    await master.spawn({ member: MEMBER, durable_id: DUR_X, role: MEMBER, tier: 1 });
+    expect(resolveTeamHomeForView(DUR_X).membership).toEqual({
+      root_session: SESSION_MASTER,
+      member: MEMBER,
+    });
+
+    // 接管：旧记录标 dead 后换新 durableId 重新登记（registry.ts revived 分支）
+    const reg = new Registry(resolveTeamHome(SESSION_MASTER));
+    await reg.setStatus(MEMBER, "dead");
+    await master.spawn({ member: MEMBER, durable_id: DUR_Y, role: MEMBER, tier: 1 });
+
+    // 写面对账后：旧 durableId 不再命中（索引残留被清理，与全扫一致），新 id 命中
+    expect(resolveTeamHomeForView(DUR_X).membership).toBeNull();
+    expect(resolveTeamHomeForView(DUR_Y).membership).toEqual({
+      root_session: SESSION_MASTER,
+      member: MEMBER,
+    });
   });
 });

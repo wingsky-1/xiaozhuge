@@ -46,7 +46,7 @@ import {
 import { userTemplatesRoot, projectTemplatesRoot } from "./team-home.js";
 import { appendToolManifest } from "./tool-manifest.js";
 import { auditWorkspace } from "./workspace-audit.js";
-import { sessionIndexFor, isTeamHomeUnderSessionsRoot } from "./session-index.js";
+import { sessionIndexFor, isTeamHomeUnderSessionsRoot, type SessionIndex } from "./session-index.js";
 
 /**
  * 反查索引登记（ADR 0021）：成员登记成功后维护 durableId→(teamHome, member)
@@ -60,7 +60,32 @@ import { sessionIndexFor, isTeamHomeUnderSessionsRoot } from "./session-index.js
 function indexMember(teamHome: string, durableId: string, member: string, tier: number): void {
   if (tier <= 0) return;
   if (!isTeamHomeUnderSessionsRoot(teamHome)) return;
-  sessionIndexFor()?.set(durableId, teamHome, member);
+  const idx = sessionIndexFor();
+  if (idx === null) return;
+  idx.set(durableId, teamHome, member);
+  // 写面对账（QA 必须修正项）：登记后清理同 teamHome 下不在 agents.json（SOT）
+  // 在册的残留索引条目。覆盖「接管换 durableId」——旧 durableId 从 SOT 消失后
+  // 若索引残留会被反查误判为成员（错检 + 残留写权限）。best-effort：对账失败
+  // 静默，漏检由 miss 回扫自愈，不阻塞登记主事务。
+  syncPruneStaleIndex(idx, teamHome);
+}
+
+/** 读 agents.json 在册 durableId 集合并对账清理（同步；handlers 层已有 readFileSync 依赖）。 */
+function syncPruneStaleIndex(idx: SessionIndex, teamHome: string): void {
+  try {
+    const agentsPath = join(teamHome, "agents.json");
+    if (!existsSync(agentsPath)) return;
+    const reg = JSON.parse(readFileSync(agentsPath, "utf8")) as {
+      members?: Record<string, { durableId?: string }>;
+    };
+    const valid = new Set<string>();
+    for (const m of Object.values(reg.members ?? {})) {
+      if (typeof m.durableId === "string" && m.durableId.length > 0) valid.add(m.durableId);
+    }
+    idx.pruneTeam(teamHome, valid);
+  } catch {
+    // best-effort：对账失败静默，漏检由 miss 回扫自愈
+  }
 }
 
 /** 统一错误形状：{ error: { code, message } }，模型可读可路由。 */
