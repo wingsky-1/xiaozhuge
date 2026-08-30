@@ -17,6 +17,8 @@
  *   team_reconcile 的 master_idle / stale_members / awaiting_input 承载
  *   （report-only）。本视图仍不做时长横切——着色反映即时活动态，静默时长
  *   语义归对账输出，二者职责正交。
+ *   Q3（#164）：tone 兼采 registry.status（Q6 物化终态）与黑板分片双源，
+ *   事件流仅补 currentActivity 不做时效衰减判定（不引入时长横切）。
  */
 import type { EventRecord, MemberRecord, TeamRegistry } from "../kernel/types.js";
 import type { Shard } from "../collab/blackboard.js";
@@ -87,6 +89,28 @@ export function toneOfShard(shard: Shard | undefined): Exclude<NodeTone, "lost">
   return "idle";
 }
 
+/**
+ * 成员级活动着色（Q3，#164）：registry.status 物化态 + 黑板分片双源驱动。
+ *
+ * 权威层级（对抗性评审定稿，反例 A–I 消解）：
+ *   dead（registry 一票否决，lost）> 黑板分片（blocked/running/done 权威，
+ *   与 ADR 0016 §5 免责索引同源）> registry.status（running 补位）> idle。
+ * 关键语义：
+ *   - 无分片成员 registry=running → running（验收目标 1：无分片也有进度）；
+ *   - blocked 唯一权威 = 黑板分片，registry blocked 但无分片仍落 idle（反例 I：
+ *     避免「展示 blocked 而免责索引不认」的漂移；Q6 状态机 blocked 与分片 blocked
+ *     同源同步写，分片缺失时保守静默）；
+ *   - spawned/stopped → idle（stopped 是明确静默而非排队，#97 语义保留）；
+ *   - 事件流只补 currentActivity，不参与 tone 判定（禁用全量重放，禁止全量读）。
+ */
+export function toneOfMember(record: MemberRecord, shard: Shard | undefined): NodeTone {
+  if (record.status === "dead") return "lost";
+  const fromShard = toneOfShard(shard);
+  if (fromShard !== "idle") return fromShard;
+  if (record.status === "running") return "running";
+  return "idle";
+}
+
 /** 从分片 ext 提取 current_activity（非空字符串才认可；机械取值零生成）。 */
 function activityFromExt(ext: unknown): string | null {
   if (ext !== null && typeof ext === "object") {
@@ -131,8 +155,10 @@ export function reduceRoom(input: OverviewRoomInput): RoomView {
  * 保证 L1 一屏可见全团队），房间逐个投影。registry.members 为空即视为
  * 非团队实例（isTeam=false，路由层据此短路）。
  *
- * 着色优先级：registryStatus=dead → lost（一票否决）；其余取分片活动态
- * （缺失 → idle）。多房间同角色分片并存时取字典序首个房间的分片，确定性可测。
+ * 着色优先级（Q3，#164 修订）：dead（registry 一票否决 → lost）> 黑板分片
+ * （blocked/running/done 权威，与 ADR 0016 §5 同源）> registry.status（running
+ * 补位）> idle。无分片 running 成员即可见（不再「谁写分片谁显示进度」）。
+ * 多房间同角色分片并存时取字典序首个房间的分片，确定性可测。
  */
 export function reduceOverview(input: OverviewInput): TeamOverview {
   const memberNames = Object.keys(input.registry.members).sort();
@@ -156,7 +182,7 @@ export function reduceOverview(input: OverviewInput): TeamOverview {
       parent: record.parent ?? null,
       durableId: record.durableId,
       registryStatus: record.status,
-      tone: record.status === "dead" ? ("lost" as const) : toneOfShard(shard),
+      tone: toneOfMember(record, shard),
       currentActivity: currentActivityOf(name, shard, eventsByActor.get(name) ?? []),
       lastSeen: Number.isFinite(record.lastSeen) ? record.lastSeen : null,
     };
