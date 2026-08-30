@@ -16,7 +16,9 @@ import {
   TeamBackNavEntry,
   bindSessionsService,
   classifyTeamRole,
+  openSession,
   rootSessionOf,
+  type MemberNodeView,
   type TeamOverview,
   type TeamStatusLike,
 } from "../../src/client/team-view.js";
@@ -145,6 +147,100 @@ describe("TeamBackNavEntry：子代理页「返回团队」入口（#163）", ()
     render(createElement(TeamBackNavEntry, { sessionId: "s-child" }));
     const btn = await screen.findByRole("button", { name: "返回团队" });
     expect(() => fireEvent.click(btn)).not.toThrow();
+  });
+});
+
+describe("openSession：成员回放三级跳转链（issue #169 PR-A）", () => {
+  let openCalls: string[];
+  let openSubagentCalls: unknown[];
+  let refreshCalls: string[];
+  let addressOf: (id: string) => { parentSessionId: string; childSessionId: string; mode: "one-shot" | "continuable" } | undefined;
+
+  function memberView(durableId: string | null): MemberNodeView {
+    return {
+      member: "coder",
+      tier: 1,
+      parent: "master",
+      durableId,
+      registryStatus: "spawned",
+      tone: "idle",
+      currentActivity: null,
+      lastSeen: Date.now(),
+    };
+  }
+
+  function bindSessions() {
+    bindSessionsService({
+      open: (id: string) => {
+        openCalls.push(id);
+      },
+      openSubagent: (address: unknown) => {
+        openSubagentCalls.push(address);
+      },
+      subagentAddress: (id: string) => addressOf(id),
+      refreshSubagents: async (parentId: string) => {
+        refreshCalls.push(parentId);
+      },
+    });
+  }
+
+  beforeEach(() => {
+    openCalls = [];
+    openSubagentCalls = [];
+    refreshCalls = [];
+    addressOf = () => undefined;
+    bindSessions();
+  });
+  afterEach(() => {
+    bindSessionsService(null);
+  });
+
+  it("已打开过的会话：subagentAddress 命中 → openSubagent(address)，不 refresh", async () => {
+    addressOf = (id) =>
+      id === "s-child"
+        ? { parentSessionId: "s-root", childSessionId: "s-child", mode: "continuable" }
+        : undefined;
+    const child = memberView("s-child");
+    await openSession(child, "s-root");
+    expect(refreshCalls).toEqual([]);
+    expect(openSubagentCalls).toEqual([
+      { parentSessionId: "s-root", childSessionId: "s-child", mode: "continuable" },
+    ]);
+    expect(openCalls).toEqual([]);
+  });
+
+  it("未打开过的会话：subagentAddress miss → refreshSubagents(parent) → 降级 open(childId)（PR-A 根因修正）", async () => {
+    // 宿主语义：subagentAddress 只查「已保留地址」，未打开过的会话恒 miss；
+    // refreshSubagents 刷 catalog 但不写 addresses——二级重试后依旧 miss。
+    const child = memberView("s-child");
+    await openSession(child, "s-root");
+    expect(refreshCalls).toEqual(["s-root"]);
+    expect(openSubagentCalls).toEqual([]);
+    // 修复点：降级目标是 open(childId)，宿主 select 内部 navigationAddress
+    // 会从已刷新 catalog 反查成功；原实现 open(parent) 在团队页等于原地跳转。
+    expect(openCalls).toEqual(["s-child"]);
+  });
+
+  it("refreshSubagents 抛错：降级 open(childId) 不崩 UI（fail-loud 兜底）", async () => {
+    bindSessionsService({
+      open: (id: string) => {
+        openCalls.push(id);
+      },
+      openSubagent: () => {},
+      subagentAddress: () => undefined,
+      refreshSubagents: async () => {
+        throw new Error("catalog unavailable");
+      },
+    });
+    const child = memberView("s-child");
+    await expect(openSession(child, "s-root")).resolves.toBeUndefined();
+    expect(openCalls).toEqual(["s-child"]);
+  });
+
+  it("durableId 缺失：静默返回不抛错", async () => {
+    const child = memberView(null);
+    await expect(openSession(child, "s-root")).resolves.toBeUndefined();
+    expect(openCalls).toEqual([]);
   });
 });
 
