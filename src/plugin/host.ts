@@ -23,6 +23,7 @@ import { makeGateRoutes, makeConsoleRoute } from "./gate-console.js";
 import { makeLaunchRoutes } from "./team-launch.js";
 import { makeOverviewRoute } from "./team-overview.js";
 import { makeDetailRoute } from "./team-detail.js";
+import { closeSessionIndex } from "./session-index.js";
 
 /** 稳定的 cordis 插件名。 */
 export const name = "xiaozhuge-team";
@@ -262,5 +263,7 @@ export function apply(ctx: {
 
   return () => {
     for (const dispose of disposers) dispose();
+    // ADR 0021：卸载时关闭反查索引（释放 SQLite fd；重载后惰性重开）。
+    closeSessionIndex();
   };
 }

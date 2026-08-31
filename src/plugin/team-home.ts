@@ -11,7 +11,8 @@
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
+import { sessionIndexFor } from "./session-index.js";
 
 /** 解析 DSH_HOME（默认 ~/.dsh）。 */
 export function resolveDshHome(): string {
@@ -35,18 +36,52 @@ export interface TeamHomeResolution {
 
 /**
  * 视图供数解析（#97 问题 3）：先按主会话直查；未命中实例根时，按成员
- * durable id 反查所属实例（扫各实例 agents.json，纯读）。子会话页据此
- * 以实例根身份取数，打通「子会话 → 所属团队」反向入口。
+ * durable id 反查所属实例（ADR 0021：优先走 SQLite 反查索引，miss 才回退
+ * 全目录扫描并自愈回填）。子会话页据此以实例根身份取数，打通
+ * 「子会话 → 所属团队」反向入口。
+ *
+ * 反查三阶段（ADR 0021）：
+ * ① 主会话直查（team.yaml 在场）——快路径，不查索引；
+ * ② 索引查询（命中且实例已初始化才信任，保留 team.yaml 守卫防错检）；
+ * ③ miss 回退全目录扫描（自愈）——有命中回填索引，无命中登记负缓存
+ *    （TTL 内不重复全扫，防无效 id/坏索引放大挂起）。
  *
  * 边界：扫描范围限本 DSH_HOME 的 xiaozhuge/sessions；单实例注册表损坏
  * 跳过继续（不整体失败）；实例未初始化（team.yaml 不在）视为未命中，
- * 与 team/status 判定一致。
+ * 与 team/status 判定一致。索引不可用（node:sqlite 缺失/打开失败）时
+ * 全程回落旧全扫，行为与引入索引前一致。
  */
-export function resolveTeamHomeForView(sessionId: string): TeamHomeResolution {
-  const direct = resolveTeamHome(sessionId);
-  if (existsSync(join(direct, "team.yaml"))) {
-    return { teamHome: direct, membership: null };
+
+/** 负缓存 TTL（ms）：同一 sessionId 全扫未命中后的免扫窗口。 */
+export const NEGATIVE_CACHE_TTL_MS = 30_000;
+/** 负缓存有界上限（防无效 id 枚举撑爆内存；Map 插入序，超限删最旧）。 */
+const NEGATIVE_CACHE_MAX = 1024;
+/** 模块级负缓存：sessionId → 过期时间戳。 */
+const negativeCache = new Map<string, number>();
+
+function cacheMiss(sessionId: string): void {
+  negativeCache.set(sessionId, Date.now() + NEGATIVE_CACHE_TTL_MS);
+  if (negativeCache.size > NEGATIVE_CACHE_MAX) {
+    // 有界：先清过期项，仍超限删最旧（Map 插入序首个）。
+    const now = Date.now();
+    for (const [k, exp] of negativeCache) {
+      if (exp <= now) negativeCache.delete(k);
+    }
+    const oldest = negativeCache.keys().next().value;
+    if (oldest !== undefined && negativeCache.size > NEGATIVE_CACHE_MAX) negativeCache.delete(oldest);
   }
+}
+
+function isCachedMiss(sessionId: string): boolean {
+  const exp = negativeCache.get(sessionId);
+  if (exp === undefined) return false;
+  if (exp > Date.now()) return true;
+  negativeCache.delete(sessionId);
+  return false;
+}
+
+/** 全目录扫描（旧实现，作为索引 miss 的自愈兜底）。 */
+function scanSessions(sessionId: string, direct: string): TeamHomeResolution {
   const sessionsDir = join(resolveDshHome(), "xiaozhuge", "sessions");
   let entries: string[] = [];
   try {
@@ -74,6 +109,42 @@ export function resolveTeamHomeForView(sessionId: string): TeamHomeResolution {
     }
   }
   return { teamHome: direct, membership: null };
+}
+
+export function resolveTeamHomeForView(sessionId: string): TeamHomeResolution {
+  const direct = resolveTeamHome(sessionId);
+  // ① 主会话直查（快路径）：team.yaml 在场即为团队实例根，无需索引。
+  if (existsSync(join(direct, "team.yaml"))) {
+    return { teamHome: direct, membership: null };
+  }
+  // ② 索引反查：命中且实例已初始化（team.yaml 守卫防错检占位实例）。
+  const idx = sessionIndexFor();
+  if (idx !== null) {
+    const hit = idx.get(sessionId);
+    if (hit !== undefined) {
+      if (existsSync(join(hit.teamHome, "team.yaml"))) {
+        return {
+          teamHome: hit.teamHome,
+          membership: { root_session: basename(hit.teamHome), member: hit.member },
+        };
+      }
+      // 索引命中但实例未初始化（team.yaml 已删/未建）：惰性清条目，回落扫描。
+      idx.remove(sessionId);
+    }
+    // 负缓存：最近全扫未命中的无效/未知 id 短窗内不重复全扫（防放大挂起）。
+    if (isCachedMiss(sessionId)) return { teamHome: direct, membership: null };
+  }
+  // ③ miss 回退：全目录扫描（自愈），有命中回填索引、无命中登记负缓存。
+  const scanned = scanSessions(sessionId, direct);
+  if (idx !== null) {
+    if (scanned.membership !== null) {
+      idx.set(sessionId, scanned.teamHome, scanned.membership.member);
+      negativeCache.delete(sessionId);
+    } else {
+      cacheMiss(sessionId);
+    }
+  }
+  return scanned;
 }
 
 /** user 层模板根（ADR 0013）：<DSH_HOME>/xiaozhuge/templates/。 */

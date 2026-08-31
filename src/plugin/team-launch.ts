@@ -226,11 +226,17 @@ export function launchPageHtml(): string {
 const $ = (s) => document.querySelector(s);
 const BOOT_HEAD = ${headLiteral};
 const log = (m) => ($("#log").textContent += m + "\\n");
+// 浏览器→dsh web 一跳超时兜底（ADR 0021）：半开连接下裸 fetch 会挂到 TCP
+// 重传超时（可达 15 分钟）。AbortSignal.timeout 需 Safari 15.4+/iOS 15.4+；
+// 更旧环境不注入（低频操作，依赖浏览器自身超时）。
+const connTimeoutSignal = () =>
+  typeof AbortSignal.timeout === "function" ? { signal: AbortSignal.timeout(10000) } : {};
 async function jfetch(method, path, body) {
   const r = await fetch(path, {
     method,
     headers: body !== undefined ? { "content-type": "application/json" } : {},
     body: body === undefined ? undefined : JSON.stringify(body),
+    ...connTimeoutSignal(),
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok && data.error) {
