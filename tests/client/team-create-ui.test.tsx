@@ -183,13 +183,19 @@ describe("issue 81：建团成功后清空目标会话草稿", () => {
     promptResult = { ok: true };
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (url: RequestInfo | URL) =>
-        Response.json(
-          String(url).includes("/api/xiaozhuge/team/scenarios")
+      vi.fn(async (url: RequestInfo | URL) => {
+        const u = String(url);
+        // 评审建议：status 探测须明确返回 is_team=false，避免兜底分支
+        // 误判已建团导致按钮/浮层卸载（依赖 scenarios 先 resolve 的时序）。
+        if (u.includes("/api/xiaozhuge/team/status")) {
+          return Response.json({ is_team: false });
+        }
+        return Response.json(
+          u.includes("/api/xiaozhuge/team/scenarios")
             ? { scenarios: SCENARIOS }
             : { ok: true, tier0_prompt: "TIER0" },
-        ),
-      ),
+        );
+      }),
     );
   });
   afterEach(() => {

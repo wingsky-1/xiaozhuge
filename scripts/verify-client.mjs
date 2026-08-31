@@ -42,7 +42,8 @@ const slotsStub = stubModule("@deepseek-ai/dsh-client-ui-slots", {});
 const cordisStub = stubModule("@deepseek-ai/cordis", {});
 // 0.1.2：dsh-client-runtime 已删，客户端仅 type-only import 官方契约包
 // （session-controller / ui-conversation），esbuild 擦除 type import 后
-// bundle 无这些包的运行时 require——stub 表仅保留实际值导入的宿主依赖。
+// bundle 无这些包的运行时 require；connection/conversation stub 为
+// dsh.client.external 保留性声明对应的兜底条目（实际不被 require，冗余无害）。
 const connectionStub = stubModule("@deepseek-ai/dsh-client-connection", {});
 const conversationStub = stubModule("@deepseek-ai/dsh-client-ui-conversation", {});
 
