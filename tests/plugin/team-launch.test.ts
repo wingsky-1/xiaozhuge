@@ -346,9 +346,12 @@ describe("客户端插件构建产物", () => {
     expect(src).toContain("session.blank");
     expect(src).toContain('"/api/xiaozhuge/team/create"');
     expect(src).toContain("/api/xiaozhuge/team/scenarios");
-    // 官方 typed 客户端投递（IApiClient.sessions.prompt），非手写 fetch 信封
-    expect(src).toContain("apiClient.sessions.prompt");
-    expect(src).toContain("apiClient.sessions.list");
+    // 官方会话服务方法面投递与场景枚举（0.1.2：ctx.sessions.scope(id)?.conversation
+    // .send / list.getSnapshot().byId），非旧 connection.api RPC 信封
+    expect(src).toContain("scopeCtx.conversation.send(promptText)");
+    expect(src).toContain("sessionsService?.list.getSnapshot()");
+    expect(src).not.toContain("apiClient.sessions.prompt");
+    expect(src).not.toContain("apiClient.sessions.list");
     // 不再依赖服务端 DOM 注入
     expect(src).not.toContain("MutationObserver");
   });

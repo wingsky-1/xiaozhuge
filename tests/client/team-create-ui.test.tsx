@@ -10,7 +10,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createElement } from "react";
-import { scopeOf } from "@deepseek-ai/dsh-client-runtime/client";
+// 0.1.2：dsh-client-runtime 已删；scopeOf 经官方服务方法面替身寻址
+// （vitest.config.ts alias → tests/client/stubs/session-controller-client.ts）。
+import { scopeOf, makeScopedCtx } from "@deepseek-ai/dsh-api-session-controller/client";
 import {
   TeamCreateButton,
   ScenarioPicker,
@@ -97,19 +99,41 @@ describe("issue 80：受控单选——显示勾选 = 提交值", () => {
 describe("issue 81：建团成功后清空目标会话草稿", () => {
   /** conversation 门面 fake：记录 resolver 收到的 ctx tag 与 setDraft 调用。 */
   let draftCalls: Array<{ sessionTag: string | undefined; text: string }>;
+  /** scope 门面 fake：conversation.send 投递记录 + 失败注入。 */
+  let sendCalls: Array<{ sessionTag: string | undefined; text: string }>;
   let promptResult: { ok: true } | { ok: false; error: { message: string } };
 
-  /** 组装宿主 fake ctx 并执行 apply 装配（注入 apiClient/conversation 句柄）。 */
+  /** 组装宿主 fake ctx 并执行 apply 装配（注入 sessions/conversation 句柄）。 */
   function assemble() {
     const slots = {
       inject: () => () => {},
       register: () => () => {},
     };
-    const api = {
-      sessions: {
-        list: async () => ({ result: { ok: true, value: { items: [] } } }),
-        prompt: async () => ({ result: promptResult }),
+    // fake ISessions 服务方法面（0.1.2 官方形状）：scope(id) mint 带 tag 的
+    // AgentContext（scoped conversation.send 记录投递；失败走 reject）；
+    // list.getSnapshot() 供 loadScenarios 读 cwd。
+    const sessions = {
+      open: () => {},
+      openSubagent: () => {},
+      subagentAddress: () => undefined,
+      refreshSubagents: async () => {},
+      list: {
+        getSnapshot: () => ({ byId: {} }),
       },
+      scope: (id: string) =>
+        makeScopedCtx(
+          {
+            conversation: {
+              send: async (text: string) => {
+                sendCalls.push({ sessionTag: id, text });
+                if (promptResult.ok !== true) {
+                  throw new Error(promptResult.error.message);
+                }
+              },
+            },
+          },
+          id,
+        ),
     };
     const conversation = {
       input: {
@@ -123,13 +147,12 @@ describe("issue 81：建团成功后清空目标会话草稿", () => {
     apply({
       get(name: string) {
         if (name === "slots") return slots;
-        if (name === "connection") return { api };
-        if (name === "sessions") return null;
+        if (name === "sessions") return sessions;
         if (name === "conversation") return conversation;
         return undefined;
       },
-      // createScope 需要 cordis 完整 ctx；测试聚焦 tag 寻址与写路径调用，
-      // 真实 fiber 语义由宿主集成兜底——此处以最小结构面通过类型即可。
+      // 0.1.2 起经 ctx.sessions.scope 服务方法边界寻址；真实 scope 生命周期
+      // 由宿主集成兜底——此处以最小结构面通过类型即可。
     } as never);
   }
 
@@ -137,7 +160,15 @@ describe("issue 81：建团成功后清空目标会话草稿", () => {
   async function createViaUi(sessionId: string, scenario: string) {
     const zone: InputZone = {
       session: { blank: true, sessionId } as InputZone["session"],
-      input: { draft: "修复 80 81 82" },
+      // InputState 官方必填字段（draft/draftRev/imageIds/phase/occurrences/queue）。
+      input: {
+        draft: "修复 80 81 82",
+        draftRev: 0,
+        imageIds: [],
+        phase: "plain",
+        occurrences: [],
+        queue: [],
+      },
     };
     render(createElement(TeamCreateButton, zone));
     fireEvent.click(screen.getByTitle("选择团队场景并在本会话创建团队"));
@@ -148,6 +179,7 @@ describe("issue 81：建团成功后清空目标会话草稿", () => {
 
   beforeEach(() => {
     draftCalls = [];
+    sendCalls = [];
     promptResult = { ok: true };
     vi.stubGlobal(
       "fetch",
@@ -168,6 +200,9 @@ describe("issue 81：建团成功后清空目标会话草稿", () => {
     assemble();
     await createViaUi("session-target", "research-report");
     await waitFor(() => expect(draftCalls.length).toBeGreaterThan(0));
+    expect(sendCalls).toHaveLength(1);
+    expect(sendCalls[0].sessionTag).toBe("session-target");
+    expect(sendCalls[0].text).toContain("【我的任务】修复 80 81 82");
     expect(draftCalls.at(-1)).toEqual({ sessionTag: "session-target", text: "" });
   });
 
