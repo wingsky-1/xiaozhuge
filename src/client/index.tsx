@@ -12,32 +12,25 @@
  *   用户任务（空则只投递规程）。
  */
 import { useEffect, useRef, useState } from "react";
-// 运行时引用走宿主注入（dsh.client.external 已声明 runtime/conversation 包），
-// 不进发布物；createScope 为官方公开导出（agent/session 作用域 mint）。
-import { createScope } from "@deepseek-ai/dsh-client-runtime/client";
-import type { ConversationSnapshot } from "@deepseek-ai/dsh-client-runtime/client";
-import type { IConversation } from "@deepseek-ai/dsh-client-ui-conversation/client";
+// 0.1.2 起 dsh-client-runtime 已删：类型面迁移到官方 dsh-api-session-controller /
+// dsh-client-ui-conversation，且只走 type-only import（无 createScope 运行时值导入——
+// kScope Symbol 单例：esbuild 内联会产生第二份 Symbol → scopeOf 读不到 tag；
+// 会话作用域一律经 ctx.sessions.scope 服务方法边界寻址，见 clearSessionDraft）。
+import type { SessionSnapshot, ISessions } from "@deepseek-ai/dsh-api-session-controller/client";
+import type { InputZone, IConversation } from "@deepseek-ai/dsh-client-ui-conversation/client";
 import type { Context } from "@deepseek-ai/cordis";
-import type { IApiClient } from "@deepseek-ai/dsh-client-connection/client";
 import { TeamView, TeamBackNavEntry, bindSessionsService } from "./team-view.js";
 import { fetchTimeout } from "./fetch.js";
 
 /**
- * conversation.input.right 插槽 owner share（InputZone）。
- * 类型面未从 conversation 包 re-export（contract/slots 不在 exports 面），
- * 此处按官方 slots.d.ts 的 InputZone 结构本地声明——运行时形状一致，
- * 仅消费 session.blank / session.sessionId / input.draft 三个字段。
+ * conversation.input.right 插槽 owner share（官方 InputZone：session 为
+ * SessionSnapshot、input 为 InputState；消费 session.blank / session.sessionId /
+ * input.draft 三个字段）。
  */
-export interface InputZone {
-  readonly session: ConversationSnapshot;
-  readonly input: { readonly draft: string };
-}
+export type { InputZone } from "@deepseek-ai/dsh-client-ui-conversation/client";
 
-/** apply 时注入的宿主 typed API 客户端（connection.api），组件经模块级引用使用。 */
-let apiClient: IApiClient | null = null;
-
-/** apply 时注入的客户端根 ctx（createScope mint 目标会话作用域用）。 */
-let clientRootCtx: Context | null = null;
+/** apply 时注入的宿主 sessions 服务（ISessions：scope/scopeOf/list 等官方服务方法面）。 */
+let sessionsService: ISessions | null = null;
 
 /** apply 时注入的宿主 conversation 服务（官方公开面：per-session input 门面注册表）。 */
 let conversationService: IConversation | null = null;
@@ -45,26 +38,18 @@ let conversationService: IConversation | null = null;
 /**
  * 清空目标会话输入框草稿（issue 81）：经官方 conversation.input 注册表解析
  * 该会话的 SessionInput 门面，走唯一公开写路径 setDraft("")。
- * 作用域寻址：createScope 按 sessionId mint 官方 tagged ctx（resolver.for
- * 只读 tag 定位常驻门面；门面操作仍落在真会话 shell 上），用完即弃。
- * 解析失败（如门面未就绪）只放弃清空，不影响已成功的建团流程。
+ * 作用域寻址：0.1.2 起不走 createScope 值导入（Symbol 单例问题），改走
+ * ctx.sessions.scope(sessionId) 服务方法边界（ISessions.scope 返回 AgentContext，
+ * conversation.input.for 经 scopeOf 读 tag 定位常驻门面），用完即弃。
+ * 解析失败（scope 未就绪）只放弃清空，不影响已成功的建团流程。
  */
 export function clearSessionDraft(sessionId: string): void {
-  const root = clientRootCtx;
+  const sessions = sessionsService;
   const conversation = conversationService;
-  if (!root || !conversation) return;
-  let scope: { fiber: { dispose(): Promise<void> }; ctx: Context } | null = null;
-  try {
-    // SessionId 为官方 branded string；品牌构造器在不依赖的 dsh-session 运行时
-    // 包内，此处按 createScope 参数形状收窄（值本身即宿主下发的会话 id）。
-    const branded = sessionId as unknown as Parameters<typeof createScope>[1];
-    scope = createScope(root, branded);
-    conversation.input.for(scope.ctx).setDraft("");
-  } catch {
-    // 草稿残留由用户手动清理；此处静默（建团已成功）。
-  } finally {
-    void scope?.fiber.dispose();
-  }
+  if (!sessions || !conversation) return;
+  const scopeCtx = sessions.scope(sessionId as Parameters<ISessions["scope"]>[0]);
+  if (!scopeCtx) return;
+  conversation.input.for(scopeCtx).setDraft("");
 }
 
 /** 团队状态探测（服务端只读 GET）。 */
@@ -92,8 +77,8 @@ export const BOOT_MESSAGE_HEAD =
 /** 本插件注册名（cordis 名册 id = npm 包名，经 dsh.client 契约）。 */
 export const name = "@wingsky-1/dsh-xiaozhuge";
 
-/** 需要的浏览器端服务：slots（插槽注册）+ connection（typed RPC 客户端）+ sessions（成员会话导航）+ conversation（草稿写路径）。 */
-export const inject = ["slots", "connection", "sessions", "conversation"];
+/** 需要的浏览器端服务：slots（插槽注册）+ sessions（官方服务方法面）+ conversation（草稿写路径）。 */
+export const inject = ["slots", "sessions", "conversation"];
 
 /** 浮层内固定文案。 */
 const COPY = {
@@ -298,13 +283,12 @@ export function TeamCreateButton(props: InputZone) {
   if (!session.blank || isTeam) return null;
 
   async function loadScenarios(): Promise<ScenarioEntry[]> {
-    // 工作区随会话推导：session.list 的 cwd（会话工作目录）→ project 层模板可见。
+    // 工作区随会话推导：ctx.sessions.list 快照的 byId[sessionId].cwd（会话工作
+    // 目录，官方服务方法面 ObservableSnapshot，非旧 connection.api RPC）→
+    // project 层模板可见。
     try {
-      if (apiClient) {
-        const v = await apiClient.sessions.list({});
-        const row = v.result.ok ? (v.result.value.items ?? []).find((i) => i.sessionId === sessionId) : undefined;
-        cwdRef.current = row?.cwd;
-      }
+      const list = sessionsService?.list.getSnapshot();
+      cwdRef.current = list?.byId[sessionId]?.cwd;
     } catch {
       // cwd 缺失仅影响 project 层模板；builtin/user 仍可用。
     }
@@ -355,17 +339,13 @@ export function TeamCreateButton(props: InputZone) {
         throw new Error(msg);
       }
       // ② 投递 tier0_prompt 到当前会话（输入框草稿作首条用户任务）。
+      // 0.1.2 官方推荐形态：ctx.sessions.scope(id)?.conversation.send(text)
+      // （scope-addressed 会话门面；send 失败走 reject 进外层 catch）。
       const bootText = `${BOOT_MESSAGE_HEAD}\n\n${created.tier0_prompt}`;
       const promptText = draft ? `【我的任务】${draft}\n\n${bootText}` : bootText;
-      if (!apiClient) throw new Error("宿主 API 客户端不可用");
-      const r = await apiClient.sessions.prompt({
-        sessionId: targetSession,
-        mode: "queue",
-        content: [{ type: "text", text: promptText }],
-      });
-      if (!r.result.ok) {
-        throw new Error(r.result.error?.message ?? "规程投递失败");
-      }
+      const scopeCtx = sessionsService?.scope(targetSession as Parameters<ISessions["scope"]>[0]);
+      if (!scopeCtx) throw new Error("会话作用域不可用");
+      await scopeCtx.conversation.send(promptText);
       // ③ 成功后清空目标会话草稿（issue 81）：任务文本已随 prompt 投递，
       // 残留易误重发；失败路径不走到这里，草稿保留便于重试。
       clearSessionDraft(targetSession);
@@ -423,11 +403,9 @@ export function TeamCreateButton(props: InputZone) {
  * @param ctx - 客户端 cordis 上下文。
  */
 export function apply(ctx: Context): void {
-  // 注入宿主 typed API 客户端（connection.api）：组件经模块级引用使用。
-  const connection = ctx.get("connection") as { api: IApiClient } | undefined;
-  apiClient = connection?.api ?? null;
-  // 根 ctx 与 conversation 服务（issue 81：成功建团后清目标会话草稿）。
-  clientRootCtx = ctx;
+  // 注入宿主服务句柄：sessions（0.1.2 官方 ISessions 服务方法面：scope/scopeOf/
+  // list 等）+ conversation（input 门面注册表）。组件经模块级引用使用。
+  sessionsService = (ctx.get("sessions") as ISessions | undefined) ?? null;
   conversationService = (ctx.get("conversation") as IConversation | undefined) ?? null;
   // 成员「打开会话」导航面（ISessions 公开契约子集：open/openSubagent/
   // subagentAddress/refreshSubagents）。

@@ -23,7 +23,6 @@ const EXTERNALS = [
   "react/jsx-runtime",
   "@deepseek-ai/cordis",
   "@deepseek-ai/dsh-client-ui-slots",
-  "@deepseek-ai/dsh-client-runtime",
   "@deepseek-ai/dsh-client-connection",
   "@deepseek-ai/dsh-client-ui-conversation",
 ];

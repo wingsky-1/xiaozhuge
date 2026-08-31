@@ -40,12 +40,10 @@ let registered = null;
 const registrations = [];
 const slotsStub = stubModule("@deepseek-ai/dsh-client-ui-slots", {});
 const cordisStub = stubModule("@deepseek-ai/cordis", {});
-const runtimeStub = stubModule("@deepseek-ai/dsh-client-runtime", {});
-// runtime/client 子路径：createScope（issue 81 会话作用域寻址用）。
-const runtimeClientStub = stubModule("@deepseek-ai/dsh-client-runtime/client", {
-  createScope: () => ({ fiber: { dispose: async () => {} }, ctx: {} }),
-  scopeOf: () => undefined,
-});
+// 0.1.2：dsh-client-runtime 已删，客户端仅 type-only import 官方契约包
+// （session-controller / ui-conversation），esbuild 擦除 type import 后
+// bundle 无这些包的运行时 require；connection/conversation stub 为
+// dsh.client.external 保留性声明对应的兜底条目（实际不被 require，冗余无害）。
 const connectionStub = stubModule("@deepseek-ai/dsh-client-connection", {});
 const conversationStub = stubModule("@deepseek-ai/dsh-client-ui-conversation", {});
 
@@ -54,8 +52,6 @@ const table = new Map([
   ["react/jsx-runtime", jsxRuntimeStub],
   ["@deepseek-ai/cordis", cordisStub],
   ["@deepseek-ai/dsh-client-ui-slots", slotsStub],
-  ["@deepseek-ai/dsh-client-runtime", runtimeStub],
-  ["@deepseek-ai/dsh-client-runtime/client", runtimeClientStub],
   ["@deepseek-ai/dsh-client-connection", connectionStub],
   ["@deepseek-ai/dsh-client-ui-conversation", conversationStub],
 ]);
@@ -105,32 +101,23 @@ const mod = registered?.factory ? loader.factories.get(registered.id) : null;
 assert(mod !== null, "factory 产物已注册");
 assert(typeof mod?.apply === "function", "exports.apply 是函数");
 assert(Array.isArray(mod?.inject), "exports.inject 是数组");
-assert(JSON.stringify(mod?.inject) === JSON.stringify(["slots", "connection", "sessions", "conversation"]), "inject = [slots, connection, sessions, conversation]");
+assert(JSON.stringify(mod?.inject) === JSON.stringify(["slots", "sessions", "conversation"]), "inject = [slots, sessions, conversation]");
 
 // ---- apply(ctx) 插槽注册 ----
 const ctxStub = {
   get(key) {
-    if (key === "connection") {
-      return {
-        api: {
-          sessions: {
-            list: async () => ({ result: { ok: true, value: { items: [] } } }),
-            prompt: async () => ({ result: { ok: true, value: { accepted: true } } }),
-          },
-        },
-      };
-    }
     if (key === "conversation") {
       // IConversation 公开面子集：apply 只存 input resolver 句柄（issue 81）。
       return { input: { for: () => ({ setDraft: noop }) } };
     }
     if (key === "sessions") {
-      // ISessions 导航子集（团队视图「打开会话」用）。
+      // ISessions 服务方法面子集（团队视图「打开会话」+ 清草稿 scope 寻址）。
       return {
         open: noop,
         openSubagent: noop,
         subagentAddress: () => undefined,
         refreshSubagents: async () => {},
+        scope: () => ({}),
       };
     }
     if (key === "slots") {
