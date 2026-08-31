@@ -201,7 +201,7 @@ function isNarrowViewport(): boolean {
 
 /* ---------------- sessions 服务面（公开契约 ISessions 的消费子集） ---------------- */
 
-/** SubagentAddress（@deepseek-ai/dsh-host-apiproxy/api 形状的本地消费面）。 */
+/** SubagentAddress（官方 @deepseek-ai/dsh-subagent/client 形状的本地消费面；0.1.2 起 dsh-host-apiproxy 已删，结构逐字段一致）。 */
 interface SubagentAddressLike {
   parentSessionId: string;
   childSessionId: string;

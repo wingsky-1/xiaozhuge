@@ -4,10 +4,12 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
-      // runtime/client 是 __ModuleLoader__ 契约外壳 bundle，node 测试环境
-      // 不可加载；tests/client 行为测试经此替身按官方语义寻址（见 stub 内注释）。
-      "@deepseek-ai/dsh-client-runtime/client": fileURLToPath(
-        new URL("./tests/client/stubs/runtime-client.ts", import.meta.url),
+      // 0.1.2：dsh-client-runtime 已删；客户端仅 type-only import 官方契约包
+      // （session-controller / ui-conversation），esbuild 擦除 type import 后
+      // 无运行时依赖；jsdom 行为测试经官方服务方法面（ctx.sessions.scope 等）
+      // fake，无需包级替身——此处仅保留兜底 alias（当前无消费方）。
+      "@deepseek-ai/dsh-api-session-controller/client": fileURLToPath(
+        new URL("./tests/client/stubs/session-controller-client.ts", import.meta.url),
       ),
     },
   },
