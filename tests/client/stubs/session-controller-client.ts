@@ -5,7 +5,10 @@
  * scopeOf）寻址会话作用域。该入口打包进宿主 web bundle（__ModuleLoader__ 契约
  * 外壳），node/jsdom 测试环境无法解析真实包——此处按官方语义提供最小替身：
  * - scopeOf(ctx)：读取最近的会话 tag（官方 ISessions.scopeOf 服务方法语义）；
- * - TAG：fake sessions.scope(id) 用它 mint 带 tag 的 ctx。
+ * - TAG：fake sessions.scope(id) 用它 mint 带 tag 的 ctx；
+ * - makeScopedCtx：返回携带会话 tag 且支持 get(name) 的最小 AgentContext
+ *   （投递必须显式 get("conversation")，属性访问在 cordis 跨插件 fiber
+ *   回溯会抛 without inject——见 issue 176 修复）。
  * 仅用于 tests/client 行为测试；生产代码路径不受影响（type-only import 擦除）。
  */
 export const TAG = "__xzgTestSessionTag";
@@ -21,5 +24,9 @@ export function makeScopedCtx(
   ctx: Record<string, unknown>,
   id: string,
 ): Record<string, unknown> {
-  return { ...ctx, [TAG]: id };
+  return {
+    ...ctx,
+    get: (name: string) => ctx[name],
+    [TAG]: id,
+  };
 }
