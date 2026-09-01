@@ -339,13 +339,20 @@ export function TeamCreateButton(props: InputZone) {
         throw new Error(msg);
       }
       // ② 投递 tier0_prompt 到当前会话（输入框草稿作首条用户任务）。
-      // 0.1.2 官方推荐形态：ctx.sessions.scope(id)?.conversation.send(text)
-      // （scope-addressed 会话门面；send 失败走 reject 进外层 catch）。
+      // 0.1.2 官方形态：ctx.sessions.scope(id).get("conversation").send(text)
+      // （scope-addressed 会话门面；必须显式 get——conversation 服务提供在
+      // dsh-client-ui-conversation 插件 fiber，scope ctx 与其是兄弟子树，
+      // 属性访问 scopeCtx.conversation 沿 fiber 祖先链回溯不到 → cordis 抛
+      // `cannot get property "conversation" without inject`；get() 走共享
+      // root 存储任意 ctx 可解析，且返回服务的 this.ctx 仍绑定调用者 scope
+      // （官方内部 scopedConversation() 即此形态）。send 失败走 reject 进外层 catch）。
       const bootText = `${BOOT_MESSAGE_HEAD}\n\n${created.tier0_prompt}`;
       const promptText = draft ? `【我的任务】${draft}\n\n${bootText}` : bootText;
       const scopeCtx = sessionsService?.scope(targetSession as Parameters<ISessions["scope"]>[0]);
       if (!scopeCtx) throw new Error("会话作用域不可用");
-      await scopeCtx.conversation.send(promptText);
+      const conversation = scopeCtx.get("conversation") as IConversation | undefined;
+      if (!conversation) throw new Error("conversation 服务不可用");
+      await conversation.send(promptText);
       // ③ 成功后清空目标会话草稿（issue 81）：任务文本已随 prompt 投递，
       // 残留易误重发；失败路径不走到这里，草稿保留便于重试。
       clearSessionDraft(targetSession);
