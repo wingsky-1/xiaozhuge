@@ -8,7 +8,7 @@
  * - TAG：fake sessions.scope(id) 用它 mint 带 tag 的 ctx；
  * - makeScopedCtx：返回携带会话 tag 且支持 get(name) 的最小 AgentContext
  *   （投递必须显式 get("conversation")，属性访问在 cordis 跨插件 fiber
- *   回溯会抛 without inject——见 issue 176 修复）。
+ *   回溯会抛 without inject——#176 引入回归、#177 修复）。
  * 仅用于 tests/client 行为测试；生产代码路径不受影响（type-only import 擦除）。
  */
 export const TAG = "__xzgTestSessionTag";

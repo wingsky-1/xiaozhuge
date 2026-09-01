@@ -349,7 +349,7 @@ describe("客户端插件构建产物", () => {
     // 官方会话服务方法面投递与场景枚举（0.1.2：ctx.sessions.scope(id)
     // .get("conversation").send / list.getSnapshot().byId），非旧
     // connection.api RPC 信封；投递须显式 get（属性访问在 cordis 跨插件
-    // fiber 回溯会抛 without inject，见 issue 176 修复）。
+    // fiber 回溯会抛 without inject——#176 引入回归、#177 修复）。
     expect(src).toContain('scopeCtx.get("conversation")');
     expect(src).toContain("conversation.send(promptText)");
     expect(src).not.toContain("scopeCtx.conversation.send(promptText)");
