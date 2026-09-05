@@ -16,6 +16,7 @@ import {
   TeamBackNavEntry,
   bindSessionsService,
   classifyTeamRole,
+  gateConsoleUrl,
   openSession,
   rootSessionOf,
   type MemberNodeView,
@@ -334,5 +335,12 @@ describe("TeamViewWatcher：团队 tab 存在性协调器（issue #68/#97）", (
     render(createElement(TeamViewWatcher, { sessionId: "" }));
     await new Promise((r) => setTimeout(r, 20));
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("gateConsoleUrl：Gate 待办入口（#195 U0-c）", () => {
+  it("session 直达参数经 encodeURIComponent 拼装", () => {
+    expect(gateConsoleUrl("abc-123")).toBe("/xiaozhuge/console?session=abc-123");
+    expect(gateConsoleUrl("id/with&special")).toBe("/xiaozhuge/console?session=id%2Fwith%26special");
   });
 });

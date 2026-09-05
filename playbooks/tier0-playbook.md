@@ -71,6 +71,9 @@
 
 - 读 `gates/*.json`：凡任务推进被某个 `pending` gate 阻塞 → 该任务转 `blocked`
   （`team_task_update(status=blocked)`），并在等待清单记录 gate id。
+- 发现 `pending` gate 时，把待审项写入原生 todo（`todo_write`），
+  让人在熟悉界面看到待办——待办只是投影，事实源仍是 `gates/*.json`；
+  绝不代写 approved（人审只能经 Console 裁决落账）。
 - gate 变 `approved` → 解除对应任务的阻塞（回 `running` 或 `queued` 派发）；
   `denied` → 任务转 `cancelled` 并上行通知人。
 - **stub gate 分支**：手工放置的 gate 文件与本分支行为完全一致——巡场不区分

@@ -3,7 +3,7 @@
  * Console 页直出。用 node:http 真实监听回环端口驱动 WebRoute handler。
  */
 import { describe, expect, it, beforeEach } from "vitest";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createServer } from "node:http";
 import { join } from "node:path";
@@ -259,6 +259,86 @@ describe("Console 加固（#2 P0）", () => {
     // XSS 转义函数在渲染路径上
     expect(html).toContain("esc(g.reason)");
     expect(html).toContain("esc(g.id)");
+  });
+
+  it("零门槛（#195 U0-b）：无手填输入框，加载即定位 instances；resolve 未定位前拒绝", async () => {
+    baseUrl = await listen();
+    const html = await (await fetch(`${baseUrl}/xiaozhuge/console`)).text();
+    // 打开即调 instances 枚举面
+    expect(html).toContain("/api/xiaozhuge/gates/instances");
+    // 旧手填路径清除：无 session 输入框、无旧提示文案
+    expect(html).not.toContain('id="session"');
+    expect(html).not.toContain("填入主会话");
+    // 未定位实例前 resolve 不发出（防误批空实例）
+    expect(html).toContain("if (!currentSession) return; // 未定位实例前不做任何裁决");
+    // ?session= 直达保留（团队 tab 内嵌兼容）
+    expect(html).toContain('location.search).get("session")');
+  });
+});
+
+describe("instances 枚举面（#195 U0-b）", () => {
+  /** 造一个实例目录：team.yaml（mtime 可控）+ gates/*.json（pending 计数用）。 */
+  function makeInstance(name: string, opts: { mtimeMs: number; pending: number; resolved?: number }): void {
+    const teamHome = join(home, "dsh-home", "xiaozhuge", "sessions", name);
+    const gatesDir = join(teamHome, "gates");
+    mkdirSync(gatesDir, { recursive: true });
+    writeFileSync(join(teamHome, "team.yaml"), "name: t\n");
+    for (let i = 0; i < opts.pending; i++) {
+      writeFileSync(
+        join(gatesDir, `g-pending-${i}.json`),
+        JSON.stringify({ id: `g-pending-${i}`, status: "pending", reason: "", requestedBy: "m", requestedAt: 0 }),
+      );
+    }
+    for (let i = 0; i < (opts.resolved ?? 0); i++) {
+      writeFileSync(
+        join(gatesDir, `g-done-${i}.json`),
+        JSON.stringify({ id: `g-done-${i}`, status: "approved", reason: "", requestedBy: "m", requestedAt: 0 }),
+      );
+    }
+    utimesSync(join(teamHome, "team.yaml"), new Date(opts.mtimeMs), new Date(opts.mtimeMs));
+  }
+
+  it("按最近活跃降序返回，pendingCount 只计 pending（approved 不计）", async () => {
+    baseUrl = await listen();
+    makeInstance("aaaa-old-instance", { mtimeMs: 1_000_000, pending: 1, resolved: 2 });
+    makeInstance("bbbb-new-instance", { mtimeMs: 2_000_000, pending: 2 });
+    const data = (await (await fetch(`${baseUrl}/api/xiaozhuge/gates/instances`)).json()) as {
+      instances: Array<{ session: string; pendingCount: number }>;
+    };
+    expect(data.instances).toHaveLength(2);
+    expect(data.instances[0]?.session).toBe("bbbb-new-instance");
+    expect(data.instances[0]?.pendingCount).toBe(2);
+    expect(data.instances[1]?.session).toBe("aaaa-old-instance");
+    expect(data.instances[1]?.pendingCount).toBe(1);
+  });
+
+  it("空 sessions 根 / 无 team.yaml 目录 / 非法目录名均不产出实例", async () => {
+    baseUrl = await listen();
+    // 非法 session id 目录名（白名单外字符）与缺 team.yaml 的合法名目录都跳过
+    mkdirSync(join(home, "dsh-home", "xiaozhuge", "sessions", "bad$name"), { recursive: true });
+    mkdirSync(join(home, "dsh-home", "xiaozhuge", "sessions", "no-yaml-session"), { recursive: true });
+    const data = (await (await fetch(`${baseUrl}/api/xiaozhuge/gates/instances`)).json()) as {
+      instances: unknown[];
+    };
+    expect(data.instances).toEqual([]);
+  });
+
+  it("无 sessions 根（从未建团）返回空数组而非错误", async () => {
+    baseUrl = await listen();
+    const data = (await (await fetch(`${baseUrl}/api/xiaozhuge/gates/instances`)).json()) as {
+      instances: unknown[];
+    };
+    expect(data.instances).toEqual([]);
+  });
+
+  it("非 GET 方法 → 405", async () => {
+    baseUrl = await listen();
+    const r = await fetch(`${baseUrl}/api/xiaozhuge/gates/instances`, {
+      method: "POST",
+      headers: { origin: baseUrl },
+      body: JSON.stringify({}),
+    });
+    expect(r.status).toBe(405);
   });
 });
 

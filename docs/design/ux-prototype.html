@@ -1,0 +1,845 @@
+<!doctype html>
+<html lang="zh" data-theme="night">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小诸葛 · 团队台 体验稿（U0–U3）</title>
+<style>
+/* ============ 设计令牌 ============ */
+:root{
+  --serif:"Songti SC","STSongti-SC","Noto Serif CJK SC","Source Han Serif SC","SimSun",serif;
+  --sans:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Code","Consolas",monospace;
+  --r:10px; --r-sm:7px;
+}
+html[data-theme="night"]{
+  --bg:#0F1512; --panel:#151D18; --panel2:#1A241E;
+  --line:#25342B; --line-soft:#1E2A23;
+  --ink:#E8ECE8; --dim:#9AA69E; --faint:#6C7A70;
+  --amber:#E0A33C; --amber-bg:rgba(224,163,60,.12);
+  --cinnabar:#C4472B; --cinnabar-hi:#D9583A;
+  --celadon:#5BA98A; --celadon-bg:rgba(91,169,138,.13);
+  --slate:#6E8CA8; --slate-bg:rgba(110,140,168,.13);
+  --stamp:#C0402A; --shadow:0 12px 32px rgba(0,0,0,.38);
+  --bar:rgba(15,21,18,.82);
+}
+html[data-theme="dawn"]{
+  --bg:#F1F2ED; --panel:#FBFBF8; --panel2:#F3F4EF;
+  --line:#DCDED3; --line-soft:#E7E8E0;
+  --ink:#232723; --dim:#5C6660; --faint:#8B948D;
+  --amber:#A66A14; --amber-bg:rgba(166,106,20,.10);
+  --cinnabar:#B13A20; --cinnabar-hi:#C4472B;
+  --celadon:#2F7A5B; --celadon-bg:rgba(47,122,91,.10);
+  --slate:#3F6180; --slate-bg:rgba(63,97,128,.10);
+  --stamp:#B33722; --shadow:0 10px 24px rgba(40,44,40,.10);
+  --bar:rgba(241,242,237,.86);
+}
+/* ============ 基础 ============ */
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--sans);
+  font-size:14px; line-height:1.65; -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3{font-family:var(--serif); font-weight:600; margin:0}
+code,.mono{font-family:var(--mono); font-size:.92em}
+button{font:inherit; color:inherit; cursor:pointer}
+:focus-visible{outline:2px solid var(--slate); outline-offset:2px; border-radius:4px}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important; transition:none!important}
+}
+/* ============ 顶栏 ============ */
+.bar{
+  position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:18px;
+  padding:10px 20px; background:var(--bar); backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.brand{display:flex; align-items:center; gap:9px; font-family:var(--serif); font-size:16px; font-weight:600; white-space:nowrap}
+.brand svg{display:block}
+.brand .beta{
+  font-family:var(--mono); font-size:10.5px; color:var(--faint);
+  border:1px solid var(--line); border-radius:99px; padding:1px 8px; margin-left:2px;
+}
+.tabs{display:flex; gap:2px; flex:1; min-width:0; overflow-x:auto}
+.tab{
+  background:none; border:none; padding:7px 13px; border-radius:var(--r-sm);
+  color:var(--dim); font-size:13.5px; white-space:nowrap; position:relative;
+}
+.tab:hover{color:var(--ink); background:var(--panel2)}
+.tab[aria-selected="true"]{color:var(--ink); font-weight:600}
+.tab[aria-selected="true"]::after{
+  content:""; position:absolute; left:13px; right:13px; bottom:-11px;
+  height:2px; background:var(--cinnabar); border-radius:2px;
+}
+.bar-actions{display:flex; gap:8px; align-items:center; white-space:nowrap}
+.btn{
+  border:1px solid var(--line); background:var(--panel); border-radius:var(--r-sm);
+  padding:6px 14px; font-size:13px; transition:background .15s,border-color .15s;
+}
+.btn:hover{border-color:var(--dim)}
+.btn.primary{background:var(--cinnabar); border-color:var(--cinnabar); color:#fff}
+.btn.primary:hover{background:var(--cinnabar-hi); border-color:var(--cinnabar-hi)}
+.btn.ghost{background:transparent}
+.btn.sm{padding:4px 10px; font-size:12.5px}
+.btn b{font-family:var(--mono); font-weight:600}
+/* ============ 主体框架 ============ */
+main{max-width:1080px; margin:0 auto; padding:26px 20px 80px}
+.view[hidden]{display:none}
+.view-head{display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:6px; flex-wrap:wrap}
+.view-head h1{font-size:26px; letter-spacing:.02em}
+.view-head .sub{margin:4px 0 0; color:var(--dim); max-width:56em}
+.head-actions{display:flex; gap:8px; align-items:center}
+.count-pill{
+  font-family:var(--mono); font-size:12px; color:var(--amber);
+  background:var(--amber-bg); border:1px solid var(--line);
+  border-radius:99px; padding:3px 12px; white-space:nowrap;
+}
+.stage{transition:max-width .25s ease}
+.stage.phone{
+  max-width:411px; margin:18px auto 0; border:1.5px solid var(--line);
+  border-radius:26px; padding:16px 14px; box-shadow:var(--shadow); background:var(--panel);
+}
+.phone-note{display:none; text-align:center; color:var(--faint); font-size:12px; margin-top:8px}
+.stage.phone ~ .phone-note{display:block}
+/* ============ 实例区块 ============ */
+.inst-block{margin-top:22px}
+.inst-head{display:flex; align-items:baseline; gap:10px; margin-bottom:10px; flex-wrap:wrap}
+.inst-name{font-size:17px}
+.inst-meta{color:var(--faint); font-size:12px}
+.dot{width:8px; height:8px; border-radius:50%; display:inline-block; flex:none; align-self:center}
+.dot.amber{background:var(--amber); box-shadow:0 0 8px var(--amber)}
+.dot.ok{background:var(--celadon)}
+.inst-toggle{
+  width:100%; text-align:left; background:var(--panel); border:1px dashed var(--line);
+  border-radius:var(--r); padding:10px 14px; color:var(--dim); font-size:13px;
+}
+.inst-toggle:hover{color:var(--ink); border-color:var(--dim)}
+.inst-toggle[aria-expanded="true"]{border-style:solid}
+.inst-hint{color:var(--faint); font-size:12px; margin:8px 2px 0}
+/* ============ Gate 卡 ============ */
+.gate-card{
+  position:relative; overflow:hidden; background:var(--panel);
+  border:1px solid var(--line); border-left:3px solid var(--amber);
+  border-radius:var(--r); padding:15px 17px; margin-bottom:12px;
+}
+.gate-card[data-state="approved"]{border-left-color:var(--celadon)}
+.gate-card[data-state="denied"]{border-left-color:var(--faint)}
+.gc-top{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.lamp{width:9px; height:9px; border-radius:50%; background:var(--amber); box-shadow:0 0 10px var(--amber); flex:none; animation:lamp 2.4s ease-in-out infinite}
+@keyframes lamp{0%,100%{opacity:1}50%{opacity:.45}}
+.gate-card[data-state] .lamp{animation:none}
+.gate-card[data-state="approved"] .lamp{background:var(--celadon); box-shadow:0 0 8px var(--celadon)}
+.gate-card[data-state="denied"] .lamp{background:var(--faint); box-shadow:none}
+.gate-id{font-size:13px; color:var(--ink)}
+.pill{font-size:11.5px; border-radius:99px; padding:2px 10px; white-space:nowrap}
+.pill.amber{color:var(--amber); background:var(--amber-bg)}
+.pill.ok{color:var(--celadon); background:var(--celadon-bg)}
+.pill.mute{color:var(--faint); background:var(--panel2)}
+.pill.slate{color:var(--slate); background:var(--slate-bg)}
+.reason{margin:9px 0 10px; color:var(--ink)}
+.kv{margin:0; display:grid; gap:5px}
+.kv>div{display:flex; gap:10px; align-items:baseline}
+.kv dt{flex:none; width:64px; color:var(--faint); font-size:12px}
+.kv dd{margin:0; font-size:13px}
+.tone{font-family:var(--mono); font-size:11.5px; padding:1px 7px; border-radius:5px}
+.tone.blocked{color:var(--amber); background:var(--amber-bg)}
+.tone.running{color:var(--celadon); background:var(--celadon-bg)}
+.tone.queued{color:var(--slate); background:var(--slate-bg)}
+.tone.cancelled{color:var(--faint); background:var(--panel2)}
+.evidence{margin:12px 0 2px}
+.evidence summary{cursor:pointer; color:var(--dim); font-size:12.5px; user-select:none}
+.evidence summary:hover{color:var(--ink)}
+.evidence[open] summary{margin-bottom:8px}
+.gc-actions{display:flex; gap:10px; margin-top:13px}
+.gc-actions[hidden]{display:none}
+/* 朱批印章 */
+.stamp{
+  position:absolute; right:18px; top:14px; width:58px; height:58px;
+  border:3px double var(--stamp); border-radius:50%; color:var(--stamp);
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--serif); font-size:26px; font-weight:700;
+  transform:rotate(8deg) scale(.4); opacity:0; pointer-events:none;
+}
+.gate-card[data-state="approved"] .stamp,.gate-card[data-state="denied"] .stamp{
+  animation:stampIn .38s cubic-bezier(.2,1.4,.4,1) forwards;
+}
+.gate-card[data-state="denied"] .stamp{border-color:var(--faint); color:var(--faint)}
+@keyframes stampIn{
+  0%{transform:rotate(14deg) scale(1.7); opacity:0}
+  60%{transform:rotate(7deg) scale(.94); opacity:1}
+  100%{transform:rotate(8deg) scale(1); opacity:.92}
+}
+/* ============ 账本事件行 ============ */
+.evt-list{border:1px solid var(--line-soft); border-radius:var(--r-sm); background:var(--panel2); overflow:hidden}
+.evt{
+  display:flex; gap:10px; align-items:baseline; padding:7px 12px;
+  border-bottom:1px dashed var(--line-soft); font-size:12.5px;
+}
+.evt:last-child{border-bottom:none}
+.evt .seq{flex:none; width:44px; color:var(--faint)}
+.evt .etype{flex:none; font-family:var(--mono); font-size:11px; color:var(--slate); background:var(--slate-bg); border-radius:4px; padding:0 6px}
+.evt .esum{color:var(--dim); min-width:0}
+.evt .esum b{color:var(--ink); font-weight:600}
+.evt.new{animation:evtIn .5s ease}
+@keyframes evtIn{from{background:var(--amber-bg)}to{background:transparent}}
+/* ============ 团队视图 ============ */
+.stats{
+  display:flex; gap:18px; flex-wrap:wrap; color:var(--dim); font-size:12.5px;
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--r);
+  padding:9px 14px; margin:16px 0 18px;
+}
+.stats b{color:var(--ink); font-weight:600}
+.team-grid{display:grid; grid-template-columns:minmax(0,1.25fr) minmax(280px,.9fr); gap:16px; align-items:start}
+.tree{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:16px}
+.tnode{border-left:1.5px solid var(--line); margin-left:7px; padding:2px 0 2px 14px; position:relative}
+.tnode::before{content:""; position:absolute; left:-1px; top:22px; width:12px; height:1.5px; background:var(--line)}
+.tnode>.tcard{margin:7px 0}
+.tnode.root{border-left:none; margin-left:0; padding-left:0}
+.tnode.root::before{display:none}
+.tcard{
+  background:var(--panel2); border:1px solid var(--line-soft); border-radius:var(--r-sm);
+  padding:9px 12px; cursor:pointer; transition:border-color .15s;
+}
+.tcard:hover,.tcard[aria-current="true"]{border-color:var(--dim)}
+.tc-head{display:flex; align-items:center; gap:8px}
+.tdot{width:8px; height:8px; border-radius:50%; flex:none}
+.tone-running .tdot{background:var(--celadon); box-shadow:0 0 7px var(--celadon)}
+.tone-amber .tdot{background:var(--amber); box-shadow:0 0 7px var(--amber)}
+.tone-slate .tdot{background:var(--slate)}
+.tone-faint .tdot{background:var(--faint)}
+.tname{font-family:var(--serif); font-weight:600; font-size:14.5px}
+.trole{color:var(--faint); font-size:11.5px}
+.ttask{margin-left:auto; color:var(--dim); font-size:11.5px; white-space:nowrap}
+.tact{margin:4px 0 0; color:var(--dim); font-size:12.5px}
+.drawer{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:15px 16px}
+.drawer h2{font-size:16px; display:flex; align-items:center; gap:8px}
+.d-role{color:var(--faint); font-size:12px; font-weight:400}
+.d-sec{margin-top:14px}
+.d-sec h3{font-size:12px; color:var(--faint); font-family:var(--sans); font-weight:600; letter-spacing:.08em; margin-bottom:6px}
+.d-line{font-size:13px; margin:3px 0}
+.d-line .mono{color:var(--dim)}
+.d-evts{margin-top:4px}
+.d-note{color:var(--faint); font-size:12px; margin-top:14px; border-top:1px dashed var(--line); padding-top:10px}
+.evt-panel{margin-top:18px}
+.evt-panel h2{font-size:16px; margin-bottom:10px}
+.evt-panel .cap{color:var(--faint); font-size:12px; margin-left:10px; font-family:var(--sans); font-weight:400}
+/* ============ 对话流 ============ */
+.dialog{max-width:720px; margin:0 auto}
+.msg{margin:14px 0; display:flex; gap:10px}
+.msg .who{flex:none; width:34px; height:34px; border-radius:50%; background:var(--panel2); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-family:var(--serif); font-size:14px; color:var(--dim)}
+.msg .bubble{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:10px 14px; font-size:13.5px}
+.msg .bubble .who-name{font-size:11.5px; color:var(--faint); margin-bottom:2px}
+.cnode{
+  margin:14px 0 14px 44px; background:var(--panel2); border:1px solid var(--line-soft);
+  border-radius:var(--r-sm); padding:9px 13px; position:relative;
+}
+.cnode::before{
+  content:""; position:absolute; left:-26px; top:14px; width:16px; height:1.5px; background:var(--line);
+}
+.cn-head{display:flex; align-items:center; gap:8px; font-size:13px}
+.cn-badge{font-family:var(--mono); font-size:10.5px; color:var(--slate); background:var(--slate-bg); border-radius:4px; padding:1px 6px}
+.cn-meta{color:var(--faint); font-size:11.5px; font-family:var(--mono); margin-top:3px}
+.cn-body{color:var(--dim); font-size:12.5px; margin-top:4px}
+.cnode .mini-stamp{
+  margin-left:auto; width:26px; height:26px; border:2px double var(--stamp); border-radius:50%;
+  color:var(--stamp); display:flex; align-items:center; justify-content:center;
+  font-family:var(--serif); font-size:13px; font-weight:700; transform:rotate(8deg); flex:none;
+}
+.cnode.denied .mini-stamp{border-color:var(--faint); color:var(--faint)}
+.cn-link{font-size:12px; color:var(--slate); background:none; border:none; padding:0; text-decoration:underline; text-underline-offset:3px}
+.cn-link:hover{color:var(--ink)}
+/* ============ 清空态 / 页脚 ============ */
+.cleared{text-align:center; padding:56px 0 30px}
+.cleared .big{font-size:22px; color:var(--ink)}
+.cleared .sub{color:var(--faint); margin-top:8px}
+footer{border-top:1px solid var(--line); margin-top:56px; padding:18px 20px 34px; color:var(--faint); font-size:12px; display:flex; gap:14px; flex-wrap:wrap; justify-content:center}
+/* ============ 设计对照 ============ */
+.map-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:18px}
+.map-card{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:15px 17px}
+.map-card h2{font-size:16px; margin-bottom:10px}
+.map-card .eyebrow{font-family:var(--mono); font-size:10.5px; color:var(--slate); letter-spacing:.12em; display:block; margin-bottom:4px}
+.map-card ul{margin:0; padding-left:18px}
+.map-card li{margin:6px 0; color:var(--dim); font-size:13px}
+.map-card li b{color:var(--ink); font-weight:600}
+.map-card li .loc{font-family:var(--mono); font-size:11px; color:var(--celadon)}
+.no-list{list-style:none; padding-left:0!important}
+.no-list li::before{content:"✕"; color:var(--cinnabar); font-weight:700; margin-right:8px}
+/* ============ Toast ============ */
+#toast{
+  position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(16px);
+  background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--celadon);
+  border-radius:var(--r-sm); padding:10px 16px; font-size:13px; box-shadow:var(--shadow);
+  opacity:0; pointer-events:none; transition:opacity .25s,transform .25s; z-index:50; max-width:90vw;
+}
+#toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+#toast.warn{border-left-color:var(--amber)}
+/* ============ 响应式 ============ */
+@media (max-width:820px){
+  .team-grid{grid-template-columns:1fr}
+  .map-grid{grid-template-columns:1fr}
+  .bar{flex-wrap:wrap; gap:8px; padding:10px 14px}
+  .tabs{order:3; width:100%}
+  .tab[aria-selected="true"]::after{bottom:-4px}
+  main{padding:20px 14px 60px}
+  .view-head h1{font-size:22px}
+  .ttask{display:none}
+}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand">
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+      <g fill="currentColor" opacity=".9">
+        <circle cx="4" cy="4" r="1.6"/><circle cx="10" cy="4" r="1.6" opacity=".4"/><circle cx="16" cy="4" r="1.6"/>
+        <circle cx="4" cy="10" r="1.6" opacity=".4"/><circle cx="10" cy="10" r="2.4"/><circle cx="16" cy="10" r="1.6" opacity=".4"/>
+        <circle cx="4" cy="16" r="1.6"/><circle cx="10" cy="16" r="1.6" opacity=".4"/><circle cx="16" cy="16" r="1.6"/>
+      </g>
+    </svg>
+    小诸葛 · 团队台
+    <span class="beta">UX 体验稿 U0–U3</span>
+  </div>
+  <nav class="tabs" role="tablist" aria-label="视图">
+    <button class="tab" role="tab" aria-selected="true" data-view="gates">待办</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="team">团队</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="dialog">对话流</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="map">设计对照</button>
+  </nav>
+  <div class="bar-actions">
+    <button class="btn ghost sm" id="themeToggle" title="切换晨点/夜巡">晨点</button>
+    <button class="btn ghost sm" id="reset">重置演示</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ═══════════ 视图一：Gate 待办（U0-b 零门槛） ═══════════ -->
+<section class="view" id="view-gates" role="tabpanel" aria-label="待办">
+  <div class="stage" id="gatesStage">
+    <div class="view-head">
+      <div>
+        <h1>待办</h1>
+        <p class="sub">打开即见最近活跃实例的人审门。这里是人的唯一裁决写点，其余一切只读。</p>
+      </div>
+      <div class="head-actions">
+        <span class="count-pill" id="lampCount">2 盏灯待批</span>
+        <button class="btn ghost sm" id="phoneToggle" aria-pressed="false">375px 预览</button>
+      </div>
+    </div>
+
+    <!-- 最近活跃实例：默认展开，无需任何输入 -->
+    <div class="inst-block">
+      <div class="inst-head">
+        <span class="dot amber" id="dotA"></span>
+        <span class="inst-name">dsh-plugin-hub · 维护批次 B</span>
+        <span class="inst-meta mono">最近活跃 · 2 分钟前</span>
+      </div>
+
+      <article class="gate-card" id="gateA" data-state="pending">
+        <div class="gc-top">
+          <span class="lamp" aria-hidden="true"></span>
+          <code class="gate-id">gate/plan-approval</code>
+          <span class="pill amber" data-pill>待裁决</span>
+        </div>
+        <p class="reason">批次 B 共 3 项改动，进入执行前需人工放行：触碰路径已分成两组互斥改动集，风险已由军师核过一遍。</p>
+        <dl class="kv">
+          <div><dt>绑定</dt><dd><code>stage-enter:running</code> · 任务进入执行时</dd></div>
+          <div><dt>开闸</dt><dd>master（Tier-0 军师）· 6 分钟前</dd></div>
+          <div><dt>关联任务</dt><dd><code>T-104</code> provider 拒绝路径补测 · <span class="tone blocked" data-taskTone>blocked</span></dd></div>
+        </dl>
+        <details class="evidence">
+          <summary>证据链（事件回放）</summary>
+          <div class="evt-list" data-evidence>
+            <div class="evt"><span class="seq">1283</span><span class="etype">gate/open</span><span class="esum">plan-approval · requestedBy <b>master</b></span></div>
+            <div class="evt"><span class="seq">1282</span><span class="etype">task/update</span><span class="esum"><b>T-104</b> → blocked（等待 plan-approval）</span></div>
+            <div class="evt"><span class="seq">1281</span><span class="etype">dispatch</span><span class="esum">coder ← master · parent 显式携带</span></div>
+            <div class="evt"><span class="seq">1280</span><span class="etype">task/create</span><span class="esum"><b>T-104</b> provider 拒绝路径补测 · 触碰 <code>src/provider/detect.ts</code></span></div>
+          </div>
+        </details>
+        <div class="gc-actions" data-actions>
+          <button class="btn primary" data-act="approve" data-gate="A">批准</button>
+          <button class="btn ghost" data-act="deny" data-gate="A">驳回</button>
+        </div>
+        <span class="stamp" aria-hidden="true">准</span>
+      </article>
+    </div>
+
+    <!-- 其他实例：显式展开（跨实例聚合默认关闭，防误批） -->
+    <div class="inst-block">
+      <button class="inst-toggle" id="otherToggle" aria-expanded="false" aria-controls="otherBody">
+        其他实例（1 盏灯待批）· 显式展开
+      </button>
+      <div id="otherBody" hidden>
+        <p class="inst-hint">跨实例聚合默认关闭：不同团队的任务与缘由不混排，避免在错误实例上误批。</p>
+        <article class="gate-card" id="gateR" data-state="pending" style="margin-top:10px">
+          <div class="gc-top">
+            <span class="lamp" aria-hidden="true"></span>
+            <code class="gate-id">gate/outline-approval</code>
+            <span class="pill amber" data-pill>待裁决</span>
+          </div>
+          <p class="reason">报告大纲定稿前需确认引用范围：3 个一手来源、2 个待补数据点。</p>
+          <dl class="kv">
+            <div><dt>绑定</dt><dd><code>stage-enter:running</code> · 撰写开始前</dd></div>
+            <div><dt>开闸</dt><dd>organizer（Tier-0）· 41 分钟前</dd></div>
+          </dl>
+          <div class="gc-actions" data-actions>
+            <button class="btn primary" data-act="approve" data-gate="R">批准</button>
+            <button class="btn ghost" data-act="deny" data-gate="R">驳回</button>
+          </div>
+          <span class="stamp" aria-hidden="true">准</span>
+        </article>
+        <div class="inst-head" style="margin-top:18px">
+          <span class="dot ok"></span>
+          <span class="inst-name" style="color:var(--dim)">dsh-plugin-hub · 维护批次 A</span>
+          <span class="inst-meta mono">已收圈 · 3 小时前</span>
+        </div>
+        <p class="inst-hint">已收圈实例不产生待办；回放请进「团队」视图。</p>
+      </div>
+    </div>
+
+    <div class="cleared" id="clearedState" hidden>
+      <p class="big">灯已清。巡场继续。</p>
+      <p class="sub">人审门归位，团队自行推进；下一盏灯亮起时，这里会亮。</p>
+    </div>
+  </div>
+  <p class="phone-note">375px 形态：卡片单列、按钮落在拇指热区——移动端裁决是一等场景，不是降级。</p>
+</section>
+
+<!-- ═══════════ 视图二：团队（U1 展示即账本） ═══════════ -->
+<section class="view" id="view-team" role="tabpanel" aria-label="团队" hidden>
+  <div class="view-head">
+    <div>
+      <h1>团队</h1>
+      <p class="sub">树形组织与账本投影。界面上每个字段都能回溯到事件流——展示即账本，界面不自造状态。</p>
+    </div>
+    <div class="head-actions">
+      <!-- U0-c：入口露出。团队页即 Gate 待办的官方入口之一 -->
+      <button class="btn ghost sm" id="gatesEntry">待办 <b id="entryCount">2</b></button>
+    </div>
+  </div>
+
+  <div class="stats mono" id="statsLine">
+    <span>任务 <b id="stBlocked" class="tone blocked">blocked 1</b> <b class="tone queued">queued 1</b></span>
+    <span>并发池 <b>1/3</b></span>
+    <span>事件游标 <b>seq 1284</b> · 尾窗 64 KB</span>
+    <span>team.yaml <b>digest 9078…478</b></span>
+  </div>
+
+  <div class="team-grid">
+    <div class="tree" aria-label="成员树">
+      <div class="tnode root tone-running">
+        <div class="tcard" data-member="master" tabindex="0" role="button" aria-current="false">
+          <div class="tc-head">
+            <span class="tdot"></span>
+            <span class="tname">master</span>
+            <span class="trole">军师 · Tier-0 · 根会话</span>
+            <span class="ttask mono">巡场第 3 圈</span>
+          </div>
+          <p class="tact" data-act-master>等待人审门 plan-approval → 批准后派发 coder</p>
+        </div>
+        <div class="tnode tone-amber">
+          <div class="tcard" data-member="coder" tabindex="0" role="button" aria-current="true">
+            <div class="tc-head">
+              <span class="tdot"></span>
+              <span class="tname">coder</span>
+              <span class="trole">实现工程师 · Tier-1</span>
+              <span class="ttask mono">T-104</span>
+            </div>
+            <p class="tact" data-act-coder>T-104 blocked：等待 plan-approval 放行</p>
+          </div>
+          <div class="tnode tone-slate">
+            <div class="tcard" data-member="qa" tabindex="0" role="button" aria-current="false">
+              <div class="tc-head">
+                <span class="tdot"></span>
+                <span class="tname">qa</span>
+                <span class="trole">质检裁判 · Tier-1</span>
+                <span class="ttask mono">待命</span>
+              </div>
+              <p class="tact">下一棒复核 T-104 产物（judge 回执模式）</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="drawer" id="drawer" aria-label="成员详情">
+      <h2><span class="tdot tone-amber" id="dDot"></span><span id="dName">coder</span><span class="d-role" id="dRole">实现工程师 · Tier-1</span></h2>
+      <div class="d-sec">
+        <h3>当前活动</h3>
+        <p class="d-line" id="dActivity">T-104 blocked：等待 plan-approval 放行</p>
+      </div>
+      <div class="d-sec">
+        <h3>承担任务</h3>
+        <p class="d-line"><code>T-104</code> provider 拒绝路径补测 · <span class="tone blocked" id="dTaskTone">blocked</span> <span class="mono" id="dRounds" style="color:var(--faint)">第 1/3 圈</span></p>
+        <p class="d-line" style="color:var(--faint);font-size:12px">触碰 <code>src/provider/detect.ts</code> · 互斥组 B-1</p>
+      </div>
+      <div class="d-sec">
+        <h3>最近信件</h3>
+        <p class="d-line">派单简报 · 来自 master · <span style="color:var(--dim)">背景/边界/验收 三段齐备</span></p>
+        <p class="d-line" style="color:var(--faint);font-size:12px">已认领 · 6 分钟前</p>
+      </div>
+      <div class="d-sec">
+        <h3>凭据</h3>
+        <p class="d-line" style="color:var(--dim)"><span class="mono">lint ✓ · build ✓</span> · 回执哈希 <code>4f2e…9c1</code></p>
+      </div>
+      <div class="d-sec d-evts">
+        <h3>本成员事件（白名单摘要）</h3>
+        <div class="evt-list">
+          <div class="evt"><span class="seq">1282</span><span class="etype">task/update</span><span class="esum"><b>T-104</b> → blocked（等门）</span></div>
+          <div class="evt"><span class="seq">1281</span><span class="etype">dispatch</span><span class="esum">接收派单 · parent master</span></div>
+          <div class="evt"><span class="seq">1280</span><span class="etype">spawn</span><span class="esum">coder 入册 · tier 1</span></div>
+        </div>
+      </div>
+      <p class="d-note">成员会话内容只读；指挥经 Tier-0 对话或 Gate 裁决表达，Console 不提供直控成员的操作。</p>
+    </aside>
+  </div>
+
+  <div class="evt-panel">
+    <h2>事件流 · 尾窗<span class="cap">只取末窗，成本不随会话时长线性增长（U1）</span></h2>
+    <div class="evt-list" id="tailList">
+      <div class="evt"><span class="seq">1284</span><span class="etype">task/update</span><span class="esum"><b>T-104</b> → blocked · title「provider 拒绝路径补测」</span></div>
+      <div class="evt"><span class="seq">1283</span><span class="etype">gate/open</span><span class="esum">plan-approval · requestedBy master</span></div>
+      <div class="evt"><span class="seq">1282</span><span class="etype">task/update</span><span class="esum"><b>T-104</b> → blocked（等待 plan-approval）</span></div>
+      <div class="evt"><span class="seq">1281</span><span class="etype">dispatch</span><span class="esum">coder ← master · parent 显式携带</span></div>
+      <div class="evt"><span class="seq">1280</span><span class="etype">task/create</span><span class="esum"><b>T-104</b> provider 拒绝路径补测 · max_rounds 3</span></div>
+      <div class="evt"><span class="seq">1279</span><span class="etype">spawn</span><span class="esum">coder 入册 · tier 1 · durableId d-41f…</span></div>
+      <div class="evt"><span class="seq">1278</span><span class="etype">init</span><span class="esum">oss-maintenance · 快照落盘 · digest 9078…478</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ 视图三：对话流（U2-b 节点进对话，单入口） ═══════════ -->
+<section class="view" id="view-dialog" role="tabpanel" aria-label="对话流" hidden>
+  <div class="view-head">
+    <div>
+      <h1>对话流</h1>
+      <p class="sub">人与团队的全部交互都在 Tier-0 对话里：协作事件折叠为对话节点（U2 愿景形态），裁决不必离开对话。</p>
+    </div>
+  </div>
+  <div class="dialog">
+    <div class="msg">
+      <span class="who">人</span>
+      <div class="bubble"><div class="who-name">维护者</div>按批次 B 推进：provider 拒绝路径补测 + 检测逻辑回归，完成后收圈归档。</div>
+    </div>
+    <div class="cnode">
+      <div class="cn-head"><span class="cn-badge">init</span>团队已建立 · oss-maintenance</div>
+      <div class="cn-meta">team.yaml digest 9078…478 · 快照与规程已注入</div>
+    </div>
+    <div class="cnode">
+      <div class="cn-head"><span class="cn-badge">task</span>T-104 · T-105 已建账</div>
+      <div class="cn-meta">触碰路径两组互斥 · 并发池 1/3 · rounds 上限 3</div>
+    </div>
+    <div class="msg">
+      <span class="who">军</span>
+      <div class="bubble"><div class="who-name">master · Tier-0</div>批次 B 进入执行前按模板规程开启人审门 plan-approval，已挂起 T-104 等待裁决。改动面：两组互斥触碰路径，风险摘要见待办卡。</div>
+    </div>
+    <div class="cnode" id="dialogGate" data-state="pending">
+      <div class="cn-head">
+        <span class="cn-badge">gate</span>
+        <span id="dgTitle">plan-approval · 待裁决</span>
+        <span class="mini-stamp" id="dgStamp" hidden>准</span>
+      </div>
+      <div class="cn-meta" id="dgMeta">stage-enter:running · requestedBy master · seq 1283</div>
+      <div class="cn-body" id="dgBody">
+        批准后 T-104 恢复执行；驳回则转 cancelled 并上行。
+        <button class="cn-link" id="dgGo">去裁决</button>
+      </div>
+    </div>
+    <div class="msg" id="dialogAfter" hidden>
+      <span class="who">军</span>
+      <div class="bubble"><div class="who-name">master · Tier-0</div>门已开。coder 继续推进 T-104，qa 待命复核；我在巡场循环里盯着完成通知。</div>
+    </div>
+    <div class="cnode" id="dialogArchive" hidden>
+      <div class="cn-head"><span class="cn-badge">archive</span>收圈摘要（示意）</div>
+      <div class="cn-meta">事件范围 1278–1290 · 产物指针 2 项 · 人审 1 次</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ 视图四：设计对照 ═══════════ -->
+<section class="view" id="view-map" role="tabpanel" aria-label="设计对照" hidden>
+  <div class="view-head">
+    <div>
+      <h1>设计对照</h1>
+      <p class="sub">体验稿与 UI/UX 演进方案（U0–U3）的逐条对应。本稿是设计提案，不是实现；一切落地以对应 issue 评审为准。</p>
+    </div>
+  </div>
+  <div class="map-grid">
+    <div class="map-card">
+      <span class="eyebrow">PRINCIPLES · 五条设计立场</span>
+      <h2>原则 → 稿中体现</h2>
+      <ul>
+        <li><b>单入口 · 两触点零门槛</b>：待办页打开即见（U0-b）；<span class="loc">对话流·去裁决</span> 链接演示不离开对话的裁决动线。</li>
+        <li><b>展示即账本</b>：每张卡附事件证据链，状态变化同步追加 <span class="loc">gate/resolve seq</span>；抽屉与尾窗全是账本投影。</li>
+        <li><b>数据面走官方通道</b>：对话节点是「协作事件入会话日志 → 投影」的愿景形态（U2-a/b 先 spike）。</li>
+        <li><b>自建只留官方没有的</b>：树形组织/房间/注册表自建；列表、表单、徽标皆素材化，不造组件轮子。</li>
+        <li><b>最小适配税</b>：素稿无外部依赖、双主题、375px 一等适配；实现面维持官方插槽形态。</li>
+      </ul>
+    </div>
+    <div class="map-card">
+      <span class="eyebrow">STAGES · 阶段对应</span>
+      <h2>U0–U3 → 稿中区域</h2>
+      <ul>
+        <li><b>U0-a gate 强制语义</b>：卡的「绑定」行与证据链是视觉提案；执行器/自动开闸/灰度以 #53 评审为准，不在本稿承诺内。</li>
+        <li><b>U0-b Console 零门槛</b>：<span class="loc">待办·打开即见</span> 最近活跃实例默认展开、其他实例显式展开、375px 预览。</li>
+        <li><b>U0-c 入口露出</b>：<span class="loc">团队·待办 2</span> 入口按钮（shell.overlay 徽标待 U2-a 投影落地后再评）。</li>
+        <li><b>U0-d 规程小修</b>：提示词侧，无视觉面（Tier-0 发现待裁门写原生 todo）。</li>
+        <li><b>U1 还债</b>：<span class="loc">团队·尾窗</span>、事件白名单摘要、task/update 带 title、无上限任务不显示 n/m（T-105 未入稿即示例）。</li>
+        <li><b>U2 数据面官方化</b>：<span class="loc">对话流</span> 整页为 U2-a/b spike 通过后的目标形态。</li>
+        <li><b>U3 纵深</b>：未入稿（依赖 U2 投影）。</li>
+      </ul>
+    </div>
+    <div class="map-card">
+      <span class="eyebrow">NOT-DO · 不做清单</span>
+      <h2>明确不做</h2>
+      <ul class="no-list">
+        <li><b>迁官方 approval 承载 Gate</b>——实证语义错位：单 agent 实时瀑布、离线即 abort、fail-closed、决策域两值，无持久待办。</li>
+        <li><b>用官方 Trajectory 回放协作事件</b>——消费模型会话专属语义（token/TTFT），且无自定义事件源接口。</li>
+        <li><b>建团向导 G2</b>——触发条件重估中，不借 UI 重启。</li>
+        <li><b>视觉重做</b>——问题在人机回路断裂，不在观感；本稿只演示回路修复后的形态。</li>
+        <li><b>新增 REST 轮询面</b>——新数据面一律投影通道，存量 REST 冻结并设移除里程碑。</li>
+      </ul>
+    </div>
+    <div class="map-card">
+      <span class="eyebrow">SIGNATURE · 签名时刻</span>
+      <h2>一次裁决，三面同步</h2>
+      <ul>
+        <li>在<b>待办</b>页对 <code>plan-approval</code> 点「批准」：朱批落卡，证据链入账 <code>gate/resolve</code>。</li>
+        <li>切到<b>团队</b>：T-104 已解锁 running，coder 转青瓷，游标推进。</li>
+        <li>切到<b>对话流</b>：gate 节点翻转为「已裁决」，军师接话继续派发。</li>
+        <li>驳回则全程走驳回语义（玄墨「驳」印、任务转 cancelled）。</li>
+        <li>试完点右上「重置演示」复原。</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <span>小诸葛 · UX 体验稿 · 2026-09-05</span>
+  <span>静态造数 · 零外部依赖</span>
+  <span>双主题（晨点/夜巡）</span>
+  <span>375px 一等适配</span>
+  <span>遵循 prefers-reduced-motion</span>
+</footer>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* ---------- 状态 ---------- */
+const S = {
+  gates: {
+    A: { state: "pending" },
+    R: { state: "pending" },
+  },
+  seq: 1284,
+};
+const $ = (sel, el = document) => el.querySelector(sel);
+const $$ = (sel, el = document) => Array.from(el.querySelectorAll(sel));
+
+/* ---------- 视图切换 ---------- */
+const views = { gates: "view-gates", team: "view-team", dialog: "view-dialog", map: "view-map" };
+$$(".tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    $$(".tab").forEach((t) => t.setAttribute("aria-selected", String(t === tab)));
+    Object.entries(views).forEach(([k, id]) => {
+      $("#" + id).hidden = k !== tab.dataset.view;
+    });
+  });
+});
+function goto(view) {
+  $(`.tab[data-view="${view}"]`).click();
+}
+
+/* ---------- 主题（晨点/夜巡） ---------- */
+const themeBtn = $("#themeToggle");
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  themeBtn.textContent = t === "night" ? "晨点" : "夜巡";
+}
+themeBtn.addEventListener("click", () => {
+  const next = document.documentElement.dataset.theme === "night" ? "dawn" : "night";
+  applyTheme(next);
+  try { sessionStorage.setItem("uxp-theme", next); } catch {}
+});
+try {
+  const saved = sessionStorage.getItem("uxp-theme");
+  if (saved) applyTheme(saved);
+  else if (window.matchMedia("(prefers-color-scheme: light)").matches) applyTheme("dawn");
+} catch {}
+
+/* ---------- URL 参数（便于截图/分享指定视图与主题） ---------- */
+const qs = new URLSearchParams(location.search);
+if (qs.get("theme") === "dawn" || qs.get("theme") === "night") applyTheme(qs.get("theme"));
+if (qs.get("view") && views[qs.get("view")]) goto(qs.get("view"));
+
+/* ---------- 375px 预览 ---------- */
+const phoneBtn = $("#phoneToggle");
+phoneBtn.addEventListener("click", () => {
+  const on = $("#gatesStage").classList.toggle("phone");
+  phoneBtn.setAttribute("aria-pressed", String(on));
+  phoneBtn.textContent = on ? "退出预览" : "375px 预览";
+});
+
+/* ---------- 其他实例显式展开 ---------- */
+$("#otherToggle").addEventListener("click", () => {
+  const body = $("#otherBody");
+  const open = body.hidden;
+  body.hidden = !open;
+  $("#otherToggle").setAttribute("aria-expanded", String(open));
+});
+
+/* ---------- Toast ---------- */
+let toastTimer;
+function toast(text, warn = false) {
+  const el = $("#toast");
+  el.textContent = text;
+  el.classList.toggle("warn", warn);
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 3400);
+}
+
+/* ---------- 事件行工厂 ---------- */
+let seq = S.seq;
+function evtRow(type, sum) {
+  seq += 1;
+  const div = document.createElement("div");
+  div.className = "evt new";
+  div.innerHTML = `<span class="seq">${seq}</span><span class="etype">${type}</span><span class="esum">${sum}</span>`;
+  return div;
+}
+
+/* ---------- 裁决动作（签名时刻：一次裁决，三面同步） ---------- */
+$$("[data-act]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const key = btn.dataset.gate;
+    const act = btn.dataset.act;
+    const card = $("#gate" + key);
+    if (card.dataset.state !== "pending") return;
+    const approved = act === "approve";
+    card.dataset.state = approved ? "approved" : "denied";
+    $("[data-pill]", card).className = "pill " + (approved ? "ok" : "mute");
+    $("[data-pill]", card).textContent = approved ? "已批准 · seq " + (seq + 1) : "已驳回";
+    $("[data-actions]", card).hidden = true;
+    if (card.querySelector(".stamp") && key === "A") card.querySelector(".stamp").textContent = approved ? "准" : "驳";
+    if (key === "R" && approved) card.querySelector(".stamp").textContent = "准";
+    if (key === "R" && !approved) card.querySelector(".stamp").textContent = "驳";
+
+    /* 证据链入账 */
+    const ev = $("[data-evidence]", card);
+    if (ev) {
+      ev.prepend(evtRow("gate/resolve",
+        approved
+          ? `plan-approval → <b>approved</b> · by human-web · UA len142:9f3a2c · 10.0.2.4`
+          : `plan-approval → <b>denied</b> · by human-web · UA len142:9f3a2c · 10.0.2.4`));
+    }
+
+    if (key === "A") {
+      /* 团队面：任务解锁 / 取消 */
+      const running = approved;
+      setTaskTone($("[data-taskTone]", card), running ? "running" : "cancelled", running ? "running" : "cancelled");
+      $('[data-act-coder]').textContent = running
+        ? "正在实现拒绝路径补测（T-104）· 第 1/3 圈"
+        : "T-104 已取消：plan-approval 被驳回，等待重新规划";
+      $('[data-act-master]').textContent = running
+        ? "门已开 · coder 推进中 · 巡场等待完成通知"
+        : "T-104 取消 · 已上行通知维护者 · 重新规划中";
+      $("#dDot").className = "tdot " + (running ? "tone-running" : "tone-faint");
+      $("#dActivity").textContent = running
+        ? "正在实现拒绝路径补测（T-104）· 第 1/3 圈"
+        : "T-104 已取消，等待重新派单";
+      setTaskTone($("#dTaskTone"), running ? "running" : "cancelled", running ? "running" : "cancelled");
+      /* 尾窗入账 */
+      const tail = $("#tailList");
+      tail.prepend(evtRow("gate/resolve", `plan-approval → <b>${approved ? "approved" : "denied"}</b> · by human-web`));
+      if (approved) tail.prepend(evtRow("task/update", `<b>T-104</b> → running（守夜人解锁）· title「provider 拒绝路径补测」`));
+      else tail.prepend(evtRow("task/update", `<b>T-104</b> → cancelled（门被驳回）· 已上行`));
+      $("#stBlocked").textContent = running ? "running 1" : "cancelled 1";
+      $("#stBlocked").className = "tone " + (running ? "running" : "cancelled");
+      /* 对话流节点翻转 */
+      const dg = $("#dialogGate");
+      dg.dataset.state = approved ? "approved" : "denied";
+      $("#dgTitle").textContent = `plan-approval · ${approved ? "已批准" : "已驳回"}`;
+      $("#dgMeta").textContent = `stage-enter:running · by human-web · seq ${seq - (approved ? 2 : 1)}`;
+      $("#dgStamp").hidden = false;
+      $("#dgStamp").textContent = approved ? "准" : "驳";
+      $("#dgBody").innerHTML = approved
+        ? "裁决已入账，T-104 恢复执行。"
+        : "裁决已入账，T-104 转 cancelled 并上行。";
+      $("#dialogAfter").hidden = !approved;
+      if (approved) $("#dialogArchive").hidden = false;
+      toast(approved
+        ? `已批准 · gate/resolve 已入账（seq ${seq - 1}）· T-104 已恢复`
+        : `已驳回 · T-104 转 cancelled，已上行通知`, !approved);
+    } else {
+      toast(approved
+        ? `已批准 · 大纲门放行，撰写恢复`
+        : `已驳回 · 撰写任务转 cancelled`, !approved);
+    }
+    refreshCount();
+  });
+});
+
+function setTaskTone(el, cls, label) {
+  if (!el) return;
+  el.className = "tone " + cls;
+  el.textContent = label;
+}
+
+/* ---------- 计数与清空态 ---------- */
+function refreshCount() {
+  const anyPendingCard = $$(".gate-card[data-state='pending']").length;
+  $("#lampCount").textContent = anyPendingCard === 0 ? "灯已清" : `${anyPendingCard} 盏灯待批`;
+  $("#entryCount").textContent = String(anyPendingCard);
+  $("#clearedState").hidden = anyPendingCard !== 0;
+  $("#otherToggle").textContent = otherPendingCount() > 0
+    ? `其他实例（${otherPendingCount()} 盏灯待批）· 显式展开`
+    : "其他实例 · 无待办";
+}
+function otherPendingCount() {
+  return $$("#otherBody .gate-card[data-state='pending']").length;
+}
+
+/* ---------- 入口跳转（U0-c） ---------- */
+$("#gatesEntry").addEventListener("click", () => goto("gates"));
+$("#dgGo").addEventListener("click", () => goto("gates"));
+
+/* ---------- 抽屉成员切换（演示：master/qa 静态占位） ---------- */
+$$(".tcard").forEach((cardEl) => {
+  const select = () => {
+    $$(".tcard").forEach((c) => c.setAttribute("aria-current", String(c === cardEl)));
+    const m = cardEl.dataset.member;
+    if (m === "coder") return; // 默认视图即 coder
+    $("#dName").textContent = m;
+    $("#dRole").textContent = m === "master" ? "军师 · Tier-0 · 根会话" : "质检裁判 · Tier-1";
+    $("#dDot").className = "tdot " + (m === "master" ? "tone-running" : "tone-slate");
+    $("#dActivity").textContent = $('[data-act-' + m + ']').textContent;
+  };
+  cardEl.addEventListener("click", select);
+  cardEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(); }
+  });
+});
+
+/* ---------- 重置演示 ---------- */
+$("#reset").addEventListener("click", () => {
+  const t = document.documentElement.dataset.theme;
+  const v = $(".tab[aria-selected='true']").dataset.view;
+  location.href = location.pathname + `?theme=${t}&view=${v}`;
+});
+
+/* ---------- demo 参数驱动签名时刻（须在监听器注册后执行） ---------- */
+if (qs.get("demo") === "approved") {
+  document.querySelector('#gateA [data-act="approve"]').click();
+  document.querySelector('#gateR [data-act="approve"]').click();
+}
+if (qs.get("demo") === "denied") {
+  document.querySelector('#gateA [data-act="deny"]').click();
+}
+</script>
+</body>
+</html>

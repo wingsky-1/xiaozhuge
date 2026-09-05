@@ -618,6 +618,17 @@ export function TeamView(props: { sessionId?: string }): React.ReactNode {
             {detail.masterIdle ? <span style={{ color: "#9a6700" }}>主控心跳超阈</span> : null}
           </span>
         ) : null}
+        {/* Gate 待办入口（#195 U0-c）：单入口原则之二——人只出现在 Tier-0 对话与 Gate 待办。
+            无计数（不新增轮询面）；console 面自己定位最近活跃实例，本按钮只做跳转。 */}
+        <span style={{ marginLeft: error !== null ? undefined : "auto" }}>
+          <button
+            type="button"
+            onClick={() => window.open(gateConsoleUrl(rootSessionOf(overview, sessionId)), "_blank", "noopener")}
+            style={retryButtonStyle}
+          >
+            待办
+          </button>
+        </span>
         {error !== null ? (
           <span style={{ marginLeft: "auto", display: "inline-flex", gap: 8, alignItems: "center" }}>
             <span style={{ color: "#cf222e" }}>刷新失败（展示最后快照）</span>
@@ -881,6 +892,14 @@ export function rootSessionOf(overview: TeamOverview | null, fallbackSessionId: 
   if (overview === null) return fallbackSessionId;
   const tier0 = overview.members.find((m) => m.tier === 0);
   return tier0?.durableId ?? fallbackSessionId;
+}
+
+/**
+ * Gate 待办页 URL（#195 U0-c）：console 面自带「最近活跃实例」定位，
+ * 本函数只做 session 直达拼装（团队 tab 内嵌同款 ?session= 语义）。
+ */
+export function gateConsoleUrl(sessionId: string): string {
+  return `/xiaozhuge/console?session=${encodeURIComponent(sessionId)}`;
 }
 
 /**
