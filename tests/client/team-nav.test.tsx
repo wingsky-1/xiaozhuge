@@ -11,7 +11,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createElement } from "react";
-import { apply, setTeamViewTab, TeamViewWatcher, type InputZone } from "../../src/client/index.js";
+import { apply, setTeamViewTab, TeamViewWatcher } from "../../src/client/index.js";
 import {
   TeamBackNavEntry,
   bindSessionsService,
@@ -291,7 +291,7 @@ describe("TeamViewWatcher：团队 tab 存在性协调器（issue #68/#97）", (
   it("is_team=true → 经 fetchTimeout 探测成功（fetch 路径与响应消费正确）", async () => {
     const fetchSpy = vi.fn(async () => Response.json(status(true)));
     vi.stubGlobal("fetch", fetchSpy);
-    render(createElement(TeamViewWatcher, { session: { sessionId: "s-root", blank: false }, input: { draft: "" } }));
+    render(createElement(TeamViewWatcher, { sessionId: "s-root" }));
     await waitFor(() => {
       expect(fetchSpy).toHaveBeenCalledTimes(1);
     });
@@ -304,7 +304,7 @@ describe("TeamViewWatcher：团队 tab 存在性协调器（issue #68/#97）", (
 
   it("is_team=false → 不抛错、无 UI 残留", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json(status(false))));
-    render(createElement(TeamViewWatcher, { session: { sessionId: "s-other", blank: false }, input: { draft: "" } }));
+    render(createElement(TeamViewWatcher, { sessionId: "s-other" }));
     await new Promise((r) => setTimeout(r, 30));
     expect(screen.queryByRole("button")).toBeNull();
   });
@@ -313,7 +313,7 @@ describe("TeamViewWatcher：团队 tab 存在性协调器（issue #68/#97）", (
     vi.stubGlobal("fetch", vi.fn(async () => {
       throw new Error("network down");
     }));
-    render(createElement(TeamViewWatcher, { session: { sessionId: "s-root", blank: false }, input: { draft: "" } }));
+    render(createElement(TeamViewWatcher, { sessionId: "s-root" }));
     await new Promise((r) => setTimeout(r, 30));
     expect(screen.queryByRole("button")).toBeNull();
   });
@@ -321,7 +321,7 @@ describe("TeamViewWatcher：团队 tab 存在性协调器（issue #68/#97）", (
   it("sessionId 为空 → 直接注销 tab 不 fetch", async () => {
     const fetchSpy = vi.fn(async () => Response.json(status(false)));
     vi.stubGlobal("fetch", fetchSpy);
-    render(createElement(TeamViewWatcher, { session: { sessionId: "", blank: false }, input: { draft: "" } }));
+    render(createElement(TeamViewWatcher, { sessionId: "" }));
     await new Promise((r) => setTimeout(r, 20));
     expect(fetchSpy).not.toHaveBeenCalled();
   });

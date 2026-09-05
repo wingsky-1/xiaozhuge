@@ -340,10 +340,13 @@ describe("客户端插件构建产物", () => {
     expect(bundle).toContain('require("react/jsx-runtime")');
   });
 
-  it("client 源码含官方 slots 注册（conversation.input.right）与首轮判定（blank）", () => {
+  it("client 源码含官方 slots 注册（conversation.input.right）与 D-1 数据通道（inject(sessionId)）", () => {
     const src = readFileSync(join(process.cwd(), "src", "client", "index.tsx"), "utf8");
     expect(src).toContain('"conversation.input.right"');
-    expect(src).toContain("session.blank");
+    // 0.1.2-rc.1（D-1）：插槽 owner(InputZone) 数据面移除，改走 register spec
+    // 的 inject(sessionId) 官方通道；首轮判定（blank）经 sessions.list 快照订阅。
+    expect(src).toContain("inject: (sessionId) => ({ sessionId })");
+    expect(src).toContain("useSyncExternalStore");
     expect(src).toContain('"/api/xiaozhuge/team/create"');
     expect(src).toContain("/api/xiaozhuge/team/scenarios");
     // 官方会话服务方法面投递与场景枚举（0.1.2：ctx.sessions.scope(id)
