@@ -332,6 +332,14 @@ describe("入口页与启动消息", () => {
     expect(bootMessage("PROBE")).toContain(head);
     expect(bootMessage("PROBE").endsWith("PROBE")).toBe(true);
   });
+
+  it("成功回调渲染 Gate 待办入口链接（#195 U0-c）", () => {
+    const html = launchPageHtml();
+    expect(html).toContain("/xiaozhuge/console?session=");
+    // DOM API + textContent 赋值路径（无 innerHTML 注入面）
+    expect(html).toContain('link.textContent = "打开 Gate 待办（人审入口）"');
+    expect(html).toContain('encodeURIComponent(sessionId)');
+  });
 });
 
 describe("客户端插件构建产物", () => {
