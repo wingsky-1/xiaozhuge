@@ -41,6 +41,24 @@ export interface UpdateOptions {
   expectRev?: number;
 }
 
+/**
+ * 模块级写锁链：按 task 记录绝对路径串行化写操作（#188 防 TOCTOU 与并发双写丢失）。
+ * 整个 read-modify-write 入队，前序任务失败不阻断后续（与 registry/event-log 同款）。
+ */
+const writeChains = new Map<string, Promise<unknown>>();
+
+/** 排队执行一次写任务；链尾结算后无后继则清除，避免 Map 随会话累积。 */
+function enqueueWrite<T>(file: string, task: () => Promise<T>): Promise<T> {
+  const prev = writeChains.get(file) ?? Promise.resolve();
+  const run = prev.catch(() => undefined).then(task);
+  writeChains.set(file, run);
+  const clear = () => {
+    if (writeChains.get(file) === run) writeChains.delete(file);
+  };
+  void run.then(clear, clear);
+  return run;
+}
+
 export class Ledger {
   private readonly tasksDir: string;
 
@@ -81,46 +99,49 @@ export class Ledger {
    * rounds 只能单调递增。成功后 rev+1 并原子落盘。
    */
   async update(id: string, patch: TaskPatch, opts: UpdateOptions = {}): Promise<TaskRecord> {
-    const current = await this.get(id);
-    if (current === undefined) {
-      throw new LedgerError("task-not-found", `task ${id} does not exist`);
-    }
-    if (opts.expectRev !== undefined && opts.expectRev !== current.rev) {
-      throw new LedgerError(
-        "rev-conflict",
-        `task ${id} rev mismatch: expected ${opts.expectRev}, current ${current.rev}`,
-      );
-    }
-    if (patch.status !== undefined && !canTransition(current.status, patch.status)) {
-      throw new LedgerError(
-        "illegal-transition",
-        `task ${id}: illegal transition ${current.status} -> ${patch.status}`,
-      );
-    }
-    if (patch.rounds !== undefined && patch.rounds < current.rounds) {
-      throw new LedgerError("rounds-regress", `task ${id}: rounds cannot decrease`);
-    }
-    const next: TaskRecord = {
-      ...current,
-      ...patch,
-      rev: current.rev + 1,
-      updatedAt: Date.now(),
-    };
-    // P2（#169 复核）：maxRounds 可为 null（未设上限），rounds-exceeded 仅在
-    // 显式设定上限时触发——消除 `null > 0` 的歧义与 lint 告警。
-    if (
-      patch.rounds !== undefined &&
-      next.maxRounds !== null &&
-      next.maxRounds > 0 &&
-      next.rounds > next.maxRounds
-    ) {
-      throw new LedgerError(
-        "rounds-exceeded",
-        `task ${id}: rounds ${next.rounds} exceeds max ${next.maxRounds}`,
-      );
-    }
-    await writeJsonAtomic(this.taskFile(id), next);
-    return next;
+    const file = this.taskFile(id);
+    return enqueueWrite(file, async () => {
+      const current = await this.get(id);
+      if (current === undefined) {
+        throw new LedgerError("task-not-found", `task ${id} does not exist`);
+      }
+      if (opts.expectRev !== undefined && opts.expectRev !== current.rev) {
+        throw new LedgerError(
+          "rev-conflict",
+          `task ${id} rev mismatch: expected ${opts.expectRev}, current ${current.rev}`,
+        );
+      }
+      if (patch.status !== undefined && !canTransition(current.status, patch.status)) {
+        throw new LedgerError(
+          "illegal-transition",
+          `task ${id}: illegal transition ${current.status} -> ${patch.status}`,
+        );
+      }
+      if (patch.rounds !== undefined && patch.rounds < current.rounds) {
+        throw new LedgerError("rounds-regress", `task ${id}: rounds cannot decrease`);
+      }
+      const next: TaskRecord = {
+        ...current,
+        ...patch,
+        rev: current.rev + 1,
+        updatedAt: Date.now(),
+      };
+      // P2（#169 复核）：maxRounds 可为 null（未设上限），rounds-exceeded 仅在
+      // 显式设定上限时触发——消除 `null > 0` 的歧义与 lint 告警。
+      if (
+        patch.rounds !== undefined &&
+        next.maxRounds !== null &&
+        next.maxRounds > 0 &&
+        next.rounds > next.maxRounds
+      ) {
+        throw new LedgerError(
+          "rounds-exceeded",
+          `task ${id}: rounds ${next.rounds} exceeds max ${next.maxRounds}`,
+        );
+      }
+      await writeJsonAtomic(file, next);
+      return next;
+    });
   }
 
   /** 列出全部任务（跳过临时残片与损坏文件——损坏文件名会出现在结果 warnings）。 */

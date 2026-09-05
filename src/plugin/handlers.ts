@@ -535,13 +535,16 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
         const provider = optStr(args, "provider");
         const model = optStr(args, "model");
         const inline = optRoleInline(args);
-        const expectRev = optNum(args, "expect_rev");
+        // 调用方显式 expectRev 优先（显式乐观锁语义）；缺省用前置校验读回的 task.rev
+        // 作基线（#188，防 TOCTOU 与并发双派发覆盖）。
+        const rawExpectRev = optNum(args, "expect_rev");
 
         // 前置校验（无副作用，不参与半事务）：任务必须在场——账本先行约定。
         const task = await led().get(taskId);
         if (task === undefined) {
           throw new ToolError("task-not-found", `task ${taskId} does not exist`);
         }
+        const expectRev = rawExpectRev ?? task.rev;
         // 重复派发拒绝（Q5，#159，评审裁决）：任务已被**其他**成员持有即拒。
         // 判据 = assignee 占用（`(role, task_id)` 的充分条件——同 role 二次派发
         // 必触发 assignee 已占；顺带覆盖「换不同 role 派发已分配任务」的越权
@@ -587,11 +590,11 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
             ...(resolvedInline !== undefined ? { role_inline: resolvedInline } : {}),
           });
           completed.push("spawn");
-          // step 2: 指派（乐观锁透传，防并发误派）。
+          // step 2: 指派（乐观锁基线透传，防并发误派与 TOCTOU）。
           const updated = await led().update(
             taskId,
             { assignee: member },
-            { ...(expectRev !== undefined ? { expectRev } : {}) },
+            { expectRev },
           );
           await appendEvent(member, "task/update", {
             task_id: taskId,
