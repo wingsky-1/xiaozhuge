@@ -260,10 +260,12 @@ async function jfetch(method, path, body) {
   return data;
 }
 // rc.1 官方 /api 单通道 RPC（#197，官方对照：dsh-client-connection 浏览器
-// caller createWebConnectionRpc 与宿主 rpcFetchHandler 逐字段同构）：
+// caller createWebConnectionRpc + api-gateway remoteRequest 逐字段同构）：
 //   POST /api/<namespace>/<method>，body = {type:"client-request", rpcId,
-//   method, payload}；响应 {type:"server-response", rpcId, result:{ok,value}}
-//   或 {ok:false, error:{code,message,details}}。业务失败抛 "code: message"。
+//   method, payload}；payload = {args:{request: <请求对象>}}（网关强制恰好
+//   一个 args 字段，三方法 descriptor 参数名均为 request）；响应
+//   {type:"server-response", rpcId, result:{ok,value}} 或
+//   {ok:false, error:{code,message,details}}。业务失败抛 "code: message"。
 const rpcUuid = () =>
   typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
     ? crypto.randomUUID()
@@ -273,7 +275,7 @@ async function xfetch(endpoint, payload) {
   const r = await fetch("/api/" + endpoint, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ type: "client-request", rpcId: id, method: endpoint, payload }),
+    body: JSON.stringify({ type: "client-request", rpcId: id, method: endpoint, payload: { args: { request: payload } } }),
     ...connTimeoutSignal(),
   });
   const data = await r.json().catch(() => null);
