@@ -42,6 +42,8 @@ import {
   STALE_THRESHOLD_MS,
   acquireCas,
   reachable,
+  validateMemberName,
+  SAFE_NAME_PATTERN,
 } from "../runtime/index.js";
 import { userTemplatesRoot, projectTemplatesRoot } from "./team-home.js";
 import { appendToolManifest } from "./tool-manifest.js";
@@ -650,6 +652,14 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
         const to = reqStr(args, "to");
         const from = reqStr(args, "from");
         requireSelf("team_send", from);
+        // P0-2（#180）：recipient 入路径前白名单优先于成员存在性检查——
+        // 非法名直接拒（mailbox.deliver 内部亦断言，此处早拒避免读注册表）。
+        if (!validateMemberName(to)) {
+          throw new ToolError(
+            "invalid-member-name",
+            `recipient must match ${SAFE_NAME_PATTERN}, got: ${JSON.stringify(to)}`,
+          );
+        }
         const type = reqStr(args, "type");
         const body = args.body ?? null;
         if ((await reg().getMember(to)) === undefined) {

@@ -4,7 +4,7 @@
  * 入口页直出。node:http 真实监听回环端口驱动 WebRoute。
  */
 import { describe, expect, it, beforeEach } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { createServer } from "node:http";
@@ -164,6 +164,17 @@ describe("team/create 一键建团", () => {
       { ...jsonHeaders(base), "sec-fetch-site": "cross-site" },
     );
     expect(crossSite.status).toBe(403);
+  });
+
+  it("create 端点 session 白名单（P0-2，#180）：路径逃逸/超长 → 400 且无实例落盘", async () => {
+    const base = await listen();
+    for (const evil of ["../../etc", "a/b", "s".repeat(129)]) {
+      const { status, json } = await post(base, { session: evil });
+      expect(status, `evil=${evil}`).toBe(400);
+      expect(json.error, `evil=${evil}`).toBe("invalid session parameter");
+    }
+    // 无文件落盘：会话根（含逃逸目标解析路径）未被创建。
+    expect(existsSync(join(home, "dsh-home", "xiaozhuge"))).toBe(false);
   });
 
   it("同会话重入 reentered（幂等不变），异会话独立实例根", async () => {

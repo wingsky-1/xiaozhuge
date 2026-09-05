@@ -93,6 +93,18 @@ describe("gate-console 路由穷举", () => {
     expect(out().body && JSON.parse(out().body).error).toBe("id required");
   });
 
+  it("POST gates gate_id 白名单（P0-2，#180）：路径逃逸/分隔符/超长 → 400", async () => {
+    for (const evil of ["../x", "a/b", "g".repeat(65)]) {
+      const { res, out } = capture();
+      await gatesRoute.handler(
+        mockReq({ method: "POST", url: "/api/xiaozhuge/gates?session=s", headers: { origin: "http://h", host: "h" }, body: JSON.stringify({ id: evil }) }),
+        res as never,
+      );
+      expect(out().status, `evil=${evil}`).toBe(400);
+      expect(out().body && JSON.parse(out().body).error, `evil=${evil}`).toBe("invalid gate id parameter");
+    }
+  });
+
   it("POST gates 同 id 重复 → 409 already exists", async () => {
     const mk = () => capture();
     const r1cap = mk();
@@ -131,6 +143,18 @@ describe("gate-console 路由穷举", () => {
     );
     expect(out().status).toBe(400);
     expect(out().body && JSON.parse(out().body).error).toContain("session, gate_id and decision");
+  });
+
+  it("resolve gate_id 白名单（P0-2，#180）：路径逃逸/分隔符/超长 → 400", async () => {
+    for (const evil of ["../x", "a/b", "g".repeat(65)]) {
+      const { res, out } = capture();
+      await resolveRoute.handler(
+        mockReq({ method: "POST", url: "/api/xiaozhuge/gates/resolve", headers: { origin: "http://h", host: "h" }, body: JSON.stringify({ session: "s", gate_id: evil, decision: "approved" }) }),
+        res as never,
+      );
+      expect(out().status, `evil=${evil}`).toBe(400);
+      expect(out().body && JSON.parse(out().body).error, `evil=${evil}`).toBe("invalid gate id parameter");
+    }
   });
 
   // session 白名单（issue #103）：路径逃逸/分隔符/多字节/超长一律 400。

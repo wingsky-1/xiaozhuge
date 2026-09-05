@@ -145,6 +145,13 @@ export function makeLaunchRoutes(): WebRoute[] {
             writeJson(res, 400, { error: "session required" });
             return;
           }
+          // P0-2（#180）：create 端点 session 入路径前白名单早校验——此前仅查
+          // 非空（`../../..` 可把实例根写出 sessions 目录建目录写文件），现对齐
+          // status 端点 SESSION_PATTERN 口径。
+          if (!isValidSessionId(body.session)) {
+            writeJson(res, 400, { error: "invalid session parameter" });
+            return;
+          }
           // Wave 1b（#123）：拒绝已登记成员自建 root 提权——该会话已是某
           // 实例的成员（agents.json 反查命中）时，不允许再当主控建团。
           const existing = resolveTeamHomeForView(body.session);

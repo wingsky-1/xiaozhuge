@@ -7,6 +7,7 @@ import { join } from "node:path";
 import type { GateRecord, GateStatus } from "./types.js";
 import { GateError } from "./errors.js";
 import { readJson, writeJsonAtomic } from "./fs-utils.js";
+import { assertGateId } from "./names.js";
 
 export interface NewGate {
   id: string;
@@ -16,6 +17,8 @@ export interface NewGate {
 
 /** 打开闸口（status=pending）；同 id 已存在即拒（幂等键 = gate id）。 */
 export async function openGate(gatesDir: string, input: NewGate): Promise<GateRecord> {
+  // P0-2（#180）：gate id 入路径前白名单断言（`${id}.json` 拼文件路径）。
+  assertGateId(input.id);
   const file = join(gatesDir, `${input.id}.json`);
   const existing = await readJson<GateRecord>(file);
   if (existing !== undefined) {
@@ -34,6 +37,7 @@ export async function openGate(gatesDir: string, input: NewGate): Promise<GateRe
 
 /** 读单个 gate；不存在返回 undefined。 */
 export async function readGate(gatesDir: string, id: string): Promise<GateRecord | undefined> {
+  assertGateId(id);
   return readJson<GateRecord>(join(gatesDir, `${id}.json`));
 }
 
@@ -47,6 +51,7 @@ export async function resolveGate(
   decision: Exclude<GateStatus, "pending">,
   by: string,
 ): Promise<GateRecord> {
+  assertGateId(id);
   const file = join(gatesDir, `${id}.json`);
   const current = await readJson<GateRecord>(file);
   if (current === undefined) {

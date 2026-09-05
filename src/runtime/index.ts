@@ -60,6 +60,20 @@ export type { ReachabilityResult, TreeViolation, CommMode, CommEdge } from "./ke
 export { EventLog, WRITER_LOCK_SUFFIX } from "./kernel/event-log.js";
 export type { AppendInput, ReadResult } from "./kernel/event-log.js";
 export { Registry } from "./kernel/registry.js";
+export {
+  SESSION_PATTERN,
+  SAFE_NAME_PATTERN,
+  validateSessionId,
+  validateMemberName,
+  validateRoomName,
+  validateGateId,
+  validateEnvelopeId,
+  assertSessionId,
+  assertMemberName,
+  assertRoomName,
+  assertGateId,
+  assertEnvelopeId,
+} from "./kernel/names.js";
 export { openGate, resolveGate, readGate, listGates } from "./kernel/gates.js";
 export {
   recoverDeliveries,

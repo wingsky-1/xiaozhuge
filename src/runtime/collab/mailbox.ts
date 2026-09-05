@@ -18,6 +18,7 @@ import { join } from "node:path";
 import { linkNoReplace, readJson, TMP_PREFIX, writeJsonAtomic } from "../kernel/fs-utils.js";
 import { memberMailboxDir } from "../kernel/paths.js";
 import { recoverDeliveries } from "../kernel/recovery.js";
+import { assertMemberName, assertEnvelopeId } from "../kernel/names.js";
 
 export const DELIVERING_PREFIX = ".delivering-";
 export const PROCESSED_DIR = "processed";
@@ -71,8 +72,12 @@ export async function deliver(
   message: { from: string; type: string; body: unknown },
   opts: { id?: string } = {},
 ): Promise<string> {
-  const memberDir = memberMailboxDir(teamHome, to);
+  // P0-2（#180）：to 与信封 id 入路径前白名单断言（越出成员信箱目录的
+  // 路径注入被拒；id 由框架生成或调用方传入，均须匹配安全名形态）。
+  assertMemberName(to);
   const id = opts.id ?? crypto.randomUUID();
+  assertEnvelopeId(id);
+  const memberDir = memberMailboxDir(teamHome, to);
   const envelope: Envelope = {
     id,
     from: message.from,
@@ -95,6 +100,7 @@ export async function deliver(
 
 /** 列出成员待读信封。 */
 export async function readUnread(teamHome: string, member: string): Promise<Envelope[]> {
+  assertMemberName(member);
   const memberDir = memberMailboxDir(teamHome, member);
   if (!existsSync(memberDir)) return [];
   const out: Envelope[] = [];
@@ -111,6 +117,8 @@ export async function readUnread(teamHome: string, member: string): Promise<Enve
  * @throws Error 待读位不存在或已被认领。
  */
 export async function claim(teamHome: string, member: string, uuid: string): Promise<Envelope> {
+  assertMemberName(member);
+  assertEnvelopeId(uuid);
   const memberDir = memberMailboxDir(teamHome, member);
   if (!existsSync(unreadFile(memberDir, uuid))) {
     throw new Error(`unknown envelope ${uuid} in ${member}'s unread segment`);
@@ -128,6 +136,8 @@ export async function claim(teamHome: string, member: string, uuid: string): Pro
  * 直接清残片返回既有结果语义）。
  */
 export async function acknowledge(teamHome: string, member: string, uuid: string): Promise<void> {
+  assertMemberName(member);
+  assertEnvelopeId(uuid);
   const memberDir = memberMailboxDir(teamHome, member);
   const processing = deliveringFile(memberDir, uuid);
   if (!existsSync(processing)) return; // 幂等：无在途残片
@@ -143,6 +153,7 @@ export async function harvestMailbox(
   member: string,
   ttlMs?: number,
 ): Promise<number> {
+  assertMemberName(member);
   const memberDir = memberMailboxDir(teamHome, member);
   let swept = 0;
   if (existsSync(memberDir)) {
