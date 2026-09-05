@@ -342,6 +342,7 @@ export function consolePageHtml(nonce: string): string {
 <body>
 <h1>Gate 待办</h1>
 <div class="hint"><span id="inst">定位中…</span> <button id="refresh">刷新</button></div>
+<div id="msg" class="hint" style="color: #2da44e; margin-bottom: 8px;" hidden></div>
 <details id="switch" hidden><summary>其他实例</summary><div id="instlist"></div></details>
 <div id="list"><div class="empty">正在定位最近活跃实例…</div></div>
 <script nonce="${nonce}">
@@ -421,7 +422,15 @@ async function resolve(gateId, decision) {
     body: JSON.stringify({ session: currentSession, gate_id: gateId, decision, by: "human-web" }),
     ...connTimeoutSignal(),
   });
-  if (!r.ok) alert((await r.json()).error ?? "failed");
+  if (!r.ok) {
+    alert((await r.json()).error ?? "failed");
+  } else {
+    const msg = $("#msg");
+    if (msg) {
+      msg.hidden = false;
+      msg.textContent = "Gate 裁决已写入。若主控处于等待/阻塞状态，请回到主会话聊天窗口发送「已批准，请继续」唤醒主控。";
+    }
+  }
   await load();
 }
 $("#refresh").addEventListener("click", () => { currentSession = null; $("#inst").textContent = "定位中…"; $("#switch").hidden = true; void locate().then(load); });

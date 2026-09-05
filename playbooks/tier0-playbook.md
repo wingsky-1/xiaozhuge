@@ -11,8 +11,8 @@
 | # | 防护项 | 强制位置 | 默认值 | 触发动作 |
 |---|---|---|---|---|
 | R1 | 并发池上限 | 同时处于 `running` 的任务数不得超过模板 `resources.max_active_rooms` 与并发池上限的较小者；`team_task_create` 前先 `team_task_list(status=running)` 核数 | 并发池 = 3 | 超限则任务留在 `queued` 排队，本轮不派发 |
-| R2 | 熔断阈值 | 连续 **N=3** 圈无进展（无任务状态迁移、无信箱确认、无事物流入）即熔断：`goal pause` + 向人上行摘要，等人工 rearm | N = 3 圈 | 熔断后本轮巡场终止，不再派发 |
-| R3 | token 成本预算线 | 单任务 `rounds > max_rounds` 由账本拒绝推进；goal 级 `max_goal_rounds` 在创建时显式设置（建议 8–16，勿用部署默认值） | 单任务 3 圈 / goal 8–16 轮 | 超线任务转 `blocked` 并在上行摘要中列出 |
+| R2 | 熔断阈值 | 连续 **N=3** 圈无进展（无任务状态迁移、无信箱确认、无事物流入）即熔断：`update_goal(action=blocked, blocked_reason="...")` 上报收官 + 向人上行摘要，等人工介入 | N = 3 圈 | 熔断后本轮巡场终止，不再派发 |
+| R3 | token 成本预算线 | 单任务 `rounds > max_rounds` 由账本拒绝推进（超线转 `blocked`）；goal 级 `max_goal_rounds` 在建团首轮（直接人交互 turn）调用 `create_goal` 时显式硬参数化（建议 8–16 轮）；每轮巡场经 `get_goal` 巡检已耗轮次与上限 | 单任务 3 圈 / goal 8–16 轮 | 超线任务转 `blocked` 并在上行摘要中列出 |
 
 ## 1. 启动对账节（顺序化；每次会话启动或接管时执行一遍，顺序不可换）
 
@@ -21,9 +21,10 @@
    调用失败 → 输出失败摘要上行并终止本轮：禁止以「阅读函数清单的印象」
    断言工具缺失或在场，禁止静默降级单干。
 1. **goal rearm**：若 `get_goal` 显示 phase=active 但 activation=disarmed
-   （进程重启后必如此），请人执行 resume 或经授权通道 rearm；goal 尚未
-   创建则在本节内创建。自动续轮未 rearm 前不会发生，本节之后的循环由
-   当前 turn 手动驱动一轮。
+   （进程重启或熔断后必如此），请人执行 resume 或经会话发送指令唤醒 rearm；
+   若在首轮直接人输入 turn 且尚未建 goal，则显式硬参数化调用
+   `create_goal(objective, max_goal_rounds)`；自治轮内模型无权 pause/resume，
+   自动续轮未 rearm 前不会发生，本节之后的循环由当前 turn 手动驱动一轮。
 2. **目标锚定（原文工件化）**：读 `rooms/root/brief/user-request.md`；
    缺失则把**本次团队的用户原始任务指令**逐字写入该文件（冷启动 =
    当前消息中的任务本体，不是「继续」类过程指令；接管 = 从会话历史
@@ -67,10 +68,13 @@
   - 其他类型按 body.type 分派。
 - 处理完的信封立即 ack，防止收割重投造成重复消费。
 
-### 步骤 ② 巡检 gates（含 stub gate 分支）
+### 步骤 ② 巡检 gates（含 stub gate 分支与并发隔离）
 
 - 读 `gates/*.json`：凡任务推进被某个 `pending` gate 阻塞 → 该任务转 `blocked`
   （`team_task_update(status=blocked)`），并在等待清单记录 gate id。
+- **并发隔离**：局部任务卡 Gate 严禁挂起全队！只要并发池内还有其他可推进任务，
+  继续派发或推进；仅当全队全部任务均因 Gate 或依赖阻塞且无任何活动任务时，
+  进入等待窗。
 - 发现 `pending` gate 时，把待审项写入原生 todo（`todo_write`），
   让人在熟悉界面看到待办——待办只是投影，事实源仍是 `gates/*.json`；
   绝不代写 approved（人审只能经 Console 裁决落账）。
@@ -83,9 +87,11 @@
 
 - 维护计数器：连续圈数内若无任何任务离开 `blocked` 或无新进展，`blocked_streak += 1`；
   有任一进展则清零。
-- `blocked_streak >= 3`（R2）→ 熔断：`update_goal(action=pause)` + 输出上行摘要
-  （哪些任务 blocked、卡在哪个 gate、已等几圈）。
-- 单任务 `rounds` 超线（R3）→ 该任务转 `blocked`，不影响其余任务继续。
+- `blocked_streak >= 3`（R2）→ 熔断收官：经历宿主自治轮阈值（连续 $\ge 3$ 轮无进展）后，
+  调用合法的 `update_goal(action=blocked, blocked_reason="连续3圈无进展熔断: 任务阻塞于...")`
+  框架级收官，并输出上行摘要（哪些任务 blocked、卡在哪个 gate、已等几圈），
+  等待人工在主会话聊天框交互介入唤醒。
+- 单任务 `rounds` 超线（R3）→ 该任务由账本抛错后转 `blocked`，不影响其余任务继续。
 
 ### 步骤 ④ 并发池内派发
 
