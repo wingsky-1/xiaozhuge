@@ -1,6 +1,6 @@
 # ADR 0020: 黑板分片按 member 寻址 + 重复派发拒绝（Q5 命名落地）
 
-- 状态：Proposed
+- 状态：Accepted
 - 日期：2026-08-29
 - 对应 issue：#159（Q5/Q6 PR-3b，红线，state/approved）
 - 评审留痕：#159 方案评审评论（独立对抗性评审 approve-with-fixes 无 P0 + 用户授权 approve 实施）

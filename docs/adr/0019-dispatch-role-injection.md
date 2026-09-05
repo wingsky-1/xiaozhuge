@@ -1,6 +1,6 @@
 # ADR 0019: team_dispatch role 提示词确定性注入（ADR 0015「既有角色名」路径补全）
 
-- 状态：Proposed
+- 状态：Accepted
 - 日期：2026-08-28
 - 对应 issue：#149（Q8b，红线，state/approved）
 - 评审留痕：#149 方案评审评论（两轮独立对抗性评审 + 用户裁决）

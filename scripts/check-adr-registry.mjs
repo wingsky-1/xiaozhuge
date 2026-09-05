@@ -20,6 +20,9 @@ const SCAN_EXTS = new Set([".md", ".mjs", ".js", ".ts", ".yml", ".yaml"]);
 const FILE_RE = /^(\d{4})-[a-z0-9-]+\.md$/;
 const TITLE_RE = /^# ADR (\d{4}): /;
 const REF_RE = /\bADR[ -](\d{4})\b/g;
+const STATUS_RE = /^-\s*状态[：:]\s*([A-Za-z]+)/m;
+const APPROVED_RE = /\bstate\/approved\b/i;
+const KNOWN_STATUSES = new Set(["Accepted", "Proposed", "Rejected", "Superseded"]);
 
 const errors = [];
 const byNumber = new Map();
@@ -56,12 +59,25 @@ for (const file of entries) {
   } else {
     byNumber.set(num, file);
   }
-  const firstLine = readFileSync(join(DIR, file), "utf8").split("\n", 1)[0].trim();
+  const fullContent = readFileSync(join(DIR, file), "utf8");
+  const firstLine = fullContent.split("\n", 1)[0].trim();
   const titleMatch = TITLE_RE.exec(firstLine);
   if (!titleMatch) {
     errors.push(`${file}: 首行须为 "# ADR <编号>: <标题>" 格式`);
   } else if (titleMatch[1] !== num) {
     errors.push(`${file}: 正文头编号 ADR ${titleMatch[1]} 与文件名编号 ${num} 不一致`);
+  }
+
+  const statusMatch = STATUS_RE.exec(fullContent);
+  if (!statusMatch) {
+    errors.push(`${file}: 缺少 "- 状态：<状态>" 元数据字段`);
+  } else {
+    const status = statusMatch[1];
+    if (!KNOWN_STATUSES.has(status)) {
+      errors.push(`${file}: 状态 "${status}" 未知，合法状态为: ${[...KNOWN_STATUSES].join(", ")}`);
+    } else if (status === "Proposed" && APPROVED_RE.test(fullContent)) {
+      errors.push(`${file}: 正文已声明 state/approved，但状态字段仍为 Proposed（状态倒挂，请翻转为 Accepted）`);
+    }
   }
 }
 
