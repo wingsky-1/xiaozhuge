@@ -298,6 +298,15 @@ $("#go").addEventListener("click", async () => {
       content: [{ type: "text", text: BOOT_HEAD + "\\n\\n" + created.tier0_prompt }],
     });
     log("规程已投递。打开会话 " + sessionId + " 即可开始。");
+    // Gate 待办入口（#195 U0-c）：人审是两个触点之一，建团完成即给出入口。
+    // DOM API + textContent 赋值（sessionId 经 encodeURIComponent），无 innerHTML 注入面。
+    const link = document.createElement("a");
+    link.href = "/xiaozhuge/console?session=" + encodeURIComponent(sessionId);
+    link.textContent = "打开 Gate 待办（人审入口）";
+    link.target = "_blank";
+    link.rel = "noopener";
+    $("#log").appendChild(document.createElement("br"));
+    $("#log").appendChild(link);
   } catch (e) {
     $("#err").textContent = String(e.message ?? e);
   } finally {

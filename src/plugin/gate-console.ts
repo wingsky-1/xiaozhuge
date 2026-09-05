@@ -12,12 +12,13 @@
  * Console 页面由 host 直出内联 HTML（零构建）：直读 gates/*.json 渲染
  * pending 区块（ADR 0003/#3 最终决策），批准后状态自然刷新。
  */
-import { readdir } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { WebRoute } from "@deepseek-ai/dsh-host-webserver";
 import { join } from "node:path";
 import { isValidSessionId } from "./session-id.js";
+import { resolveDshHome } from "./team-home.js";
 import {
   listGates,
   openGate,
@@ -85,6 +86,54 @@ export function fetchSiteAllowed(req: IncomingMessage): boolean {
 function sfsMarker(req: IncomingMessage): string {
   const site = req.headers["sec-fetch-site"];
   return site === undefined ? "absent-legacy" : String(site);
+}
+
+/** 实例摘要（#195 U0-b）：Console 打开即见的定位数据面。 */
+export interface TeamInstanceSummary {
+  /** 主会话 id（实例根目录名）。 */
+  session: string;
+  /** pending 态 gate 数（只回计数，不回 gate 内容——信息分层，内容仍按需凭 session 取）。 */
+  pendingCount: number;
+  /** 最近活跃时间 = team.yaml mtime（epoch ms）；缺 team.yaml 的目录不是实例，已过滤。 */
+  lastActiveMs: number;
+}
+
+/**
+ * 枚举 `<DSH_HOME>/xiaozhuge/sessions/*` 下的团队实例，按最近活跃降序。
+ *
+ * 成本定性（#195 评审 B2 修正）：Console 打开时一次、目录深度 1、每目录
+ * 一次 team.yaml stat + gates 目录 readdir——与 #173 消灭的「每工具调用
+ * 全库会话扫描」不同量级，不复辟全扫模式。目录名经 session id 白名单
+ * 过滤（#103/#180 口径），白名单外的目录直接跳过。
+ */
+export async function listInstances(dshHome: string = resolveDshHome()): Promise<TeamInstanceSummary[]> {
+  const sessionsRoot = join(dshHome, "xiaozhuge", "sessions");
+  let names: string[];
+  try {
+    names = await readdir(sessionsRoot);
+  } catch {
+    return []; // 无 sessions 根（未建过团）= 空态，不是错误
+  }
+  const summaries: TeamInstanceSummary[] = [];
+  for (const name of names) {
+    if (!isValidSessionId(name)) continue;
+    const teamHome = join(sessionsRoot, name);
+    let lastActiveMs: number;
+    try {
+      lastActiveMs = (await stat(join(teamHome, "team.yaml"))).mtimeMs;
+    } catch {
+      continue; // 缺 team.yaml = 未初始化目录，不算实例
+    }
+    let pendingCount = 0;
+    try {
+      const { gates } = await listGates(layout(teamHome).gatesDir);
+      pendingCount = gates.filter((g) => g.status === "pending").length;
+    } catch {
+      // 无 gates 目录 = 0 pending
+    }
+    summaries.push({ session: name, pendingCount, lastActiveMs });
+  }
+  return summaries.sort((a, b) => b.lastActiveMs - a.lastActiveMs);
 }
 
 export function makeGateRoutes(deps: GateRouteDeps): WebRoute[] {
@@ -215,6 +264,19 @@ export function makeGateRoutes(deps: GateRouteDeps): WebRoute[] {
         }
       },
     },
+    {
+      kind: "exact",
+      path: `${ROUTES_PREFIX}/gates/instances`,
+      handler: async (req, res) => {
+        // 只读枚举面（#195 U0-b）：无参返回全部实例摘要（最近活跃降序）。
+        // 读侧-only、无写语义，不做 Origin 断言（与 GET gates 同口径）。
+        if (req.method !== "GET") {
+          writeJson(res, 405, { error: "method not allowed" });
+          return;
+        }
+        writeJson(res, 200, { instances: await listInstances() });
+      },
+    },
   ];
 }
 
@@ -222,6 +284,9 @@ export function makeGateRoutes(deps: GateRouteDeps): WebRoute[] {
  * Console 页面（内联 HTML，直读 API 渲染；375px 可用 + 双主题）。
  * #2 P0 加固：全部插值经 esc() 转义——gate 内容是外部输入，防同源 XSS；
  * 事件委托替代内联 onclick；每请求 nonce CSP 见 makeConsoleRoute。
+ * #195 U0-b 零门槛：去手填 session id——打开即取 gates/instances 定位
+ * 最近活跃实例；「其他实例」显式展开防跨实例误批；?session= 直达保留
+ * （团队 tab 内嵌兼容）。
  */
 export function consolePageHtml(nonce: string): string {
   return `<!doctype html>
@@ -243,6 +308,7 @@ export function consolePageHtml(nonce: string): string {
   .denied { border-left: 4px solid #cf222e; opacity: .75; }
   .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   button { padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; }
+  button.ghost { border: 1px solid #bbb; background: inherit; color: inherit; width: 100%; text-align: left; margin-bottom: 6px; }
   .approve { background: #2da44e; color: #fff; }
   .deny { background: #cf222e; color: #fff; }
   code { font-size: 12px; }
@@ -251,8 +317,9 @@ export function consolePageHtml(nonce: string): string {
 </head>
 <body>
 <h1>Gate 待办</h1>
-<div class="hint">主会话：<input id="session" placeholder="session id"> <button id="refresh">刷新</button></div>
-<div id="list"><div class="empty">填入主会话 id 后刷新。</div></div>
+<div class="hint"><span id="inst">定位中…</span> <button id="refresh">刷新</button></div>
+<details id="switch" hidden><summary>其他实例</summary><div id="instlist"></div></details>
+<div id="list"><div class="empty">正在定位最近活跃实例…</div></div>
 <script nonce="${nonce}">
 const $ = (s) => document.querySelector(s);
 // 浏览器→dsh web 一跳超时兜底（ADR 0021）：半开连接下裸 fetch 挂到 TCP 重传
@@ -262,10 +329,47 @@ const connTimeoutSignal = () =>
   typeof AbortSignal.timeout === "function" ? { signal: AbortSignal.timeout(10000) } : {};
 // 全部插值转义：gate 内容是外部输入，防同源 XSS（#2 P0）
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// 当前实例 session（#195 U0-b）：?session= 直达优先（团队 tab 内嵌兼容），
+// 否则取 instances[0]（最近活跃）。未定位前 resolve 一律拒绝（防误批空实例）。
+let currentSession = null;
+const short = (s) => String(s).slice(0, 8);
+function fmtAgo(ms) {
+  const m = Math.max(0, Math.round((Date.now() - ms) / 60000));
+  if (m < 1) return "刚刚";
+  if (m < 60) return m + " 分钟前";
+  return Math.round(m / 60) + " 小时前";
+}
+async function locate() {
+  // 直达：URL 显式带 session（团队 tab 内嵌 #51），跳过枚举
+  const qsSession = new URLSearchParams(location.search).get("session");
+  if (qsSession) { currentSession = qsSession; return; }
+  let data;
+  try {
+    const r = await fetch("/api/xiaozhuge/gates/instances", connTimeoutSignal());
+    data = await r.json();
+  } catch { $("#inst").textContent = "实例定位失败——点「刷新」重试。"; return; }
+  const inst = data.instances ?? [];
+  if (inst.length === 0) {
+    $("#inst").textContent = "暂无团队实例——先建团，待办会出现在这里。";
+    $("#list").innerHTML = '<div class="empty">无实例。</div>';
+    return;
+  }
+  currentSession = inst[0].session;
+  // 其余实例给显式切换入口（跨实例聚合默认关闭，防在错误实例上误批）
+  if (inst.length > 1) {
+    $("#switch").hidden = false;
+    $("#instlist").innerHTML = inst.slice(1).map((i) => \`
+      <button class="ghost" data-switch="\${esc(i.session)}">
+        <code>\${esc(short(i.session))}</code> · pending \${i.pendingCount} · \${esc(fmtAgo(i.lastActiveMs))}
+      </button>\`).join("");
+  }
+}
+function renderInst() {
+  $("#inst").innerHTML = \`实例 <code>\${esc(short(currentSession))}</code>\`;
+}
 async function load() {
-  const session = $("#session").value.trim();
-  if (!session) return;
-  const r = await fetch(\`/api/xiaozhuge/gates?session=\${encodeURIComponent(session)}\`, connTimeoutSignal());
+  if (!currentSession) return;
+  const r = await fetch(\`/api/xiaozhuge/gates?session=\${encodeURIComponent(currentSession)}\`, connTimeoutSignal());
   const data = await r.json();
   render(data.gates ?? []);
 }
@@ -285,24 +389,32 @@ function render(gates) {
     </div>\`).join("");
 }
 async function resolve(gateId, decision) {
-  const session = $("#session").value.trim();
+  if (!currentSession) return; // 未定位实例前不做任何裁决
   const r = await fetch("/api/xiaozhuge/gates/resolve", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ session, gate_id: gateId, decision, by: "human-web" }),
+    body: JSON.stringify({ session: currentSession, gate_id: gateId, decision, by: "human-web" }),
     ...connTimeoutSignal(),
   });
   if (!r.ok) alert((await r.json()).error ?? "failed");
   await load();
 }
-$("#refresh").addEventListener("click", load);
+$("#refresh").addEventListener("click", () => { currentSession = null; $("#switch").hidden = true; void locate().then(load); });
 $("#list").addEventListener("click", (ev) => {
   const btn = ev.target.closest("button[data-act]");
   if (btn) void resolve(btn.dataset.gid, btn.dataset.act);
 });
-// 团队 tab 内嵌（#51）：URL 带 ?session= 时自动预填并加载
-const qsSession = new URLSearchParams(location.search).get("session");
-if (qsSession) { $("#session").value = qsSession; load(); }
+$("#instlist").addEventListener("click", (ev) => {
+  const btn = ev.target.closest("button[data-switch]");
+  if (!btn) return;
+  currentSession = btn.dataset.switch;
+  $("#switch").open = false;
+  renderInst();
+  void load();
+});
+// 打开即定位 + 加载（零手填，#195）；窗口重聚焦时轻拉一次（无常驻轮询）
+void locate().then(renderInst).then(load);
+window.addEventListener("focus", () => { if (currentSession) void load(); });
 </script>
 </body>
 </html>`;
