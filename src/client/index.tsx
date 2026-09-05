@@ -378,6 +378,9 @@ export function TeamCreateButton(props: { sessionId?: string }) {
       // 残留易误重发；失败路径不走到这里，草稿保留便于重试。
       clearSessionDraft(targetSession);
       setIsTeam(true);
+      // #186 即时性：建团成功不改变会话 id，watcher 的 [sessionId] 探测不会
+      // 重跑——经模块级建团信号通知协调器（tab 零延迟呈现 + watcher 重探测收敛）。
+      notifyTeamCreated();
       setOpen(false);
     } catch (e) {
       setError(`${COPY.createFailed}：${(e as Error).message}`);
@@ -514,6 +517,21 @@ let slotsService: {
 /** 团队 view entry 当前 disposer（null = 未注册）。 */
 let teamViewDisposer: (() => void) | null = null;
 
+/**
+ * #186 建团信号（模块级代数计数器）：建团成功 bump，TeamViewWatcher 以
+ * effect 依赖订阅——建团不改会话 id，仅靠 sessionId 探测不会重跑。代数式
+ * （非布尔）保证同会话二次建团（异常恢复场景）也能再次触发。
+ */
+let teamCreatedTick = 0;
+/** watcher 订阅面（useSyncExternalStore；getSnapshot 读代数，通知触发重探测）。 */
+const teamCreatedListeners = new Set<() => void>();
+/** 建团成功 → ① 立即注册团队 tab（零 RTT 呈现）；② bump 信号触发重探测。 */
+function notifyTeamCreated(): void {
+  teamCreatedTick += 1;
+  for (const l of teamCreatedListeners) l();
+  setTeamViewTab(true);
+}
+
 /** 团队 tab 注册参数：order 20 排在对话与轨迹(order 10)之后。 */
 const TEAM_VIEW_SPEC = {
   name: "conversation.view",
@@ -541,6 +559,16 @@ export function setTeamViewTab(present: boolean): void {
  */
 export function TeamViewWatcher(props: { sessionId?: string }): null {
   const sessionId = props.sessionId ?? "";
+  // #186：订阅模块级建团信号——建团成功（同会话，sessionId 不变）bump 代数，
+  // useSyncExternalStore 通知 React 重跑下方探测 effect，收敛 is_team 真值；
+  // 呈现零延迟由 notifyTeamCreated 侧的 setTeamViewTab(true) 直接保证。
+  const teamCreatedTickNow = useSyncExternalStore(
+    (cb) => {
+      teamCreatedListeners.add(cb);
+      return () => teamCreatedListeners.delete(cb);
+    },
+    () => teamCreatedTick,
+  );
   useEffect(() => {
     let cancelled = false;
     if (!sessionId) {
@@ -558,7 +586,7 @@ export function TeamViewWatcher(props: { sessionId?: string }): null {
     return () => {
       cancelled = true;
     };
-  }, [sessionId]);
+  }, [sessionId, teamCreatedTickNow]);
   // 插件卸载兜底清理。
   useEffect(() => () => setTeamViewTab(false), []);
   return null;
