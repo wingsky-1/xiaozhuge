@@ -2,7 +2,7 @@
  * dsh 插件装配层：把 team_* 工具注册进 cordis tools 服务。
  *
  * #29 第 0 项落地：工具定义与路由面改用 @deepseek-ai 官方类型（仅 import type、
- * 精确 pin 0.1.1-rc.2）——dsh 升级时形状变化获得编译期报警；execute 内仍自行
+ * 精确 pin 0.1.2-rc.1，#179）——dsh 升级时形状变化获得编译期报警；execute 内仍自行
  * 校验参数并抛稳定 code 错误。TEAM_HOME 按主会话 id 绑定（ADR 0005 宿主绑定层），
  * 一个主会话 = 一个实例根。
  *

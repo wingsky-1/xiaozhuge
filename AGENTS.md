@@ -30,7 +30,7 @@
 5. 小步提交，Conventional Commits（禁止 emoji）。
 6. 框架层代码零业务词汇（issue/PR 等词只允许出现在 templates/ 与 prompts/ 中）。
 7. 唯一有 dsh 兼容约束的依赖是 `@deepseek-ai/*` 官方类型包：引入时精确 pin 到与本机
-   dsh（当前 0.1.1-rc.2）匹配的版本，只 `import type`，禁止指向 DSH 源码 checkout；
+   dsh（当前 0.1.2-rc.1）匹配的版本，只 `import type`，禁止指向 DSH 源码 checkout；
    开发期工具链依赖取最新稳定版即可（不进发布物）。
 8. 例外：`typescript` 锁 `~5.9`——Stryker 10 依赖 TS 旧 JS API
    （`parseConfigFileTextToJson`），TS 7 原生编译器已移除（实证撞过）；待 Stryker
