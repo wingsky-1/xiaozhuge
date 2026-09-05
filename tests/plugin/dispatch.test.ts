@@ -176,6 +176,68 @@ describe("team_dispatch 半事务语义", () => {
     };
     expect(ledgerView.tasks.find((t) => t.id === taskId)?.assignee).toBeUndefined();
   });
+
+  it("并发双 dispatch 同一任务（TOCTOU 防护，#188）：恰好一人成功，另一人以 rev-conflict 拒绝且停在 [spawn]", async () => {
+    await handlers.init({});
+    const taskId = await createTask();
+
+    // 两个 dispatch 同时发出，均不传 expect_rev，模拟并发池同时认领未分配任务
+    const [resA, resB] = await Promise.allSettled([
+      handlers.dispatch({
+        member: "coder-a",
+        durable_id: "dur-a",
+        role: "coder",
+        tier: 1,
+        task_id: taskId,
+      }),
+      handlers.dispatch({
+        member: "coder-b",
+        durable_id: "dur-b",
+        role: "coder",
+        tier: 1,
+        task_id: taskId,
+      }),
+    ]);
+
+    const fulfilled = [resA, resB].filter(
+      (r): r is PromiseFulfilledResult<{ ok: boolean; member: string }> => r.status === "fulfilled",
+    );
+    const rejected = [resA, resB].filter(
+      (r): r is PromiseRejectedResult => r.status === "rejected",
+    );
+
+    // 恰好一人成功，另一人以 rev-conflict 拒绝
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(fulfilled[0].value.ok).toBe(true);
+    expect(rejected[0].reason).toMatchObject({
+      code: "rev-conflict",
+    });
+    expect(rejected[0].reason.message).toContain("dispatch stopped after [spawn]");
+
+    // 账本锁定为成功方的 member，rev 确定为 2（无 lost update）
+    const winner = fulfilled[0].value.member;
+    const loser = winner === "coder-a" ? "coder-b" : "coder-a";
+
+    const ledgerView = (await handlers.taskList({})) as {
+      tasks: Array<{ id: string; assignee?: string; rev: number }>;
+    };
+    const task = ledgerView.tasks.find((t) => t.id === taskId);
+    expect(task?.assignee).toBe(winner);
+    expect(task?.rev).toBe(2);
+
+    // 信箱检查：仅成功者收到 task-assign 信封，失败者信箱为空
+    const winnerMailbox = await readUnread(home, winner);
+    expect(winnerMailbox).toHaveLength(1);
+    expect(winnerMailbox[0].body).toMatchObject({ task_id: taskId });
+    const loserMailbox = await readUnread(home, loser);
+    expect(loserMailbox).toHaveLength(0);
+
+    // 失败者的 step 1 副作用（在册留痕）保留（符合 ADR 0015 半事务规范）
+    const reg = new Registry(home);
+    expect(await reg.getMember(winner)).toBeDefined();
+    expect(await reg.getMember(loser)).toBeDefined();
+  });
 });
 
 describe("team_dispatch 前置校验（无副作用）", () => {
