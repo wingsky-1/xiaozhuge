@@ -18,6 +18,7 @@ import { roomLayout } from "../kernel/paths.js";
 import { isReservedStage } from "../kernel/types.js";
 import { readJson, writeJsonAtomic } from "../kernel/fs-utils.js";
 import { RuntimeError } from "../kernel/errors.js";
+import { assertRoomName } from "../kernel/names.js";
 
 /** 黑板分片：保留态 + 自由业务负载（ext 仅展示，不参与归约）。 */
 export interface Shard {
@@ -55,6 +56,8 @@ export async function setShard(
   shard: Omit<Shard, "role" | "updatedAt"> & { ext?: unknown },
 ): Promise<Shard> {
   assertShardKey(member);
+  // P0-2（#180）：room 入路径前白名单断言（越出 roomsDir 建目录写分片被拒）。
+  assertRoomName(room);
   if (!isReservedStage(shard.status)) {
     throw new RuntimeError(
       "invalid-stage",
@@ -73,11 +76,13 @@ export async function getShard(
   member: string,
 ): Promise<Shard | undefined> {
   assertShardKey(member);
+  assertRoomName(room);
   return readJson<Shard>(join(roomLayout(teamHome, room).stateDir, `${member}.json`));
 }
 
 /** 列出房间全部分片（含旧归档纯 role 名文件，原样返回）。 */
 export async function listShards(teamHome: string, room: string): Promise<Shard[]> {
+  assertRoomName(room);
   const stateDir = roomLayout(teamHome, room).stateDir;
   if (!existsSync(stateDir)) return [];
   const shards: Shard[] = [];

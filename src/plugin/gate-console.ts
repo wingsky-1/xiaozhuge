@@ -25,6 +25,7 @@ import {
   EventLog,
   ensureDir,
   layout,
+  validateGateId,
 } from "../runtime/index.js";
 
 /** 路由前缀。 */
@@ -126,6 +127,11 @@ export function makeGateRoutes(deps: GateRouteDeps): WebRoute[] {
               writeJson(res, 400, { error: "id required" });
               return;
             }
+            // P0-2（#180）：gate id 入路径前白名单早校验（`${id}.json` 拼文件）。
+            if (!validateGateId(body.id)) {
+              writeJson(res, 400, { error: "invalid gate id parameter" });
+              return;
+            }
             await ensureDir(gatesDir);
             const gate = await openGate(gatesDir, {
               id: body.id,
@@ -173,6 +179,11 @@ export function makeGateRoutes(deps: GateRouteDeps): WebRoute[] {
           // 白名单防御（issue #103）：对齐 overview 口径。
           if (!isValidSessionId(body.session)) {
             writeJson(res, 400, { error: "invalid session parameter" });
+            return;
+          }
+          // P0-2（#180）：gate id 入路径前白名单早校验。
+          if (!validateGateId(body.gate_id)) {
+            writeJson(res, 400, { error: "invalid gate id parameter" });
             return;
           }
           const teamHome = deps.teamHomeFor(body.session);
