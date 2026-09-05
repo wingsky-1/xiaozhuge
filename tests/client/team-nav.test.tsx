@@ -11,7 +11,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createElement } from "react";
-import { apply, setTeamViewTab, TeamViewWatcher } from "../../src/client/index.js";
+import { apply, setTeamViewTab, TeamViewWatcher, TeamCreateButton } from "../../src/client/index.js";
 import {
   TeamBackNavEntry,
   bindSessionsService,
@@ -244,40 +244,50 @@ describe("openSession：成员回放三级跳转链（issue #169 PR-A）", () =>
   });
 });
 
-describe("apply：注册 header.actions「返回团队」插槽（#163 O1）", () => {
-  it("apply 后 conversation.session.header.actions 槽位注册 TeamBackNavEntry", () => {
-    const injected: Array<{ slot: string; component: unknown }> = [];
+describe("apply：插槽注册与 D-1 inject 数据通道（#163 O1 / #179 D-1）", () => {
+  /** 记录 register spec（含 inject 通道）与组件，供执行断言。 */
+  function applyWithCapturedSlots(tabs: Array<{ slot: string; spec: { name: string; id: string; inject?: (id: string) => object }; component: unknown }>) {
     const slots = {
       inject: (slot: string, callback: () => unknown) => {
-        injected.push({ slot, component: callback() });
+        void callback();
       },
-      register: (spec: { name: string; id: string }, component: unknown) => {
-        injected.push({ slot: `register:${spec.name}`, component });
+      register: (spec: { name: string; id: string; inject?: (id: string) => object }, component: unknown) => {
+        tabs.push({ slot: spec.name, spec, component });
         return () => {};
-      },
-    };
-    const connection = {
-      api: {
-        sessions: {
-          list: async () => ({ result: { ok: true, value: { items: [] } } }),
-          prompt: async () => ({ result: { ok: true } }),
-        },
       },
     };
     apply({
       get(name: string) {
         if (name === "slots") return slots;
-        if (name === "connection") return connection;
-        if (name === "sessions") return null;
-        if (name === "conversation") return null;
         return undefined;
       },
     } as never);
-    // inject("conversation.session.header.actions") 回调执行后 register 被调用，
-    // 组件即 TeamBackNavEntry（#163 官方插槽落地）。
-    const headerEntry = injected.find((e) => e.slot === "register:conversation.session.header.actions");
-    expect(headerEntry).toBeDefined();
-    expect(headerEntry?.component).toBe(TeamBackNavEntry);
+    return slots;
+  }
+
+  it("apply 后各插槽条目注册且 inject(sessionId) 返回会话 id props（D-1 契约）", () => {
+    const tabs: Array<{ slot: string; spec: { name: string; id: string; inject?: (id: string) => object }; component: unknown }> = [];
+    applyWithCapturedSlots(tabs);
+    // 恒驻 input.right 两条目（建团按钮 + 团队 tab 协调器）+ header.actions「返回团队」。
+    const byId = new Map(tabs.map((t) => [t.spec.id, t]));
+    expect(byId.get("xiaozhuge-team-create")?.component).toBe(TeamCreateButton);
+    expect(byId.get("xiaozhuge-team-view-watcher")?.component).toBe(TeamViewWatcher);
+    expect(byId.get("xiaozhuge-team-back-nav")?.component).toBe(TeamBackNavEntry);
+    // D-1：0.1.2-rc.1 owner(InputZone) 数据面移除后，sessionId 经 inject 通道注入。
+    for (const entry of tabs) {
+      expect(entry.spec.inject?.("s-child")).toEqual({ sessionId: "s-child" });
+    }
+  });
+
+  it("setTeamViewTab(true) 经 slotsService 注册 conversation.view（TEAM_VIEW_SPEC），inject 返回会话 id", () => {
+    const tabs: Array<{ slot: string; spec: { name: string; id: string; inject?: (id: string) => object }; component: unknown }> = [];
+    applyWithCapturedSlots(tabs);
+    setTeamViewTab(true);
+    const view = tabs.find((t) => t.spec.id === "xiaozhuge-team-view");
+    expect(view).toBeDefined();
+    expect(view?.slot).toBe("conversation.view");
+    expect(view?.spec.inject?.("s-root")).toEqual({ sessionId: "s-root" });
+    setTeamViewTab(false); // 幂等注销清理
   });
 });
 
