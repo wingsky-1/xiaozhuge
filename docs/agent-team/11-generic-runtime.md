@@ -133,15 +133,15 @@ $TEAM_HOME/<instance-id>/
 | 任务半成品 | 任务账本记录基线与产物指针；重做前清理（git worktree 等**属 oss-maintenance 模板层约定，不入框架协议**） |
 | 并发写 | 黑板 per-member 分片（键=成员名）；账本每任务单文件；事件流仅运行时单写者 |
 
-## 6. 关键协调动作的框架断言清单（验收口径）
+## 6. 关键协调动作的框架断言清单（验收口径，兑现度分档标注）
 
-不再声称"100% 提示词可表达"，以下动作有框架级保证：
+不再声称"100% 提示词可表达"，以下协调动作的框架保证按现状分档标注（实际注册 12 个 `team_*` 工具，单一事实源见 `src/plugin/tool-manifest.ts`；早期规划的 `team_negotiate/archive_write/gate_open/resolve` 工具未实现，Gate 走 Web Console 单通道与审计流）：
 
-1. touched paths 分组互斥：`team_task_update` 校验同组互斥才允许 active
-2. dod 核验回执：`team_handoff` judge 模式校验逐条结论格式
-3. 可达性：`team_send` 按 auto/explicit 校验
-4. 资源边界：并发池/hop/round 由账本计数强制，超限拒绝或转 blocked
-5. 审计完整：事件 = 工具副作用，无旁路写路径
+1. **touched paths 分组互斥**【过渡态】：`team_task_create` 预检同组互斥（`findConflicts`），`team_reconcile` 视图标注互斥冲突；`team_task_update` 迁移 active 尚未硬性拦截。
+2. **dod 核验回执**【已强制】：`team_handoff` 校验逐条以 `pass:|fail:` 开头的结构化结论（格式不符以 `receipt-format` 拒绝）。
+3. **可达性**【过渡态】：`team_send` 依据 auto/explicit 模式与白名单校验，当前为 report-only 审计记录过渡档（#138），尚未硬阻断。
+4. **资源边界**【过渡态 / 未交付】：单任务 `rounds` 递增与 `maxRounds` 上限超限由账本强制拒绝（`rounds-exceeded`，已强制）；并发池与 hop 计数尚未由运行时消费，template `resources` 上限约束待落地（#193）。
+5. **审计完整**【已强制】：事件 = 工具副作用（append-only `events.jsonl`），全仓工具操作无旁路写路径；open-gate 亦已补齐字段级审计事件（#189）。
 
 ## 7. Team Template schema（v2 变更处标注 ★）
 

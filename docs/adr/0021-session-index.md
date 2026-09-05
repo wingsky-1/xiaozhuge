@@ -1,6 +1,6 @@
 # ADR 0021: 会话→团队反查索引（SQLite 落盘，替代全目录同步扫描）
 
-- 状态：Proposed
+- 状态：Accepted
 - 日期：2026-08-31
 - 对应 issue：#174（连接挂起修复——`/api/xiaozhuge/team/status` 等 HTTP 面每次请求
   同步全目录扫描阻塞事件循环）
