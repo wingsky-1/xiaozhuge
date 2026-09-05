@@ -5,28 +5,31 @@
  * 宿主官方扩展点，非 DOM 注入（宿主升级不失效，主题/样式自动适配）。
  *
  * 交互：
- * - 仅首轮对话展示（InputZone.session.blank = 无用户消息且未建团）；
+ * - 仅首轮对话展示（会话快照 blank = 无用户消息且未建团）；
  * - 点击弹「选团段（场景）」浮层（复用 /api/xiaozhuge/team/scenarios 枚举）；
  * - 选定后本会话一键建团：team/create（服务端 init 持久化）→ session.prompt
  *   投递 tier0_prompt；工作区随会话推导（session.list cwd），输入框草稿作首条
  *   用户任务（空则只投递规程）。
+ *
+ * 0.1.2-rc.1 适配（issue #179 D-1）：conversation.input.right/header.actions 等
+ * 插槽的 owner(InputZone) 数据面被移除（rc.1 renderSlot 传空 props）——组件不再
+ * 从插槽 owner 读 session/input，改为官方 register spec 的 `inject: (sessionId) => props`
+ * 通道（宿主注入当前会话 id，官方 input.dock/trajectory 同款形态）取 sessionId，
+ * blank 经 sessions.list 快照订阅（useSyncExternalStore），draft 经
+ * conversation.input.for(scope).state 门面读取。
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 // 0.1.2 起 dsh-client-runtime 已删：类型面迁移到官方 dsh-api-session-controller /
 // dsh-client-ui-conversation，且只走 type-only import（无 createScope 运行时值导入——
 // kScope Symbol 单例：esbuild 内联会产生第二份 Symbol → scopeOf 读不到 tag；
 // 会话作用域一律经 ctx.sessions.scope 服务方法边界寻址，见 clearSessionDraft）。
 import type { SessionSnapshot, ISessions } from "@deepseek-ai/dsh-api-session-controller/client";
-import type { InputZone, IConversation } from "@deepseek-ai/dsh-client-ui-conversation/client";
+import type { IConversation } from "@deepseek-ai/dsh-client-ui-conversation/client";
 import type { Context } from "@deepseek-ai/cordis";
 import { TeamView, TeamBackNavEntry, bindSessionsService } from "./team-view.js";
 import { fetchTimeout } from "./fetch.js";
 
-/**
- * conversation.input.right 插槽 owner share（官方 InputZone：session 为
- * SessionSnapshot、input 为 InputState；消费 session.blank / session.sessionId /
- * input.draft 三个字段）。
- */
+/** 供类型消费方引用官方 InputZone 形状（本插件组件已不依赖插槽 owner 数据面）。 */
 export type { InputZone } from "@deepseek-ai/dsh-client-ui-conversation/client";
 
 /** apply 时注入的宿主 sessions 服务（ISessions：scope/scopeOf/list 等官方服务方法面）。 */
@@ -244,13 +247,14 @@ export function ScenarioPicker(props: {
 
 /**
  * 输入框内「创建团队」按钮组件（conversation.input.right 插槽）。
- * 读 InputZone owner props（point-in-time snapshot，宿主 re-render 保持最新）：
- * - session.blank：官方「无用户消息」位（首轮判定，发消息后自动翻转 false）；
- * - session.sessionId：当前会话 id；
- * - input.draft：输入框草稿（首条用户任务）。
+ * 0.1.2-rc.1 起插槽不再提供 owner 数据面（D-1）：sessionId 经 register spec
+ * 的 inject(sessionId) 通道注入（宿主渲染当前会话时调用，官方 input.dock /
+ * trajectory 同款形态）；blank 位经 sessions.list 快照订阅（useSyncExternalStore，
+ * 与官方 trajectory 订阅同款）；draft 经 conversation.input.for(scope).state
+ * 门面读取（创建时快照）。
  */
-export function TeamCreateButton(props: InputZone) {
-  const { session, input } = props;
+export function TeamCreateButton(props: { sessionId?: string }) {
+  const sessionId = props.sessionId ?? "";
   const [open, setOpen] = useState(false);
   const [scenarios, setScenarios] = useState<ScenarioEntry[]>([]);
   const [selected, setSelected] = useState<ScenarioEntry | null>(null);
@@ -260,14 +264,22 @@ export function TeamCreateButton(props: InputZone) {
   const loadedRef = useRef(false);
   const cwdRef = useRef<string | undefined>(undefined);
 
-  const sessionId = session.sessionId;
+  // 首轮位（blank）订阅 sessions.list 快照：byId[sessionId].blank 翻转即
+  // re-render（发消息后自动翻 false → 按钮隐藏；切会话 → 换行判定）。
+  const sessionBlank = useSyncExternalStore(
+    (cb) => sessionsService?.list.subscribe(cb) ?? (() => {}),
+    () => {
+      const list = sessionsService?.list.getSnapshot();
+      return list?.byId[sessionId as Parameters<ISessions["scope"]>[0]]?.blank ?? false;
+    },
+  );
 
   // 建团状态探测：随会话重置（切到已建团会话立即隐藏按钮），仅首轮探测。
   useEffect(() => {
     loadedRef.current = false;
     cwdRef.current = undefined;
     setIsTeam(false);
-    if (!session.blank || !sessionId) return;
+    if (!sessionBlank || !sessionId) return;
     loadedRef.current = true;
     let cancelled = false;
     fetchTimeout(`/api/xiaozhuge/team/status?session=${encodeURIComponent(sessionId)}`)
@@ -277,10 +289,10 @@ export function TeamCreateButton(props: InputZone) {
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [sessionId, session.blank]);
+  }, [sessionId, sessionBlank]);
 
   // 仅首轮（blank 且未建团）展示。
-  if (!session.blank || isTeam) return null;
+  if (!sessionBlank || isTeam) return null;
 
   async function loadScenarios(): Promise<ScenarioEntry[]> {
     // 工作区随会话推导：ctx.sessions.list 快照的 byId[sessionId].cwd（会话工作
@@ -318,7 +330,16 @@ export function TeamCreateButton(props: InputZone) {
     const entry = selected;
     // 快照当前会话与草稿（异步期间用户可能切换会话/输入）。
     const targetSession = sessionId;
-    const draft = (input.draft ?? "").trim();
+    // 0.1.2-rc.1（D-1）：draft 不再来自插槽 owner props，改经 conversation.input
+    // 门面读取（SessionInputShell.state 发布 InputState；scope 未就绪视为空草稿——
+    // 仅影响「我的任务」前缀，不阻断建团）。
+    let draft = "";
+    if (sessionsService !== null && conversationService !== null) {
+      const scopeCtx = sessionsService.scope(targetSession as Parameters<ISessions["scope"]>[0]);
+      if (scopeCtx) {
+        draft = (conversationService.input.for(scopeCtx).state.getSnapshot().draft ?? "").trim();
+      }
+    }
     setBusy(true);
     setError(null);
     try {
@@ -422,7 +443,14 @@ export function apply(ctx: Context): void {
   const slots = ctx.get("slots") as {
     inject: (key: string, callback: () => unknown) => void;
     register: <P>(
-      spec: { name: string; id: string; order?: number; label?: string },
+      spec: {
+        name: string;
+        id: string;
+        order?: number;
+        label?: string;
+        /** 0.1.2-rc.1（D-1）官方数据通道：宿主渲染条目时以当前会话 id 调用。 */
+        inject?: (sessionId: string) => object;
+      },
       component: (props: P) => unknown,
     ) => () => void;
   };
@@ -433,6 +461,7 @@ export function apply(ctx: Context): void {
         name: "conversation.input.right",
         id: "xiaozhuge-team-create",
         order: 0,
+        inject: (sessionId) => ({ sessionId }),
       },
       TeamCreateButton,
     ),
@@ -446,6 +475,7 @@ export function apply(ctx: Context): void {
         name: "conversation.input.right",
         id: "xiaozhuge-team-view-watcher",
         order: 1,
+        inject: (sessionId) => ({ sessionId }),
       },
       TeamViewWatcher,
     ),
@@ -459,6 +489,7 @@ export function apply(ctx: Context): void {
         name: "conversation.session.header.actions",
         id: "xiaozhuge-team-back-nav",
         order: 0,
+        inject: (sessionId) => ({ sessionId }),
       },
       TeamBackNavEntry,
     ),
@@ -468,7 +499,14 @@ export function apply(ctx: Context): void {
 /** 模块级 slots 句柄（协调器动态注册团队 tab 用）。 */
 let slotsService: {
   register: <P>(
-    spec: { name: string; id: string; order?: number; label?: string },
+    spec: {
+      name: string;
+      id: string;
+      order?: number;
+      label?: string;
+      /** 0.1.2-rc.1（D-1）官方数据通道：宿主渲染条目时以当前会话 id 调用。 */
+      inject?: (sessionId: string) => object;
+    },
     component: (props: P) => unknown,
   ) => () => void;
 } | null = null;
@@ -482,6 +520,8 @@ const TEAM_VIEW_SPEC = {
   id: "xiaozhuge-team-view",
   order: 20,
   label: "团队",
+  // D-1：view 条目同走 inject(sessionId) 官方通道（trajectory 先例）。
+  inject: (sessionId: string) => ({ sessionId }),
 } as const;
 
 /** 按期望状态注册/注销团队 tab（幂等）。 */
@@ -499,8 +539,8 @@ export function setTeamViewTab(present: boolean): void {
  * 否则注销。dispose 即刻生效（切走立即消失），register 在探测完成后（团队
  * 会话首次切入约一个 RTT 后出现）——时序毛边为 v1 已知取舍。
  */
-export function TeamViewWatcher(props: InputZone): null {
-  const sessionId = props.session.sessionId;
+export function TeamViewWatcher(props: { sessionId?: string }): null {
+  const sessionId = props.sessionId ?? "";
   useEffect(() => {
     let cancelled = false;
     if (!sessionId) {

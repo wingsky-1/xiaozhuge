@@ -18,7 +18,6 @@ import {
   ScenarioPicker,
   scenarioKey,
   apply,
-  type InputZone,
 } from "../../src/client/index.js";
 
 /** 场景清单 fixture（字典序与线上一致：首项 ≠ 用户意图项）。 */
@@ -102,6 +101,13 @@ describe("issue 81：建团成功后清空目标会话草稿", () => {
   /** scope 门面 fake：conversation.send 投递记录 + 失败注入。 */
   let sendCalls: Array<{ sessionTag: string | undefined; text: string }>;
   let promptResult: { ok: true } | { ok: false; error: { message: string } };
+  /**
+   * 会话快照 fake（0.1.2-rc.1 D-1：blank 位经 sessions.list 快照订阅）：
+   * 键 = 会话 id，值 = blank 位（首轮判定数据源）。
+   */
+  let blankById: Record<string, boolean>;
+  /** 草稿文本 fixture（conversation.input 门面 state 发布值）。 */
+  const DRAFT_TEXT = "修复 80 81 82";
 
   /** 组装宿主 fake ctx 并执行 apply 装配（注入 sessions/conversation 句柄）。 */
   function assemble() {
@@ -111,14 +117,24 @@ describe("issue 81：建团成功后清空目标会话草稿", () => {
     };
     // fake ISessions 服务方法面（0.1.2 官方形状）：scope(id) mint 带 tag 的
     // AgentContext（scoped conversation.send 记录投递；失败走 reject）；
-    // list.getSnapshot() 供 loadScenarios 读 cwd。
+    // list 为 ObservableSnapshot（getSnapshot/subscribe）——TeamCreateButton 的
+    // useSyncExternalStore 订阅 blank 位、loadScenarios 读 cwd。
     const sessions = {
       open: () => {},
       openSubagent: () => {},
       subagentAddress: () => undefined,
       refreshSubagents: async () => {},
       list: {
-        getSnapshot: () => ({ byId: {} }),
+        getSnapshot: () => ({
+          ids: Object.keys(blankById),
+          byId: Object.fromEntries(
+            Object.entries(blankById).map(([id, blank]) => [id, { id, blank }]),
+          ),
+          current: undefined,
+          phase: "ready",
+          subagentsByParent: {},
+        }),
+        subscribe: () => () => {},
       },
       scope: (id: string) =>
         makeScopedCtx(
@@ -141,6 +157,10 @@ describe("issue 81：建团成功后清空目标会话草稿", () => {
           setDraft: (text: string) => {
             draftCalls.push({ sessionTag: scopeOf(actx), text });
           },
+          // 0.1.2-rc.1（D-1）：draft 读取经 SessionInputShell.state 发布面。
+          state: {
+            getSnapshot: () => ({ draft: DRAFT_TEXT }),
+          },
         }),
       },
     };
@@ -158,19 +178,9 @@ describe("issue 81：建团成功后清空目标会话草稿", () => {
 
   /** 打开浮层并完成一次指定场景的建团流程（终态等待由用例自行断言）。 */
   async function createViaUi(sessionId: string, scenario: string) {
-    const zone: InputZone = {
-      session: { blank: true, sessionId } as InputZone["session"],
-      // InputState 官方必填字段（draft/draftRev/imageIds/phase/occurrences/queue）。
-      input: {
-        draft: "修复 80 81 82",
-        draftRev: 0,
-        imageIds: [],
-        phase: "plain",
-        occurrences: [],
-        queue: [],
-      },
-    };
-    render(createElement(TeamCreateButton, zone));
+    // D-1：组件只接收 inject 注入的 sessionId；blank 位由 sessions.list 快照提供。
+    blankById[sessionId] = true;
+    render(createElement(TeamCreateButton, { sessionId }));
     fireEvent.click(screen.getByTitle("选择团队场景并在本会话创建团队"));
     await screen.findByText("research-report");
     fireEvent.click(screen.getByRole("radio", { name: new RegExp(scenario) }));
@@ -181,6 +191,7 @@ describe("issue 81：建团成功后清空目标会话草稿", () => {
     draftCalls = [];
     sendCalls = [];
     promptResult = { ok: true };
+    blankById = {};
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: RequestInfo | URL) => {
