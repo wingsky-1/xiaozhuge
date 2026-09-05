@@ -1050,11 +1050,11 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
         if (existsSync(l.roomsDir)) {
           for (const room of readdirSync(l.roomsDir)) {
             try {
-              const el = new EventLog(join(l.roomsDir, room, "events.jsonl"));
-              await el.init();
-              const { events } = await el.read();
-              const last = events[events.length - 1];
-              eventCursors.push({ room, seq: last?.seq ?? 0 });
+              // #187 尾窗化：lastSeq 读游标快路径 / 真偏移尾窗，替代旧
+              // init（全量扫）+ read（全量解析）——对账只要末笔 seq，长会话
+              // IO 从 O(全文件) 降到 O(游标/窗口)。
+              const seq = await new EventLog(join(l.roomsDir, room, "events.jsonl")).lastSeq();
+              eventCursors.push({ room, seq });
             } catch {
               // 房间目录存在但事件文件不可读：游标记 0
               eventCursors.push({ room, seq: 0 });
