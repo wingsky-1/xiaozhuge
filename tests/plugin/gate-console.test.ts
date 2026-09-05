@@ -245,6 +245,83 @@ describe("Fetch Metadata 断言（#2 P0）", () => {
   });
 });
 
+describe("open 分支审计事件（#189，ADR 0018 兑现）", () => {
+  /** 读回实例事件流。 */
+  async function readEvents(): Promise<Array<{ type: string; payload: unknown }>> {
+    const log = new EventLog(join(home, "dsh-home", "xiaozhuge", "sessions", SESSION, "rooms", "root", "events.jsonl"));
+    await log.init();
+    const { events } = await log.read();
+    return events;
+  }
+
+  it("open-gate 后事件流出现 gate/open 审计事件（字段齐全）", async () => {
+    baseUrl = await listen();
+    const r = await fetch(`${baseUrl}/api/xiaozhuge/gates?session=${SESSION}`, {
+      method: "POST",
+      headers: { origin: baseUrl, "sec-fetch-site": "same-origin" },
+      body: JSON.stringify({ id: "plan-approval", reason: "计划待批", requestedBy: "master" }),
+    });
+    expect(r.status).toBe(200);
+    const audit = (await readEvents()).find((e) => e.type === "gate/open");
+    expect(audit).toBeDefined();
+    const payload = audit!.payload as {
+      gate_id: string;
+      requested_by: string;
+      reason: string;
+      ua_fingerprint: string;
+      sec_fetch_site: string;
+      remote_ip: string | null;
+      opened_at: number;
+    };
+    // 七字段齐全：与 gate/resolve 同族形状（snake_case 一致）。
+    expect(payload.gate_id).toBe("plan-approval");
+    expect(payload.requested_by).toBe("master"); // 持久化权威值
+    expect(payload.reason).toBe("计划待批");
+    expect(payload.ua_fingerprint).toMatch(/^len\d+:/);
+    expect(payload.sec_fetch_site).toBe("same-origin");
+    expect(payload.remote_ip).toBeTruthy();
+    expect(typeof payload.opened_at).toBe("number");
+  });
+
+  it("重复 open 同 id（gate-exists）→ 重试安全：无第二条 gate/open 审计", async () => {
+    baseUrl = await listen();
+    const open = () =>
+      fetch(`${baseUrl}/api/xiaozhuge/gates?session=${SESSION}`, {
+        method: "POST",
+        headers: { origin: baseUrl },
+        body: JSON.stringify({ id: "g", reason: "", requestedBy: "m" }),
+      });
+    expect((await open()).status).toBe(200);
+    expect((await open()).status).toBe(409);
+    expect((await readEvents()).filter((e) => e.type === "gate/open")).toHaveLength(1);
+  });
+
+  it("GET 只读路径零事件副作用（不污染审计流）", async () => {
+    baseUrl = await listen();
+    await fetch(`${baseUrl}/api/xiaozhuge/gates?session=${SESSION}`, {
+      method: "POST",
+      headers: { origin: baseUrl },
+      body: JSON.stringify({ id: "g", reason: "", requestedBy: "m" }),
+    });
+    const before = (await readEvents()).filter((e) => e.type === "gate/open").length;
+    expect(before).toBe(1);
+    await fetch(`${baseUrl}/api/xiaozhuge/gates?session=${SESSION}`);
+    await fetch(`${baseUrl}/api/xiaozhuge/gates/instances`);
+    expect((await readEvents()).filter((e) => e.type === "gate/open")).toHaveLength(before);
+  });
+
+  it("403 拒绝路径（无 Origin）无审计事件（审计=已发生副作用）", async () => {
+    baseUrl = await listen();
+    const denied = await fetch(`${baseUrl}/api/xiaozhuge/gates?session=${SESSION}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" }, // 无 Origin
+      body: JSON.stringify({ id: "g", reason: "", requestedBy: "m" }),
+    });
+    expect(denied.status).toBe(403);
+    expect((await readEvents()).filter((e) => e.type === "gate/open")).toHaveLength(0);
+  });
+});
+
 describe("Console 加固（#2 P0）", () => {
   it("响应携带 nonce CSP，脚本带 nonce，无内联事件处理器", async () => {
     baseUrl = await listen();

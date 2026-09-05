@@ -21,6 +21,9 @@ function mockReq(partial: Partial<{ method: string; url: string; headers: Record
     url: partial.url ?? "/",
     headers: partial.headers ?? {},
     body: partial.body ?? "",
+    // 真实 IncomingMessage 恒有 socket（审计事件读 remote_address 用）；
+    // mock 补齐以免审计成功路径 TypeError（#189 起有写路径消费它）。
+    socket: { remoteAddress: "127.0.0.1" },
     [Symbol.iterator]: async function* () {
       if (partial.body !== undefined) yield partial.body;
     },
