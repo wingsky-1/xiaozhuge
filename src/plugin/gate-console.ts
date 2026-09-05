@@ -355,6 +355,7 @@ async function locate() {
     return;
   }
   currentSession = inst[0].session;
+  renderInst();
   // 其余实例给显式切换入口（跨实例聚合默认关闭，防在错误实例上误批）
   if (inst.length > 1) {
     $("#switch").hidden = false;
@@ -399,7 +400,7 @@ async function resolve(gateId, decision) {
   if (!r.ok) alert((await r.json()).error ?? "failed");
   await load();
 }
-$("#refresh").addEventListener("click", () => { currentSession = null; $("#switch").hidden = true; void locate().then(load); });
+$("#refresh").addEventListener("click", () => { currentSession = null; $("#inst").textContent = "定位中…"; $("#switch").hidden = true; void locate().then(load); });
 $("#list").addEventListener("click", (ev) => {
   const btn = ev.target.closest("button[data-act]");
   if (btn) void resolve(btn.dataset.gid, btn.dataset.act);
@@ -412,8 +413,9 @@ $("#instlist").addEventListener("click", (ev) => {
   renderInst();
   void load();
 });
-// 打开即定位 + 加载（零手填，#195）；窗口重聚焦时轻拉一次（无常驻轮询）
-void locate().then(renderInst).then(load);
+// 打开即定位 + 加载（零手填，#195）；renderInst 在 locate 成功路径内执行
+// （空态/失败分支不得渲染「实例 null」）；窗口重聚焦时轻拉一次（无常驻轮询）
+void locate().then(load);
 window.addEventListener("focus", () => { if (currentSession) void load(); });
 </script>
 </body>
