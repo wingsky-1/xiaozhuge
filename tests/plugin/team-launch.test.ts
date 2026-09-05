@@ -328,9 +328,11 @@ describe("入口页与启动消息", () => {
     expect(html).toContain('xfetch("workspace/create", { path: wsPath })');
     expect(html).toContain('xfetch("session/create"');
     expect(html).toContain('xfetch("session/prompt"');
-    // 信封字段（与官方 clientRequestSchema/serverResponseSchema 同构）
+    // 信封字段（与官方 clientRequestSchema/serverResponseSchema/remoteRequest 同构）
     expect(html).toContain('type: "client-request"');
     expect(html).toContain('data.type !== "server-response"');
+    // payload = {args:{request:...}}：网关强制恰好一个 args 字段，参数名 request
+    expect(html).toContain("payload: { args: { request: payload } }");
     expect(html).toContain("data.rpcId !== id");
     expect(html).toContain("data.result.ok !== true");
     // session/prompt 必填 requestId（rc.1 schema）
