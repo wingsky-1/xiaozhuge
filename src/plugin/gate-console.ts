@@ -154,7 +154,8 @@ export function makeGateRoutes(deps: GateRouteDeps): WebRoute[] {
           writeJson(res, 400, { error: "invalid session parameter" });
           return;
         }
-        const gatesDir = layout(deps.teamHomeFor(sessionId)).gatesDir;
+        const teamLayout = layout(deps.teamHomeFor(sessionId));
+        const gatesDir = teamLayout.gatesDir;
         if (req.method === "GET") {
           writeJson(res, 200, await listGates(gatesDir));
           return;
@@ -186,6 +187,29 @@ export function makeGateRoutes(deps: GateRouteDeps): WebRoute[] {
               id: body.id,
               reason: body.reason ?? "",
               requestedBy: body.requestedBy ?? "console",
+            });
+            // 字段级审计事件（#189，ADR 0018 兑现）：形状逐字段对齐 resolve
+            // 分支（who/when/gate id/UA 指纹/SFS 归类/远端 IP/结果）。审计
+            // append 在 openGate 之后：gate-exists 重试无副作用、无重复事件
+            // （重试安全）；append 失败 → 409 的 fail-open 残余与 resolve
+            // 分支同面，定性见 issue #189 评审评论（归 #53 评估）。
+            await ensureDir(teamLayout.roomsDir);
+            await ensureDir(join(teamLayout.roomsDir, "root"));
+            const auditLog = new EventLog(join(teamLayout.roomsDir, "root", "events.jsonl"));
+            await auditLog.init();
+            await auditLog.append({
+              session_id: sessionId,
+              actor: "gate-console",
+              type: "gate/open",
+              payload: {
+                gate_id: gate.id,
+                requested_by: gate.requestedBy,
+                reason: gate.reason,
+                ua_fingerprint: uaFingerprint(req),
+                sec_fetch_site: sfsMarker(req),
+                remote_ip: req.socket.remoteAddress ?? null,
+                opened_at: gate.requestedAt,
+              },
             });
             writeJson(res, 200, { ok: true, gate });
           } catch (error) {
