@@ -318,9 +318,25 @@ describe("入口页与启动消息", () => {
     const html = await r.text();
     expect(html).toContain("一键建团并投递规程");
     expect(html).toContain("/api/xiaozhuge/team/scenarios");
-    expect(html).toContain("/api/session.create");
     expect(html).toContain("/api/xiaozhuge/team/create");
-    expect(html).toContain("/api/session.prompt");
+  });
+
+  it("官方 API 调用走 rc.1 /api 单通道 RPC 信封（#197，契约同构 B1）", () => {
+    // 官方对照：dsh-client-connection 浏览器 caller（POST /api/<endpoint>，
+    // client-request/server-response 双向信封，rpcId 回读校验，result.ok 解包）。
+    const html = launchPageHtml();
+    expect(html).toContain('xfetch("workspace/create", { path: wsPath })');
+    expect(html).toContain('xfetch("session/create"');
+    expect(html).toContain('xfetch("session/prompt"');
+    // 信封字段（与官方 clientRequestSchema/serverResponseSchema 同构）
+    expect(html).toContain('type: "client-request"');
+    expect(html).toContain('data.type !== "server-response"');
+    expect(html).toContain("data.rpcId !== id");
+    expect(html).toContain("data.result.ok !== true");
+    // session/prompt 必填 requestId（rc.1 schema）
+    expect(html).toContain("requestId: rpcUuid()");
+    // 禁止已废弃的 rc.1 前点号 REST 形态回归
+    expect(html).not.toMatch(/\/api\/(workspace|session)\.[a-z]/);
   });
 
   it("launchPageHtml 与 bootMessage 前缀一致且含规程占位", () => {

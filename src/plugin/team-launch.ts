@@ -4,8 +4,13 @@
  * 一键链路（浏览器端 client 插件在输入框内完成，不再打开独立页）：
  *   ① session.list 推导当前会话（blank 首轮判定 + cwd 工作区推导）
  *   → ② POST /api/xiaozhuge/team/create（本文件：服务端跑 init 持久化）
- *   → ③ POST /api/session.prompt 投递 tier0_prompt 首条消息
- *     （输入框草稿作为首条用户任务，空则只投递规程）。
+ *   → ③ POST /api/session/prompt（官方 /api 单通道 RPC）投递 tier0_prompt
+ *     首条消息（输入框草稿作为首条用户任务，空则只投递规程）。
+ *
+ * 官方 API 调用形态（#197）：dsh 0.1.2-rc.1 的 workspace/session 创建与
+ * prompt 投递走官方 /api 单通道 RPC 信封（<namespace>/<method> 斜杠 endpoint，
+ * client-request/server-response 双向信封），页面脚本内 xfetch 与官方浏览器
+ * caller 逐字段同构；/api/xiaozhuge/** 为本插件自有 REST 路由，仍走裸 fetch。
  *
  * init 由此从 LLM 工具面移到 HTTP 面：team_init 工具下线，handler 逻辑
  * 保留复用。安全语义沿 Gate Console 先例：POST 同源 Origin + Fetch
@@ -254,6 +259,34 @@ async function jfetch(method, path, body) {
   if (!r.ok) throw new Error("HTTP " + r.status);
   return data;
 }
+// rc.1 官方 /api 单通道 RPC（#197，官方对照：dsh-client-connection 浏览器
+// caller createWebConnectionRpc 与宿主 rpcFetchHandler 逐字段同构）：
+//   POST /api/<namespace>/<method>，body = {type:"client-request", rpcId,
+//   method, payload}；响应 {type:"server-response", rpcId, result:{ok,value}}
+//   或 {ok:false, error:{code,message,details}}。业务失败抛 "code: message"。
+const rpcUuid = () =>
+  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : "rpc-" + Date.now() + "-" + Math.random().toString(16).slice(2);
+async function xfetch(endpoint, payload) {
+  const id = rpcUuid();
+  const r = await fetch("/api/" + endpoint, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ type: "client-request", rpcId: id, method: endpoint, payload }),
+    ...connTimeoutSignal(),
+  });
+  const data = await r.json().catch(() => null);
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  if (!data || data.type !== "server-response" || data.rpcId !== id) {
+    throw new Error("bad rpc envelope for " + endpoint);
+  }
+  if (!data.result || data.result.ok !== true) {
+    const err = data.result && data.result.error ? data.result.error : { code: "gateway/unknown", message: "empty result" };
+    throw new Error(err.code + ": " + err.message);
+  }
+  return data.result.value;
+}
 (async () => {
   const sel = $("#scenario");
   const list = (await jfetch("GET", "/api/xiaozhuge/team/scenarios")).scenarios;
@@ -272,9 +305,9 @@ $("#go").addEventListener("click", async () => {
   try {
     const wsPath = $("#ws-path").value.trim();
     if (!wsPath) throw new Error("请填写工作区路径");
-    const ws = await jfetch("POST", "/api/workspace.create", { path: wsPath });
+    const ws = await xfetch("workspace/create", { path: wsPath });
     log("workspace: " + ws.workspace.workspaceId);
-    const sess = await jfetch("POST", "/api/session.create", {
+    const sess = await xfetch("session/create", {
       workspaceId: ws.workspace.workspaceId,
       agentPreset: "standard",
     });
@@ -292,7 +325,9 @@ $("#go").addEventListener("click", async () => {
       instance_note: $("#note").value.trim() || null,
     });
     log("team initialized: " + created.home);
-    await jfetch("POST", "/api/session.prompt", {
+    // requestId 为 rc.1 session/prompt 必填参数（客户端去重 id），每次投递新生成。
+    await xfetch("session/prompt", {
+      requestId: rpcUuid(),
       sessionId,
       mode: "queue",
       content: [{ type: "text", text: BOOT_HEAD + "\\n\\n" + created.tier0_prompt }],
