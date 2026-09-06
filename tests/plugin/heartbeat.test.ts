@@ -72,7 +72,7 @@ describe("白名单心跳触点（#97 ADR 0016）", () => {
     expect(await seenOf("coder")).toBe(BASE + 7_000);
   });
 
-  it("team_ack 刷确认者本人", async () => {
+  it("team_ack 刷确认者本人（#194 批刷：窗口内重复心跳合并，lastSeen=窗口首刷时刻）", async () => {
     await seedTeam();
     vi.setSystemTime(BASE + 5_000);
     const sent = (await master.send({
@@ -82,10 +82,43 @@ describe("白名单心跳触点（#97 ADR 0016）", () => {
       body: { hello: true },
     })) as { envelope_id: string };
     vi.setSystemTime(BASE + 6_000);
-    await coder.inbox({ member: "coder", envelope_id: sent.envelope_id }); // 先 claim 入 delivering 段
+    await coder.inbox({ member: "coder", envelope_id: sent.envelope_id }); // claim → 首刷落盘 BASE+6s 并开 30s 窗口
     vi.setSystemTime(BASE + 7_000);
-    await coder.ack({ member: "coder", envelope_id: sent.envelope_id });
-    expect(await seenOf("coder")).toBe(BASE + 7_000);
+    await coder.ack({ member: "coder", envelope_id: sent.envelope_id }); // 1s 后 ack：窗口内合并（内存计数免写）
+    expect(await seenOf("coder")).toBe(BASE + 6_000); // 磁盘 lastSeen = 窗口首刷时刻（30s 粒度批刷）
+  });
+
+  it("#194 批刷：窗口已过 → 下一次心跳重新落盘（滞后上界 = 一个窗口 + 下一次调用）", async () => {
+    await seedTeam();
+    vi.setSystemTime(BASE + 5_000);
+    await coder.stateSet({ room: "root", role: "coder", status: "running" });
+    expect(await seenOf("coder")).toBe(BASE + 5_000); // 首刷落盘
+    vi.setSystemTime(BASE + 10_000);
+    await coder.heartbeatProbe?.();
+    // 窗口内（BASE+5s + 30s）：合并不写。
+    expect(await seenOf("coder")).toBe(BASE + 5_000);
+    // 窗口外（+31s）：新窗口首刷重新落盘。
+    vi.setSystemTime(BASE + 36_000);
+    await coder.send({ to: "master", from: "coder", type: "info", body: {} });
+    expect(await seenOf("coder")).toBe(BASE + 36_000);
+  });
+
+  it("#194 批刷：机会式冲刷——同一 handler 集内成员 B 心跳顺带把已到期窗口的成员 A 落盘", async () => {
+    await seedTeam();
+    vi.setSystemTime(BASE + 1_000);
+    await master.spawn({ member: "qa", durable_id: "dur-qa", role: "qa", tier: 1 });
+    const t1 = (await master.taskCreate({ title: "A", room: "root", assignee: "coder" })) as { task_id: string };
+    const t2 = (await master.taskCreate({ title: "B", room: "root", assignee: "qa" })) as { task_id: string };
+    // 主控代管 coder 认领：coder 首刷 BASE+2s，开 30s 窗口（至 BASE+32s）。
+    vi.setSystemTime(BASE + 2_000);
+    await master.taskUpdate({ task_id: t1.task_id, status: "running" });
+    expect(await seenOf("coder")).toBe(BASE + 2_000);
+    // BASE+40s 主控代管 qa 认领：qa 心跳时 coder 的窗口（BASE+32s）已到期
+    // → 同 handler 集内机会式冲刷把 coder 落盘至 BASE+40s。
+    vi.setSystemTime(BASE + 40_000);
+    await master.taskUpdate({ task_id: t2.task_id, status: "running" });
+    expect(await seenOf("coder")).toBe(BASE + 40_000);
+    expect(await seenOf("qa")).toBe(BASE + 40_000);
   });
 
   it("team_state_set 刷分片归属 role 本人", async () => {
