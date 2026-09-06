@@ -94,22 +94,27 @@ if (process.argv[2] === "--normalize") {
 }
 
 let failed = false;
+const againstRef = process.env.BASELINE_REF || "FETCH_HEAD";
+
 for (const file of baselineFiles()) {
   if (!existsSync(file)) continue;
   const current = canonical(readFileSync(file, "utf8"));
-  const head = execSync(`git show HEAD:${file}`, {
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-  });
-
-  if (current !== canonical(head)) {
+  try {
+    const head = execSync(`git show ${againstRef}:${file}`, {
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    if (current !== canonical(head)) {
+      failed = true;
+      console.log(`${file} 与孤立分支基线存在实质差异，需要快照`);
+    } else {
+      console.log(`${file} 基线一致（键序/mutant 序无关比较通过）`);
+    }
+  } catch {
+    // 孤立分支暂无该文件，视作有差异
     failed = true;
-    console.error(
-      `::error::${file} 与提交基线不一致（内容级差异）。` +
-        "请本地运行 pnpm mutation 后将更新后的基线一并提交。",
-    );
-  } else {
-    console.log(`${file} 基线一致（键序/mutant 序无关比较通过）`);
+    console.log(`${file} 远端孤立分支尚无记录，需要快照`);
   }
 }
 if (failed) process.exit(1);

@@ -27,9 +27,9 @@ export const FULL_RERUN_PATTERNS = [
   /^package\.json$/,
   /^pnpm-lock\.yaml$/,
   /^tsconfig.*\.json$/,
-  /^\.github\/workflows\/ci\.yml$/,
+  /^\.github\/workflows\/(ci|baseline)\.yml$/,
   // 门禁链路自身变更后需全量验证
-  /^scripts\/mutation-(gate|all|segments)\.mjs$/,
+  /^scripts\/(mutation-(gate|all|segments)|orphan-baseline|check-mutation-coverage|check-mutation-baseline)\.mjs$/,
 ];
 
 /** 变异面文件谓词（与段配置并集口径一致：TS 源码，排除声明文件）。 */
@@ -50,15 +50,19 @@ export function discoverSegments(confDir = CONF_DIR) {
 }
 
 /**
- * glob 形态仅两种（与段配置实际用法一致）：目录递归通配（dir 前缀 + 任意深度
- * + 扩展名，含 ! 排除）、精确路径。
+ * glob 形态：目录递归通配（dir 前缀 + 任意深度 + 扩展名，含 ! 排除）、
+ * 目录通配（dir/**）、精确路径。
  */
 export function compileGlob(g) {
   const neg = g.startsWith("!");
   const pat = neg ? g.slice(1) : g;
-  if (pat.includes("/**")) {
+  if (pat.includes("/**/*.")) {
     const [prefix, suffix] = pat.split("/**/*.");
     return { neg, test: (p) => p.startsWith(prefix + "/") && p.endsWith("." + suffix) };
+  }
+  if (pat.endsWith("/**")) {
+    const prefix = pat.slice(0, -3);
+    return { neg, test: (p) => p.startsWith(prefix + "/") };
   }
   return { neg, test: (p) => p === pat };
 }

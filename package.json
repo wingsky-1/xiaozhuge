@@ -22,6 +22,9 @@
     "cov": "vitest run --coverage",
     "cov:patch": "diff-cover coverage/cobertura-coverage.xml --compare-branch=origin/main --fail-under=80",
     "mutation": "node scripts/mutation-all.mjs",
+    "mutation:restore": "node scripts/orphan-baseline.mjs restore",
+    "mutation:push": "node scripts/orphan-baseline.mjs push",
+    "mutation:check-coverage": "node scripts/check-mutation-coverage.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.client.json --noEmit",
     "mutation:gate": "node scripts/mutation-gate.mjs"
