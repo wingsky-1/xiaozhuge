@@ -42,14 +42,14 @@ describe("tool manifest 保留段", () => {
     expect(new Set(manifestNames).size).toBe(manifestNames.length);
   });
 
-  it("保留段含导航声明、盲区声明与逐项清单", () => {
+  it("保留段含导航声明、盲区声明与逐项清单（ADR 0023 英文重构）", () => {
     const text = toolManifestText();
-    expect(text).toContain("仅供导航");
-    expect(text).toContain("不得据「清单未列」推断某工具不存在");
-    expect(text).toContain("盲区声明");
-    expect(text).toContain("goal 管理、subagent 启动/唤醒、MCP 等宿主侧能力不在本清单范围");
+    expect(text).toContain("navigation guidance only");
+    expect(text).toContain("never infer that an unlisted tool does not exist");
+    expect(text).toContain("Blindspot disclaimer");
+    expect(text).toContain("Host capabilities (goal management, subagent spawn/wake, MCP");
     for (const [name, desc] of TEAM_TOOL_MANIFEST) {
-      expect(text).toContain(`- ${name}：${desc}`);
+      expect(text).toContain(`- ${name}: ${desc}`);
     }
   });
 

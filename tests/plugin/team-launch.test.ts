@@ -122,16 +122,21 @@ describe("team/create 一键建团", () => {
     expect(status).toBe(200);
     expect(json.ok).toBe(true);
     expect(json.scenario).toBe("oss-maintenance");
-    expect(json.tier0_prompt).toContain("资源防护三项");
+    expect(json.tier0_prompt).toContain("Resource Protection Triad");
     expect(json.tier0_prompt).toContain("tier0 playbook / scenario prompt boundary");
-    expect(json.tier0_prompt).toContain("一级主控场景编排");
+    expect(json.tier0_prompt).toContain("Master Scenario Orchestration (oss-maintenance)");
+    // ADR 0023 双轨返回断言
+    expect(json.system_prompt).toBe(json.tier0_prompt);
+    expect(json.activation_prompt).toContain("## Activation Directive");
+    expect(json.activation_prompt).toContain("## User Objective");
     expect(json.playbook_digest).toMatch(/^[0-9a-f]{16}$/);
     // 实例根持久化
     const snap = JSON.parse(
       await readFile(join(home, "dsh-home", "xiaozhuge", "sessions", "s-default", "team.yaml"), "utf8"),
-    ) as { name: string; playbook_digest?: string };
+    ) as { name: string; playbook_digest?: string; system_prompt?: string };
     expect(snap.name).toBe("oss-maintenance");
     expect(snap.playbook_digest).toBe(json.playbook_digest);
+    expect(snap.system_prompt).toBe(json.system_prompt);
   });
 
   it("research-report 场景：实例化后 tier0_prompt 含规程全文（#39 依赖）", async () => {
@@ -139,8 +144,10 @@ describe("team/create 一键建团", () => {
     const { status, json } = await post(base, { session: "s-rr", scenario: "research-report" });
     expect(status).toBe(200);
     expect(json.scenario).toBe("research-report");
-    expect(json.tier0_prompt).toContain("Tier-0 巡场规程");
-    expect(json.tier0_prompt).toContain("唯一主控");
+    expect(json.tier0_prompt).toContain("Tier-0 Master Orchestration Playbook");
+    expect(json.tier0_prompt).toContain("Master Scenario Orchestration (research-report)");
+    expect(json.system_prompt).toBe(json.tier0_prompt);
+    expect(json.activation_prompt).toContain("research-report");
   });
 
   it("未知场景给稳定错误码 unknown-scenario（HTTP 400）", async () => {

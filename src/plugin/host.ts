@@ -14,7 +14,7 @@
 import type { Agent } from "@deepseek-ai/dsh-agent";
 import type { ToolDefinition, ToolRunContext } from "@deepseek-ai/dsh-tools";
 import type { WebRoute } from "@deepseek-ai/dsh-host-webserver";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { resolveTeamHome, resolveTeamHomeForView } from "./team-home.js";
 import { createHandlers, ToolError, type Caller, type Handlers } from "./handlers.js";
@@ -28,8 +28,49 @@ import { closeSessionIndex } from "./session-index.js";
 /** 稳定的 cordis 插件名。 */
 export const name = "xiaozhuge-team";
 
-/** 需要的服务：tools（工具注册表）+ webServer（Gate Console 与 resolve 端点）。 */
-export const inject = ["tools", "webServer"];
+/** 需要的服务：tools（工具注册表）+ webServer（Gate Console 与 resolve 端点）+ systemPrompt（系统提示词注入）。 */
+export const inject = ["tools", "webServer", "systemPrompt"];
+
+/** 内存缓存：sessionId -> 组装好的英文 System Prompt（避免每 step 重复读盘）。 */
+const systemPromptCache = new Map<string, string>();
+
+/**
+ * 读取或加载主会话的英文系统提示词（ADR 0023）。
+ * 极速快路径：仅检查主会话专属目录，杜绝子代理穿透与全目录扫描 I/O 雪崩。
+ */
+export function getOrLoadTeamSystemPrompt(sessionId: string): string {
+  const cached = systemPromptCache.get(sessionId);
+  if (cached !== undefined) return cached;
+
+  const rootDir = resolveTeamHome(sessionId);
+  const teamYamlPath = join(rootDir, "team.yaml");
+  if (!existsSync(teamYamlPath)) {
+    return "";
+  }
+
+  try {
+    const raw = readFileSync(teamYamlPath, "utf8");
+    const snap = JSON.parse(raw) as { system_prompt?: string | null; tier0_prompt?: string | null };
+    const prompt = snap.system_prompt ?? snap.tier0_prompt ?? "";
+    if (prompt.length > 0) {
+      systemPromptCache.set(sessionId, prompt);
+    }
+    return prompt;
+  } catch {
+    return "";
+  }
+}
+
+/** 显式预热或写入系统提示词内存缓存（init 时调用）。 */
+export function setTeamPromptCache(sessionId: string, prompt: string): void {
+  systemPromptCache.set(sessionId, prompt);
+}
+
+/** 清空内存提示词缓存（卸载或测试重置）。 */
+export function clearTeamPromptCache(sessionId?: string): void {
+  if (sessionId) systemPromptCache.delete(sessionId);
+  else systemPromptCache.clear();
+}
 
 /**
  * 从执行上下文解析主会话 id。官方 Agent.id 即会话 id；工具面 agent-required：
@@ -51,6 +92,14 @@ function sessionIdOf(agent: Agent | undefined): string {
 export function apply(ctx: {
   tools: { register: (definition: ToolDefinition) => () => void };
   webServer?: { register: (route: WebRoute) => () => void } | null;
+  systemPrompt?: {
+    section: (definition: {
+      name: string;
+      order: number;
+      text: string | ((context: { agent?: { id?: string } }) => string);
+    }) => () => void;
+    getSectionOrder?: (name: string) => number;
+  } | null;
   logger: { info: (msg: string) => void; warn: (msg: string) => void };
   get(key: string): unknown;
   /** cordis 事件订阅（webserver/index-inject 用）；缺省形态可无此方法。 */
@@ -257,6 +306,25 @@ export function apply(ctx: {
     ctx.logger.info("[xiaozhuge] gate console + team launch routes registered");
     // 输入框内「创建团队」按钮由客户端插件（dsh.client，src/client/）经
     // conversation.input.right 官方插槽渲染——不再做宿主页面 DOM 注入。
+  }
+
+  // 宿主 SystemPrompt 原生注入（ADR 0023）：下沉 Tier-0 规程，跨会话 100% 前缀缓存。
+  const sp = ctx.systemPrompt;
+  if (typeof sp === "object" && sp !== null && typeof sp.section === "function") {
+    const order =
+      typeof sp.getSectionOrder === "function" ? sp.getSectionOrder("TEAM_POLICY") : 600;
+    const disposeSection = sp.section({
+      name: "xiaozhuge-team-orchestrator",
+      order: Number.isFinite(order) ? order : 600,
+      text: (context) => {
+        const sessionId = context?.agent?.id;
+        if (!sessionId) return "";
+        return getOrLoadTeamSystemPrompt(sessionId);
+      },
+    });
+    disposers.push(disposeSection);
+    disposers.push(() => clearTeamPromptCache());
+    ctx.logger.info("[xiaozhuge] system prompt section registered");
   }
 
   ctx.logger.info("[xiaozhuge] all team_* tools registered");

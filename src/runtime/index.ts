@@ -124,10 +124,12 @@ export {
   builtinTemplatesRoot,
   resolveScenarioDir,
   listScenarios,
+  buildActivationPrompt,
 } from "./template/template-loader.js";
 export type {
   LoadedTemplate,
   Tier0Playbook,
   ScenarioRoot,
   ScenarioEntry,
+  ActivationPromptParams,
 } from "./template/template-loader.js";

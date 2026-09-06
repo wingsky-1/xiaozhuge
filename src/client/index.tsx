@@ -74,8 +74,8 @@ interface ScenarioEntry {
  * tests/plugin/team-launch.test.ts 的契约断言兜底）。
  */
 export const BOOT_MESSAGE_HEAD =
-  "团队已由人经入口创建，实例初始化完成。以下是你的 Tier-0 规程与场景编排" +
-  "提示词全文（规程在前、场景段在后，以固定分隔符分界），请从启动对账节开始执行。首 turn 检查单：① 第一个工具调用必须是 team_reconcile（readiness gate，失败即上行摘要）；② 确认 goal 已创建；③ 输出首轮摘要上行。";
+  "Team instance initialized. Please follow your System Prompt and execute the sequential startup protocol. " +
+  "First-turn checklist: (1) First tool call MUST be team_reconcile (readiness gate; report error if failed); (2) Verify or create tracking goal; (3) Anchor verbatim user objective to rooms/root/brief/user-request.md; (4) Output startup summary.";
 
 /** 本插件注册名（cordis 名册 id = npm 包名，经 dsh.client 契约）。 */
 export const name = "@wingsky-1/dsh-xiaozhuge";
@@ -351,6 +351,7 @@ export function TeamCreateButton(props: { sessionId?: string }) {
           session: targetSession,
           scenario: entry.name,
           source: entry.source,
+          user_prompt: draft || null,
           // 工作区随会话推导（session.list cwd），无需用户填写。
           ...(cwdRef.current ? { workspace: cwdRef.current } : {}),
         }),
@@ -359,7 +360,7 @@ export function TeamCreateButton(props: { sessionId?: string }) {
         const msg = created?.error?.message ?? created?.error?.code ?? "创建失败";
         throw new Error(msg);
       }
-      // ② 投递 tier0_prompt 到当前会话（输入框草稿作首条用户任务）。
+      // ② 投递激活消息到当前会话（ADR 0023：系统提示词由宿主下沉注入，此处仅投递精炼激活消息）。
       // 0.1.2 官方形态：ctx.sessions.scope(id).get("conversation").send(text)
       // （scope-addressed 会话门面；必须显式 get——conversation 服务提供在
       // dsh-client-ui-conversation 插件 fiber，scope ctx 与其是兄弟子树，
@@ -367,8 +368,12 @@ export function TeamCreateButton(props: { sessionId?: string }) {
       // `cannot get property "conversation" without inject`；get() 走共享
       // root 存储任意 ctx 可解析，且返回服务的 this.ctx 仍绑定调用者 scope
       // （官方内部 scopedConversation() 即此形态）。send 失败走 reject 进外层 catch）。
-      const bootText = `${BOOT_MESSAGE_HEAD}\n\n${created.tier0_prompt}`;
-      const promptText = draft ? `【我的任务】${draft}\n\n${bootText}` : bootText;
+      const promptText =
+        typeof created.activation_prompt === "string" && created.activation_prompt.length > 0
+          ? created.activation_prompt
+          : draft
+            ? `【我的任务】${draft}\n\n${BOOT_MESSAGE_HEAD}\n\n${created.tier0_prompt}`
+            : `${BOOT_MESSAGE_HEAD}\n\n${created.tier0_prompt}`;
       const scopeCtx = sessionsService?.scope(targetSession as Parameters<ISessions["scope"]>[0]);
       if (!scopeCtx) throw new Error("会话作用域不可用");
       const conversation = scopeCtx.get("conversation") as IConversation | undefined;

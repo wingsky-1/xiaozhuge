@@ -32,16 +32,16 @@ const OSS_DIR = join(REPO_ROOT, "templates", "oss-maintenance");
 const RR_DIR = join(REPO_ROOT, "templates", "research-report");
 const PLAYBOOK_PATH = join(REPO_ROOT, PLAYBOOKS_DIR, TIER0_PLAYBOOK_FILE);
 
-/** 规程正文独有的特征句（框架协议知识，场景层不得复制）。 */
+/** 规程正文独有的特征句（框架协议知识，场景层不得复制，ADR 0023 英文重构）。 */
 const PLAYBOOK_SIGNATURES = [
-  "资源防护三项",
-  "启动对账节",
-  "状态级重建",
+  "Resource Protection Triad",
+  "Startup Reconciliation",
+  "State-Level Recovery",
   "blocked_streak",
-  "循环不变量",
-  "目标锚定",
-  "廉价检查轮",
-  "防 max-tokens 解除武装",
+  "Operational Invariants",
+  "Objective Anchoring",
+  "Low-Cost Inspection Turn",
+  "Max-Tokens Disarm Protection",
 ];
 
 describe("分隔符协议常量", () => {

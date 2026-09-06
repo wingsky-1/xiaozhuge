@@ -143,6 +143,7 @@ export function instantiateSnapshot(
   loaded: LoadedTemplate,
   playbookDigest?: string,
   workspace?: string,
+  systemPrompt?: string,
 ): Record<string, unknown> {
   return {
     name: loaded.template.name,
@@ -153,6 +154,8 @@ export function instantiateSnapshot(
     playbook_digest: playbookDigest ?? null,
     // 工作区持久化（ADR 0015）：audit 子命令的扫描根来源；旧快照无此字段为 null。
     workspace: workspace ?? null,
+    // 系统提示词（ADR 0023）：供 host systemPrompt 注入读取；旧快照无此字段为 null。
+    system_prompt: systemPrompt ?? null,
     // 通讯模式与 explicit 白名单（#138）：运行时可达性判定的载体；旧快照无
     // 此字段按缺省容忍（只增不改）——读取侧以 `comm_mode ?? "auto"` 归一。
     comm_mode: loaded.template.comm_mode ?? "auto",
@@ -198,6 +201,46 @@ export function loadTier0Playbook(packageRoot: string): Tier0Playbook {
  */
 export function assembleTier0Prompt(playbook: Tier0Playbook, scenarioPrompt: string): string {
   return playbook.text + TIER0_PLAYBOOK_SEPARATOR + scenarioPrompt;
+}
+
+export interface ActivationPromptParams {
+  scenario: string;
+  workspace?: string | null | undefined;
+  instanceNote?: string | null | undefined;
+  userPrompt?: string | null | undefined;
+}
+
+/**
+ * 构造首轮精炼激活消息（ADR 0023 解耦规范）：
+ * 包含用户原始目标（保持原文直通）、实例元数据与首轮行动指令。
+ */
+export function buildActivationPrompt(params: ActivationPromptParams): string {
+  const userRequest = (params.userPrompt ?? "").trim();
+  const objectiveSection =
+    userRequest.length > 0
+      ? `## User Objective\n${userRequest}`
+      : `## User Objective\n(No initial user objective provided. Stand by for instructions or inspect project backlog.)`;
+
+  const metaItems = [
+    `- **Scenario**: ${params.scenario}`,
+    ...(params.workspace ? [`- **Workspace**: ${params.workspace}`] : []),
+    ...(params.instanceNote ? [`- **Note**: ${params.instanceNote}`] : []),
+  ];
+
+  return [
+    objectiveSection,
+    "",
+    "## Team Context",
+    ...metaItems,
+    "",
+    "## Activation Directive",
+    "Team instance initialized. Please follow your System Prompt and execute the sequential startup protocol.",
+    "First-turn checklist:",
+    "1. First tool call MUST be `team_reconcile` (readiness gate; report error if failed).",
+    "2. Verify or create tracking goal (`create_goal`).",
+    "3. Anchor verbatim user objective to `rooms/root/brief/user-request.md`.",
+    "4. Output startup summary and begin patrol loop.",
+  ].join("\n");
 }
 
 /** 包内模板根目录（builtin 场景白名单根，#51 入口承载场景选择）。 */

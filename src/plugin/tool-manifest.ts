@@ -1,5 +1,5 @@
 /**
- * 框架工具面自述（ADR 0015 决策 3，#66）。
+ * 框架工具面自述（ADR 0015 决策 3，#66；ADR 0023 英文重构）。
  *
  * 建团首条消息尾部追加的「保留段」：仅自述本插件注册的 team_* 工具面，
  * 附显式盲区声明。定位是概率缓解——消除「凭记忆推断工具不存在」的信息缺位
@@ -16,32 +16,32 @@ export const TOOL_MANIFEST_SEPARATOR =
 
 /** 本插件注册的 team_* 工具自述（名称 → 一句话用途；与 host.ts 注册面一致）。 */
 export const TEAM_TOOL_MANIFEST: ReadonlyArray<readonly [string, string]> = [
-  ["team_spawn", "登记成员 durable id 入注册表"],
-  ["team_dispatch", "注册 → 指派 → 派单复合原语（半事务，失败报告已完成步骤）"],
-  ["team_send", "定向信箱投递（含可达性 report-only 标注）"],
-  ["team_inbox", "读未读 / 认领指定信封"],
-  ["team_ack", "确认信封处理完成"],
-  ["team_task_create", "任务账本建账（mutex 预检）"],
-  ["team_task_update", "任务状态机流转 / 改派"],
-  ["team_task_list", "任务账本查询"],
-  ["team_state_get", "黑板读"],
-  ["team_state_set", "黑板写（running|blocked|done）"],
-  ["team_reconcile", "对账全量视图（scope=audit 为旁路 report-only；overview 含互斥冲突标注）"],
-  ["team_handoff", "显式交接（dod 回执核验）"],
+  ["team_spawn", "Register member durable ID in registry"],
+  ["team_dispatch", "Atomic dispatch primitive: register, assign, and deliver envelope"],
+  ["team_send", "Direct mailbox delivery with reachability annotation"],
+  ["team_inbox", "Read unread envelopes or claim specific envelope"],
+  ["team_ack", "Acknowledge and archive processed envelope"],
+  ["team_task_create", "Create task in shared ledger with mutex check"],
+  ["team_task_update", "Transition task status machine or reassign"],
+  ["team_task_list", "Query task ledger snapshot"],
+  ["team_state_get", "Read blackboard shards for a room"],
+  ["team_state_set", "Write blackboard shard (running|blocked|done)"],
+  ["team_reconcile", "Unified reconciliation view: members, tasks, cursors, mutexes"],
+  ["team_handoff", "Explicit task handoff with DoD receipt verification"],
 ];
 
 /** 生成完整保留段文本（不含前导分隔符，调用方拼接）。 */
 export function toolManifestText(): string {
   const lines: string[] = [
-    "以下工具面清单由框架生成，仅供导航：工具可用性一律以当轮运行时实际注册为准，",
-    "本清单不是授权依据，也不得据「清单未列」推断某工具不存在。",
+    "The following framework tool manifest is generated for navigation guidance only.",
+    "Tool availability is determined strictly by runtime registration for the current turn.",
+    "This list is informational; never infer that an unlisted tool does not exist.",
     "",
-    "本框架注册的 team_* 工具：",
-    ...TEAM_TOOL_MANIFEST.map(([name, desc]) => `- ${name}：${desc}`),
+    "Framework-registered team_* tools:",
+    ...TEAM_TOOL_MANIFEST.map(([name, desc]) => `- ${name}: ${desc}`),
     "",
-    "盲区声明：goal 管理、subagent 启动/唤醒、MCP 等宿主侧能力不在本清单范围内，",
-    "其存在性请以当轮系统提示词与实际可用工具为准。",
-    "启动对账一律先跑 team_reconcile：一次返回成员对照表、任务快照与事件游标。",
+    "Blindspot disclaimer: Host capabilities (goal management, subagent spawn/wake, MCP, shell, fs) are outside this manifest; verify their presence via system prompt and current runtime tools.",
+    "Always run team_reconcile first for startup reconciliation: returns member cross-view, task snapshot, and event cursors in a single call.",
   ];
   return lines.join("\n");
 }
