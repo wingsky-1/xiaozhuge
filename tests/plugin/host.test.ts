@@ -20,8 +20,15 @@ interface RegisteredTool {
   execute: (args: Record<string, unknown>, exec?: { agent?: { session?: { id?: string } } }) => Promise<unknown>;
 }
 
+interface RegisteredSection {
+  name: string;
+  order: number;
+  text: string | ((context: { agent?: { id?: string } }) => string);
+}
+
 function makeHost() {
   const registered = new Map<string, RegisteredTool>();
+  const sections = new Map<string, RegisteredSection>();
   const logs: string[] = [];
   const ctx = {
     tools: {
@@ -30,6 +37,13 @@ function makeHost() {
         registered.set(d.name, d);
         return () => registered.delete(d.name);
       },
+    },
+    systemPrompt: {
+      section: (definition: RegisteredSection) => {
+        sections.set(definition.name, definition);
+        return () => sections.delete(definition.name);
+      },
+      getSectionOrder: (name: string) => (name === "TEAM_POLICY" ? 600 : 100),
     },
     logger: {
       info: (msg: string) => logs.push(msg),
@@ -41,7 +55,7 @@ function makeHost() {
     },
   };
   const dispose = apply(ctx);
-  return { registered, logs, dispose };
+  return { registered, sections, logs, dispose };
 }
 
 // TEAM_HOME 指向临时目录，避免写真实 ~/.dsh
@@ -54,7 +68,35 @@ beforeEach(() => {
 describe("插件装配", () => {
   it("插件名与注入声明", () => {
     expect(name).toBe("xiaozhuge-team");
-    expect(inject).toEqual(["tools", "webServer"]);
+    expect(inject).toEqual(["tools", "webServer", "systemPrompt"]);
+  });
+
+  it("宿主 systemPrompt 在场时注册 xiaozhuge-team-orchestrator 段（ADR 0023）", async () => {
+    const { sections, dispose } = makeHost();
+    expect(sections.has("xiaozhuge-team-orchestrator")).toBe(true);
+    const sec = sections.get("xiaozhuge-team-orchestrator")!;
+    expect(sec.order).toBe(600);
+
+    // 未初始化会话：text(context) 返回空字符串（不污染普通会话）
+    const fn = sec.text as (ctx: { agent?: { id?: string } }) => string;
+    expect(fn({ agent: { id: "non-team-session" } })).toBe("");
+    expect(fn({})).toBe("");
+
+    // 初始化团队会话：写入 team.yaml 后读取并返回 system_prompt
+    const rootSession = "team-root-1";
+    const rootHome = resolveTeamHome(rootSession);
+    const handlers = createHandlers(rootHome, rootSession, rootCaller());
+    await handlers.init({ scenario: "oss-maintenance" });
+
+    const prompt = fn({ agent: { id: rootSession } });
+    expect(prompt).toContain("Resource Protection Triad");
+    expect(prompt).toContain("Master Scenario Orchestration (oss-maintenance)");
+
+    // 子代理会话（无自身 team.yaml）：返回空字符串（杜绝子代理精神分裂）
+    expect(fn({ agent: { id: "subagent-coder-1" } })).toBe("");
+
+    dispose();
+    expect(sections.size).toBe(0);
   });
 
   it("注册 12 个 team_* 工具且命名规范（team_init 已下线 #51；dispatch/reconcile 为 ADR 0015 原语）", () => {

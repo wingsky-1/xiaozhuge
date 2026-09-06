@@ -22,12 +22,12 @@ import { consolePageHtml, makeGateRoutes } from "../../src/plugin/gate-console.j
 const REPO_ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..", "..");
 const SESSION = "session-goal-test-1";
 
-describe("巡场规程 goal 全家桶契约（ADR 0022）", () => {
+describe("巡场规程 goal 全家桶契约（ADR 0022/ADR 0023）", () => {
   it("规程中显式包含 create_goal 硬参数化、get_goal 巡检与 update_goal 合法操作", () => {
     const playbook = loadTier0Playbook(REPO_ROOT);
 
     // R1/R2/R3 明确指认
-    expect(playbook.text).toContain("资源防护三项");
+    expect(playbook.text).toContain("Resource Protection Triad");
     expect(playbook.text).toContain("max_goal_rounds");
     expect(playbook.text).toContain("blocked_streak");
 
@@ -38,7 +38,7 @@ describe("巡场规程 goal 全家桶契约（ADR 0022）", () => {
     expect(playbook.text).toContain("update_goal(action=complete)");
 
     // 自治轮权限声明：自治轮内模型无权 pause/resume
-    expect(playbook.text).toContain("自治轮内模型无权 pause/resume");
+    expect(playbook.text).toContain("Autonomous rounds cannot pause/resume goals");
   });
 });
 

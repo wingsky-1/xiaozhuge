@@ -21,6 +21,7 @@ import {
   writeJsonAtomic,
   layout,
   assembleTier0Prompt,
+  buildActivationPrompt,
   builtinTemplatesRoot,
   instantiateSnapshot,
   loadTemplate,
@@ -441,13 +442,20 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
           }
           throw new ToolError("unknown-scenario", msg);
         }
-        // 模板快照落盘 + Tier-0 组装（#42 分层定稿）：tier0_prompt =
-        // 规程全文（playbooks/tier0-playbook.md，唯一事实源）+ 固定分隔符 +
-        // 场景 tiers[0].prompt；快照增补 playbook_digest 审计字段。
+        // 模板快照落盘 + Tier-0 组装（#42 分层定稿，ADR 0023 系统提示词下沉）：
+        // systemPrompt = 规程全文（playbooks/tier0-playbook.md，唯一事实源）+ 固定分隔符 +
+        // 场景 tiers[0].prompt + 工具自述保留段。
         const loaded = await loadTemplate(scenarioDir, scenarioSource);
         const playbook = loadTier0Playbook(PACKAGE_ROOT);
-        // 工作区持久化（ADR 0015）：audit 扫描根的唯一合法来源（不接受调用方传参）。
-        await writeJsonAtomic(l.teamYaml, instantiateSnapshot(loaded, playbook.digest, projectRoot));
+        const tier0PromptPath = (loaded.template.tiers as Array<{ prompt?: string }>)[0]?.prompt ?? "";
+        const scenarioPrompt = loaded.prompts[tier0PromptPath] ?? "";
+        const systemPrompt = appendToolManifest(assembleTier0Prompt(playbook, scenarioPrompt));
+
+        // 工作区持久化（ADR 0015）+ 系统提示词快照（ADR 0023）。
+        await writeJsonAtomic(
+          l.teamYaml,
+          instantiateSnapshot(loaded, playbook.digest, projectRoot, systemPrompt),
+        );
         // L1 预登记（#79）：tier0 主控根成员在 init 时入册——G0 边界把
         // agents.json 登记列为运行时确定性操作，不依赖提示词自觉。主控
         // durableId = 宿主主会话 id；status=running（init 由该存活会话触发）。
@@ -468,8 +476,15 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
           lock: outcome,
           master: { member: masterMember, outcome: masterOutcome },
         });
-        const tier0PromptPath = (loaded.template.tiers as Array<{ prompt?: string }>)[0]?.prompt ?? "";
-        const scenarioPrompt = loaded.prompts[tier0PromptPath] ?? "";
+
+        const userPrompt = typeof args.user_prompt === "string" ? args.user_prompt : null;
+        const activationPrompt = buildActivationPrompt({
+          scenario,
+          workspace: projectRoot,
+          instanceNote: typeof args.instance_note === "string" ? args.instance_note : null,
+          userPrompt,
+        });
+
         return {
           ok: true,
           lock: outcome,
@@ -478,9 +493,11 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
           source: scenarioSource,
           // L1（#79）：预登记的 tier0 主控成员名与登记形态，供入口层展示。
           master_member: masterMember,
-          // ADR 0015 决策 3：tier0_prompt 尾部追加「框架工具面自述」保留段
-          //（仅 team_* 自述 + 盲区声明；appendToolManifest 保证不双份）。
-          tier0_prompt: appendToolManifest(assembleTier0Prompt(playbook, scenarioPrompt)),
+          // ADR 0023：系统提示词下沉，返回双轨字段（system_prompt + activation_prompt）
+          // tier0_prompt 保留作为全量兼容字段。
+          system_prompt: systemPrompt,
+          activation_prompt: activationPrompt,
+          tier0_prompt: systemPrompt,
           playbook_digest: playbook.digest,
         };
       } catch (error) {

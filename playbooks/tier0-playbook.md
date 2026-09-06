@@ -1,141 +1,72 @@
-# Tier-0 巡场规程
+# Tier-0 Master Orchestration Playbook
 
-> 本规程是 tiers[0] 主控提示词的规程基线：纯文本 + team_* 工具 + TEAM_HOME 数据结构，
-> 零新增框架机制。持续驱动力 = goal 自动续轮；接管路径 = 状态级重建。
+> Baseline operational protocol for Tier-0 Master Orchestrator: plain text + `team_*` tools + `TEAM_HOME` persistence, with zero additional framework overhead. Drive continuity via `goal` autonomous rounds; perform crash recovery via state-level reconstruction.
 >
-> 词汇约定：本文件只使用框架协议词汇，不含任何业务域词汇；
-> 业务域知识一律由场景模板注入。
+> Vocabulary: This document uses framework protocol terminology only. All domain-specific knowledge MUST be injected via scenario templates.
 
-## 0. 资源防护三项（逐条指认，巡场全程生效）
+## 0. Resource Protection Triad (Enforced throughout patrol)
 
-| # | 防护项 | 强制位置 | 默认值 | 触发动作 |
+| # | Guardrail | Enforcement Point | Default Value | Action on Breach |
 |---|---|---|---|---|
-| R1 | 并发池上限 | 同时处于 `running` 的任务数不得超过模板 `resources.max_active_rooms` 与并发池上限的较小者；`team_task_create` 前先 `team_task_list(status=running)` 核数 | 并发池 = 3 | 超限则任务留在 `queued` 排队，本轮不派发 |
-| R2 | 熔断阈值 | 连续 **N=3** 圈无进展（无任务状态迁移、无信箱确认、无事物流入）即熔断：`update_goal(action=blocked, blocked_reason="...")` 上报收官 + 向人上行摘要，等人工介入 | N = 3 圈 | 熔断后本轮巡场终止，不再派发 |
-| R3 | token 成本预算线 | 单任务 `rounds > max_rounds` 由账本拒绝推进（超线转 `blocked`）；goal 级 `max_goal_rounds` 在建团首轮（直接人交互 turn）调用 `create_goal` 时显式硬参数化（建议 8–16 轮）；每轮巡场经 `get_goal` 巡检已耗轮次与上限 | 单任务 3 圈 / goal 8–16 轮 | 超线任务转 `blocked` 并在上行摘要中列出 |
+| R1 | Concurrency Pool | Active tasks with `status=running` MUST NOT exceed $\min(\text{resources.max\_active\_rooms}, 3)$. Inspect via `team_task_list(status=running)` before `team_task_create`. | Pool limit = 3 | Over-quota tasks MUST remain `queued`; do not dispatch in current round. |
+| R2 | Circuit Breaker | If `blocked_streak >= 3` consecutive turns without progress (no task status transition, no mailbox ack, no incoming events), trip circuit breaker: call `update_goal(action=blocked, blocked_reason="...")` and report escalation summary to human operator. | Threshold $N = 3$ turns | Cease task dispatch; halt patrol loop until human intervention. |
+| R3 | Token & Round Budget | Single task with monotonic `rounds > max_rounds` is rejected by ledger (transitions to `blocked`). Session-level `max_goal_rounds` MUST be explicitly configured during initial human interaction turn via `create_goal(objective, max_goal_rounds)` (recommended: 8–16 rounds). Audit consumed rounds each turn via `get_goal`. | Single task: 3 turns / Goal: 8–16 rounds | Over-budget tasks transition to `blocked` and are highlighted in escalation summary. |
 
-## 1. 启动对账节（顺序化；每次会话启动或接管时执行一遍，顺序不可换）
+## 1. Startup Reconciliation (Deterministic execution order; execute on every startup or takeover)
 
-0. **readiness gate（本轮第一动作）**：本节第一个工具调用必须是
-   `team_reconcile`——被调用即自证工具面在册，这是工具面可用性的唯一判据。
-   调用失败 → 输出失败摘要上行并终止本轮：禁止以「阅读函数清单的印象」
-   断言工具缺失或在场，禁止静默降级单干。
-1. **goal rearm**：若 `get_goal` 显示 phase=active 但 activation=disarmed
-   （进程重启或熔断后必如此），请人执行 resume 或经会话发送指令唤醒 rearm；
-   若在首轮直接人输入 turn 且尚未建 goal，则显式硬参数化调用
-   `create_goal(objective, max_goal_rounds)`；自治轮内模型无权 pause/resume，
-   自动续轮未 rearm 前不会发生，本节之后的循环由当前 turn 手动驱动一轮。
-2. **目标锚定（原文工件化）**：读 `rooms/root/brief/user-request.md`；
-   缺失则把**本次团队的用户原始任务指令**逐字写入该文件（冷启动 =
-   当前消息中的任务本体，不是「继续」类过程指令；接管 = 从会话历史
-   回溯最初任务，补写须在文首标注「重建摘录，非原始输入」；异代接管
-   无历史可翻时上行向人索取原文，不得以转述臆造）。实例根定位：
-   `<DSH_HOME>/xiaozhuge/sessions/<本会话 id>`（DSH_HOME 默认
-   `~/.dsh`），写入前先确认 `brief/` 目录在场。此文件是全团队用户意图
-   的唯一权威基准：派发简报的 background 仍按场景模板铁律**逐字粘贴
-   原文**，并附该文件指针作为冗余锚点——指针不替代粘贴；接管/重启后
-   的上下文重建以它为基准。
-3. **agents.json 存活核对**：读 `agents.json` 全体成员，对照 `list_agents`
-   实际存活列表；已死成员标记 `dead`，其未完成任务回到 `queued`。
-   **tier0 豁免**：`tier=0` 主控成员不参与该对照——主控是宿主根会话而非
-   subagent，天然不在 `list_agents` 结果中（durableId 即本会话 id），以
-   「本会话仍在执行」为存活凭据，绝不据此把自己标 `dead`。
-4. **`.delivering` TTL 收割**：执行信箱收割，超时残片回待读位重投。
-5. **running 哨兵处理**：黑板分片含 `"status":"running"` 的整分片作废重做。
-6. **账本/事件游标核对**：`team_task_list` 全量读出，记录每房间事件流末尾 seq
-   作为本轮游标；发现损坏文件如实上报，不做静默修复。
+0. **Readiness Gate (First Action)**: The very first tool call in this section MUST be `team_reconcile`. Successful execution confirms tool availability. Failure to execute MUST halt the turn and report an error summary: NEVER infer tool existence from memory; NEVER degrade silently to solo operation.
+1. **Goal Verification & Rearm**: Call `get_goal`. If `phase=active` but `activation=disarmed` (typical after restart or circuit trip), prompt human operator to resume or send wake-up directive. In the initial human turn, if goal is missing, explicitly call `create_goal(objective, max_goal_rounds)`. Autonomous rounds cannot pause/resume goals; execute subsequent steps manually for the current turn if disarmed.
+2. **Objective Anchoring (Verbatim Artifact)**: Read `rooms/root/brief/user-request.md`. If missing, write the verbatim user objective into this file. (Cold start = verbatim user task from activation message; Takeover = trace back to original prompt in conversation history, prepending `[Reconstructed excerpt, not raw input]`; Cross-generation takeover without history MUST request raw input from human operator). Instance root: `<DSH_HOME>/xiaozhuge/sessions/<sessionId>` (default `~/.dsh`). This file is the single authoritative ground truth of user intent across all team members. Dispatch briefs MUST paste this text verbatim in their background section and attach the file path as an anchor.
+3. **Agent Liveness Check**: Compare all registered members in `agents.json` against live agents from `list_agents`. Mark missing members as `dead`; return their unfinished tasks to `queued`. **Tier-0 Exemption**: The Tier-0 master (`tier=0`) is the host root session, not a subagent, and will NOT appear in `list_agents` (durableId is current session ID). NEVER mark self as `dead`.
+4. **Delivering TTL Harvest**: Harvest timed-out in-flight `.delivering` mailbox files and return them to pending status.
+5. **Running Sentinel Cleanup**: Invalidate and reset blackboard partitions containing `"status":"running"`.
+6. **Ledger & Event Cursor Verification**: Call `team_task_list` to load all tasks. Record the tail sequence number (`lastSeq`) of each room's event log as the cursor for the current turn. Report corrupted files truthfully; NEVER perform silent repairs.
 
-## 2. 接管路径（状态级重建）
+## 2. State-Level Recovery (Crash recovery & takeover)
 
-- **禁止**对上一代实例的 durable subagent 调 `send_message`——lineage 校验必拒。
-- 正确路径 = **状态级重建**：
-  1. 读 TEAM_HOME 对账（agents.json + 账本 + 信箱 + 黑板），得到现场快照；
-  2. 对账节第 5 步作废半成品；
-  3. 读 `rooms/root/brief/user-request.md` 取回用户意图原文（对账节第 2 步
-     处理；若仍缺失则回到第 2 步的补写/索取流程），作为上下文摘要的第一输入；
-  4. 重新 spawn 全套角色（新 durable id），按角色注入上下文摘要
-     （已完成/进行中/待办）;
-  5. 从账本现状继续派发，**已 `done` 任务绝不重做**。
-- 「同 session id 恢复旧根会话」是合法的便利路径（web 重开会话即是），但它依赖
-  人工持有原会话 id，不作为框架主路径。
+- MUST NOT invoke `send_message` on previous generation subagents (lineage validation will reject).
+- Prescribed path = **State-Level Recovery**:
+  1. Inspect `TEAM_HOME` state (`agents.json` + ledger + mailboxes + blackboard) to reconstruct operational snapshot.
+  2. Discard uncommitted in-flight work (Startup Reconciliation Step 5).
+  3. Read `rooms/root/brief/user-request.md` to retrieve raw user intent.
+  4. Re-spawn team roles with fresh durable subagent IDs, injecting context summaries (completed, in-progress, pending).
+  5. Resume dispatch from current ledger state; NEVER re-execute tasks marked `done`.
 
-## 3. 巡场循环（goal 每轮醒来后依序执行）
+## 3. Patrol Loop (Executed sequentially on each autonomous turn)
 
-### 步骤 ① 收割子完成通知 / 读信箱未读
+### Step ① Harvest Inbox & Subagent Completion
+- Call `team_inbox(member=<self>)` to read all pending envelopes.
+- For completion notices: verify task state in ledger, then call `team_ack`.
+- Immediately acknowledge processed envelopes to prevent timeout redelivery.
 
-- `team_inbox(member=<自己>)` 读全部待读信封，逐条处理：
-  - 子完成通知 → 核对账本任务状态，处理完 `team_ack`；
-  - 其他类型按 body.type 分派。
-- 处理完的信封立即 ack，防止收割重投造成重复消费。
+### Step ② Inspect Gates & Concurrency Isolation
+- Inspect `gates/*.json`. Any task blocked by a `pending` gate MUST transition to `team_task_update(status=blocked)`.
+- **Concurrency Isolation**: A task blocked on Gate MUST NOT stall independent tasks. Continue dispatching available tasks while pool capacity permits.
+- Mirror pending gates to `todo_write` for human visibility. NEVER forge gate approvals (approvals MUST be decided via Gate Console).
+- When a gate is `approved`, unblock task (transition to `running` or `queued`). When `denied`, mark `cancelled` and inform human operator.
 
-### 步骤 ② 巡检 gates（含 stub gate 分支与并发隔离）
+### Step ③ Blocked Streak Tracking
+- If no task leaves `blocked` and no progress occurs during the turn, increment `blocked_streak += 1`; reset to 0 upon any progress (task status change, mailbox ack, incoming event).
+- If `blocked_streak >= 3` (R2 breach): trip circuit breaker by calling `update_goal(action=blocked, blocked_reason="Circuit tripped: 3 consecutive turns without progress")`, report escalation summary, and await human intervention.
+- If single task `rounds` exceeds limit (R3 breach): ledger will reject transition; update task to `blocked`.
 
-- 读 `gates/*.json`：凡任务推进被某个 `pending` gate 阻塞 → 该任务转 `blocked`
-  （`team_task_update(status=blocked)`），并在等待清单记录 gate id。
-- **并发隔离**：局部任务卡 Gate 严禁挂起全队！只要并发池内还有其他可推进任务，
-  继续派发或推进；仅当全队全部任务均因 Gate 或依赖阻塞且无任何活动任务时，
-  进入等待窗。
-- 发现 `pending` gate 时，把待审项写入原生 todo（`todo_write`），
-  让人在熟悉界面看到待办——待办只是投影，事实源仍是 `gates/*.json`；
-  绝不代写 approved（人审只能经 Console 裁决落账）。
-- gate 变 `approved` → 解除对应任务的阻塞（回 `running` 或 `queued` 派发）；
-  `denied` → 任务转 `cancelled` 并上行通知人。
-- **stub gate 分支**：手工放置的 gate 文件与本分支行为完全一致——巡场不区分
-  gate 来源，只看状态字段。
+### Step ④ Concurrency-Aware Dispatch
+- Count active `running` tasks to evaluate available capacity under R1.
+- Pick tasks from `queued` in order. Dispatch via `team_dispatch` (registers member, assigns task, sends dispatch envelope in one atomic step; **MUST explicitly specify `parent=<self>`**). Alternatively, execute equivalent 3-step path (`team_spawn` + `team_task_update(assignee)` + `team_send`) with `parent=<self>`.
+- **Mark Running Immediately**: Call `team_task_update(status=running)`. The state machine has no transition from `queued` directly to `done`. R1 slot accounting and R2 progress signals require `running` state.
+- Wake agent via `send_message` (direct children only).
 
-### 步骤 ③ blocked 上行计圈（R2/R3 在此生效）
+### Step ④′ Waiting Discipline
+- **Single-Turn Bounded Wait**: When waiting on subagents, wait within the current turn using bounded wait (`job_output(wait=true)` with timeout $\le 10$ minutes, or bounded sleep + `team_reconcile`). Avoid multi-turn polling loops that waste full context tokens.
+- **Max-Tokens Disarm Protection**: Do not concatenate massive outputs within one turn to avoid tripping context limits and causing goal disarm.
+- **Low-Cost Inspection Turn**: If wait reaches limit and turn ends, the next turn operates as a low-cost check: call `team_reconcile` once; if no changes, terminate turn immediately without emitting empty events or blackboard noise.
 
-- 维护计数器：连续圈数内若无任何任务离开 `blocked` 或无新进展，`blocked_streak += 1`；
-  有任一进展则清零。
-- `blocked_streak >= 3`（R2）→ 熔断收官：经历宿主自治轮阈值（连续 $\ge 3$ 轮无进展）后，
-  调用合法的 `update_goal(action=blocked, blocked_reason="连续3圈无进展熔断: 任务阻塞于...")`
-  框架级收官，并输出上行摘要（哪些任务 blocked、卡在哪个 gate、已等几圈），
-  等待人工在主会话聊天框交互介入唤醒。
-- 单任务 `rounds` 超线（R3）→ 该任务由账本抛错后转 `blocked`，不影响其余任务继续。
+### Step ⑤ Completion & Shutdown
+- When all ledger tasks are `done` or `cancelled` and inbox is empty: call `update_goal(action=complete)` with final summary (task list, artifact pointers, audit event scope).
+- If tasks remain: conclude current turn and await next goal round wake-up.
 
-### 步骤 ④ 并发池内派发
+## 4. Operational Invariants
 
-- 数出当前 `running` 任务数（R1 上限内还有多少空位）。
-- 按 `queued` 顺序取任务补位：优先 `team_dispatch`
-  （注册 → 指派 → 派单一步完成；**非根成员必须显式携带
-  `parent=<本主控成员名>`**，缺失或悬空的 parent 会被 reconcile 孤儿标红；
-  中途失败即停并在错误消息中报告已完成步骤，据此决定续跑或回滚，
-  禁止盲目重放整段）；等效散装三步
-  `team_spawn` + `team_task_update(assignee)` + `team_send` 仍可使用，
-  同样不得省略 parent。
-- **派发后置 `running`**：`team_task_update(status=running)`——状态机无
-  queued 直达 done，且 R1 以 running 计占位、R2 以状态迁移计进展，
-  滞留 queued 即并发池虚空、进展信号丢失。
-- 派单后 `send_message` 唤醒该角色（仅直接子可唤醒）。
-- 无空位则本轮不派发。
-
-### 步骤 ④′ 等待纪律（派发后等待子代理期间生效）
-
-- **单 turn 有界阻塞优先**：等待子代理完成时，在当前 turn 内以有界阻塞
-  （对已知后台任务用 `job_output(wait=true)` 设超时上限；无后台句柄时用
-  有界 sleep + 一次 reconcile 核查）把整个等待窗消化在一个 turn 内；
-  goal 轮只在 turn 结束 idle 后推进，turn 内阻塞不消耗轮次。
-  取值锚点：单段阻塞上限默认 **10 分钟**，与宿主工具 timeout 封顶取较小者；
-  预算依据 = R3 单任务轮预算的分钟级折算，不随任务规模自由放大。
-- **禁止短轮询出 turn**：不允许「查一次状态即结束 turn」——那会把等待
-  摊进多个轮次/多次 LLM 往返，每次都付完整上下文代价。
-- **防 max-tokens 解除武装**：单 turn 内多次拼接模型输出撞上限会导致 goal
-  disarm，无人值守时全队停摆。长等待拆为多个有界阻塞段，每段之间只保留
-  最小核查动作，不堆叠长文输出。
-- **廉价检查轮**：阻塞达上限仍须出 turn 时，下一轮退化为廉价检查轮：
-  `team_reconcile` 一发核对等待集（blocked 分片 + 未 done 的 assignee），
-  无变化即直接结束本轮，**不写无信息量黑板、不产出凑数事件**。
-
-### 步骤 ⑤ 全 done 收圈
-
-- 账本全部任务 `done`/`cancelled` 且无未读信封 → `update_goal(action=complete)`
-  收圈：输出收圈摘要（任务清单、产物指针、审计事件范围）并触发归档。
-- 尚有工作 → 结束本轮 turn，等待 goal 下一轮唤醒。
-
-## 4. 循环不变量（验收口径）
-
-1. 一切状态迁移经 team_* 工具落账，无旁路写路径（事件流可完整回放）。
-2. **事件条数不是产出证明**：熔断判据以 R2 的进展定义为准（任务状态迁移 /
-   信箱确认 / 事物流入），不以「本轮写过黑板/发过事件」为准——禁止为凑
-   产出而写无信息量状态（等待期静默是常态，廉价检查轮允许零事件）。
-3. 接管后的第一件事是对账节，而不是继续派发。
+1. **Tool-Mediated State**: All state transitions MUST be committed through `team_*` tools. No side-channel file writes.
+2. **Events Are Not Progress**: Progress is strictly defined by R2 (task state transitions, inbox acks, event ingestion), NOT by emitting empty events or noise.
+3. **Reconciliation First**: The first action upon session start or takeover is ALWAYS the Startup Reconciliation protocol, never premature dispatch.

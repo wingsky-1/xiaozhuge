@@ -44,11 +44,11 @@ async function readBody(req: IncomingMessage): Promise<string> {
 }
 
 /** 启动消息头（不含规程正文）；bootMessage 与页面脚本共用同一前缀。
- * 尾部附首 turn 检查单（#79 L2）：注意力聚焦三件事，规程正文不再依赖跳读。 */
+ * 尾部附首 turn 检查单（ADR 0023 英文规范）。 */
 export const BOOT_MESSAGE_HEAD =
-  "团队已由人经入口创建，实例初始化完成。以下是你的 Tier-0 规程与场景编排" +
-  "提示词全文（规程在前、场景段在后，以固定分隔符分界），请从启动对账节开始执行。" +
-  "首 turn 检查单：① 第一个工具调用必须是 team_reconcile（readiness gate，失败即上行摘要）；② 确认 goal 已创建；③ 输出首轮摘要上行。";
+  "Team instance initialized. Please follow your System Prompt and execute the sequential startup protocol. " +
+  "First-turn checklist: (1) First tool call MUST be team_reconcile (readiness gate; report error if failed); " +
+  "(2) Verify or create tracking goal; (3) Anchor verbatim user objective to rooms/root/brief/user-request.md; (4) Output startup summary.";
 
 /** 启动消息 = 前缀 + 组装好的 tier0_prompt。 */
 export function bootMessage(tier0Prompt: string): string {
@@ -145,6 +145,7 @@ export function makeLaunchRoutes(): WebRoute[] {
             source?: string;
             workspace?: string;
             instance_note?: string;
+            user_prompt?: string;
           };
           if (typeof body.session !== "string" || body.session.length === 0) {
             writeJson(res, 400, { error: "session required" });
@@ -176,6 +177,7 @@ export function makeLaunchRoutes(): WebRoute[] {
             source: body.source,
             project_root: body.workspace,
             instance_note: body.instance_note,
+            user_prompt: body.user_prompt,
           })) as Record<string, unknown>;
           writeJson(res, 200, value);
         } catch (error) {
@@ -332,9 +334,9 @@ $("#go").addEventListener("click", async () => {
       requestId: rpcUuid(),
       sessionId,
       mode: "queue",
-      content: [{ type: "text", text: BOOT_HEAD + "\\n\\n" + created.tier0_prompt }],
+      content: [{ type: "text", text: created.activation_prompt || (BOOT_HEAD + "\\n\\n" + created.tier0_prompt) }],
     });
-    log("规程已投递。打开会话 " + sessionId + " 即可开始。");
+    log("团队已激活。打开会话 " + sessionId + " 即可开始。");
     // Gate 待办入口（#195 U0-c）：人审是两个触点之一，建团完成即给出入口。
     // DOM API + textContent 赋值（sessionId 经 encodeURIComponent），无 innerHTML 注入面。
     const link = document.createElement("a");
