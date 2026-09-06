@@ -19,6 +19,7 @@ import type {
 import {
   ensureDir,
   writeJsonAtomic,
+  writeTextAtomic,
   layout,
   assembleTier0Prompt,
   buildActivationPrompt,
@@ -45,7 +46,15 @@ import {
   validateMemberName,
   SAFE_NAME_PATTERN,
   staleVerdict,
+  briefMarkdown,
+  briefFileFor,
+  briefHasFrameworkMarker,
+  collectEventStats,
+  evaluateProtocolHealth,
+  DEVIATION_EVENT,
+  BRIEF_FRAMEWORK_MARKER,
 } from "../runtime/index.js";
+import type { HealthItem } from "../runtime/index.js";
 import { userTemplatesRoot, projectTemplatesRoot } from "./team-home.js";
 import { appendToolManifest } from "./tool-manifest.js";
 import { auditWorkspace } from "./workspace-audit.js";
@@ -359,6 +368,15 @@ export function createHandlers(
     await eventLog.append({ session_id: sessionId, actor, type, payload });
   }
 
+  /** appendEvent 带返回 seq 的变体（#212 deviation 首检留痕回填 first_detected_seq）。 */
+  async function appendEventSeq(actor: string, type: string, payload: unknown, room = "root"): Promise<number> {
+    await ensureDir(join(l.roomsDir, room));
+    const eventLog = log(room);
+    await eventLog.init();
+    const rec = await eventLog.append({ session_id: sessionId, actor, type, payload });
+    return rec.seq;
+  }
+
   // 心跳刷新（#97，ADR 0016）：归属采事件流 actor 镜像口径——凡调用以成员
   // X 的名义产生账面写副作用（登记/投递/交接）即刷 X 的 lastSeen；"system"
   // 与无归属不刷。caller 权威身份仅承担 forbidden 门（Wave 1b 写面收敛），
@@ -505,10 +523,24 @@ export function createHandlers(
         const scenarioPrompt = loaded.prompts[tier0PromptPath] ?? "";
         const systemPrompt = appendToolManifest(assembleTier0Prompt(playbook, scenarioPrompt));
 
-        // 工作区持久化（ADR 0015）+ 系统提示词快照（ADR 0023）。
+        // brief 工件化框架落盘（#212 P0-1，ADR 0024）：用户原文 verbatim 直通 +
+        // framework-written 水印头；空输入写占位（与 activation 兜底占位同源常量）。
+        // 机制替代提示词——playbook 不再要求主控「手写」brief，只 verify + read back。
+        // 覆盖防御：目标在场且无水印（master 补写形态）时不覆盖；框架水印在场
+        // 或缺失时刷新（同会话重入幂等）。
+        const userPromptForBrief = typeof args.user_prompt === "string" ? args.user_prompt : null;
+        const briefTarget = briefFileFor(l.teamHome);
+        const briefExistingText = existsSync(briefTarget) ? readFileSync(briefTarget, "utf8") : null;
+        const briefIsMasterRewritten =
+          briefExistingText !== null && !briefExistingText.includes(BRIEF_FRAMEWORK_MARKER);
+        if (!briefIsMasterRewritten) {
+          await writeTextAtomic(briefTarget, briefMarkdown(userPromptForBrief));
+        }
+
+        // 工作区持久化（ADR 0015）+ 系统提示词快照（ADR 0023）+ brief 标志（#212）。
         await writeJsonAtomic(
           l.teamYaml,
-          instantiateSnapshot(loaded, playbook.digest, projectRoot, systemPrompt),
+          instantiateSnapshot(loaded, playbook.digest, projectRoot, systemPrompt, true),
         );
         // L1 预登记（#79）：tier0 主控根成员在 init 时入册——G0 边界把
         // agents.json 登记列为运行时确定性操作，不依赖提示词自觉。主控
@@ -1183,6 +1215,46 @@ export function createHandlers(
           last_seen_age_ms: a.lastSeenAgeMs,
         }));
 
+        // 协议偏差机械检测（#212 P0-2，ADR 0024，report-only）：确定性事实
+        // 全部框架在手（事件流 kind 计数 / brief 在场与水印 / 快照标志 / 模板
+        // 义务声明）。warning 首检落 deviation 留痕事件（幂等：留痕已在场不
+        // 重复 append，repeat 标志供消费方抑制——告警疲劳防护）。
+        const stats = await collectEventStats(l.roomsDir);
+        const healthInput = {
+          initialized: snapshot !== null,
+          briefFrameworkWritten:
+            snapshot && typeof snapshot.brief_framework_written === "boolean"
+              ? (snapshot.brief_framework_written as boolean)
+              : null,
+          briefExists: existsSync(briefFileFor(teamHome)),
+          briefHasFrameworkMarker: briefHasFrameworkMarker(teamHome),
+          blackboardRequiredRoles: Array.isArray(
+            snapshot?.blackboard_required_roles as unknown,
+          )
+            ? (snapshot!.blackboard_required_roles as string[])
+            : [],
+          stats,
+          nowMs: now,
+        };
+        const protocolHealth = evaluateProtocolHealth(healthInput);
+        if (snapshot !== null) {
+          for (const item of protocolHealth.items) {
+            if (item.status !== "warning") continue;
+            const known = stats.deviations.get(item.check);
+            if (known !== undefined) {
+              item.first_detected_seq = known;
+              item.repeat = true;
+              item.detail = `repeat (first detected at seq ${known}): ${item.detail}`;
+              continue;
+            }
+            const appended = await appendEventSeq("system", DEVIATION_EVENT, {
+              check: item.check,
+              detail_digest: item.detail.slice(0, 200),
+            });
+            item.first_detected_seq = appended;
+          }
+        }
+
         const overview = {
           initialized: snapshot !== null,
           snapshot: snapshot && {
@@ -1202,6 +1274,11 @@ export function createHandlers(
           // running 任务对按 room + mutexGroups/touched 判定；空数组合法态
           // 恒输出——固定输出 schema 供契约测试断言（ADR 0015 先例）。
           active_mutex_conflicts: findConflicts(tasks),
+          // 协议偏差机械检测（#212 P0-2，ADR 0024，report-only）：items 恒
+          // 在场、各检测项三态（available/not-applicable/warning），消费方
+          // 零条件分支；误报率数据经 deviation 留痕事件沉淀（ADR 0015
+          // report-only → 硬卡点的渐进桥）。
+          protocol_health: protocolHealth,
           master_idle,
           stale_members,
           awaiting_input,

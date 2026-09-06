@@ -31,6 +31,10 @@ export interface WorkspaceAuditReport {
   /** 账本登记了、但工作树中不存在的路径（过期登记）。 */
   stale_registered_paths: string[];
   truncated: boolean;
+  /** 框架状态目录污染疑似（#212 P0-2 派生标注；仅特征文件命中时在场）。 */
+  rooms_pollution_suspected?: boolean;
+  /** 污染疑似证据：命中框架运行时特征的相对路径（元数据-only，无内容）。 */
+  rooms_pollution_evidence?: string[];
 }
 
 /** 固定忽略目录（构建产物 / 依赖 / 版本控制 / 框架运行时）。 */
@@ -141,11 +145,29 @@ export function auditWorkspace(workspace: string | null, registeredPaths: string
     (p) => !existsSync(join(workspace, p)),
   );
 
+  // 框架状态目录污染派生标注（#212 P0-2，report-only；ADR 0024）。
+  // 判据 = 框架运行时特征文件命中：`rooms/root/events.jsonl` 或
+  // `rooms/root/brief/` 下文件——项目自带的业务 rooms/ 目录（无 root
+  // 运行时特征）不标，压误报；复用同一遍历结果，零新增扫描。
+  const pollutionEvidence = unregistered_files
+    .map((f) => f.path)
+    .filter(
+      (p) =>
+        p === join("rooms", "root", "events.jsonl") ||
+        p.startsWith(join("rooms", "root", "brief") + sep),
+    );
+
   return {
     available: true,
     scanned_root: workspace,
     unregistered_files,
     stale_registered_paths,
     truncated: state.truncated,
+    ...(pollutionEvidence.length > 0
+      ? {
+          rooms_pollution_suspected: true,
+          rooms_pollution_evidence: pollutionEvidence,
+        }
+      : {}),
   };
 }

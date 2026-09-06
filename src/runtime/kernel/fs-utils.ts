@@ -35,6 +35,15 @@ export async function writeJsonAtomic(file: string, value: unknown): Promise<voi
   await writeFileAtomic(file, JSON.stringify(value, null, 2), "utf8");
 }
 
+/**
+ * 原子写 UTF-8 文本（#212 P0-1 brief 工件化）：与 {@link writeJsonAtomic}
+ * 同一 write-file-atomic 通道（同目录临时文件 + rename）。
+ */
+export async function writeTextAtomic(file: string, text: string): Promise<void> {
+  await ensureDir(dirname(file));
+  await writeFileAtomic(file, text, "utf8");
+}
+
 /** 读 JSON 文件；不存在时返回 undefined。 */
 export async function readJson<T>(file: string): Promise<T | undefined> {
   if (!existsSync(file)) return undefined;
