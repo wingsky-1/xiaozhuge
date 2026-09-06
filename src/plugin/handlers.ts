@@ -285,7 +285,16 @@ export interface Handlers {
   reconcile: (args: Record<string, unknown>) => Promise<unknown>;
 }
 
-export function createHandlers(teamHome: string, sessionId: string, caller: Caller = undefined): Handlers {
+export function createHandlers(
+  teamHome: string,
+  sessionId: string,
+  caller: Caller = undefined,
+  // #192：宿主存活探测回调（官方 subagent 发现 API 适配点）。runtime 层保持
+  // 平台无关纯库（零 harness 依赖），发现面由 plugin 装配层注入：返回「durableId
+  // → 宿主侧 activity（running/inactive）」映射。best-effort：探测失败返回
+  // 空映射（liveness.source=unavailable），不阻断对账（V3 存活列口径的官方化升级）。
+  livenessProbe?: () => Promise<Map<string, "running" | "inactive">>,
+): Handlers {
   const l = layout(teamHome);
   let ledger: Ledger | undefined;
   let registry: Registry | undefined;
@@ -1019,6 +1028,26 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
         const hasAnyTask = (member: string): boolean => tasks.some((t) => t.assignee === member);
         const hasActiveTask = (member: string): boolean =>
           tasks.some((t) => t.assignee === member && t.status !== "done" && t.status !== "cancelled");
+        // #192：存活观测先于 memberLedger 组装（liveness 列消费探测结果）。
+        let liveByDurableId: Map<string, "running" | "inactive"> | null = null;
+        let livenessSource: "subagent-discovery" | "unavailable" = "unavailable";
+        if (livenessProbe !== undefined) {
+          try {
+            liveByDurableId = await livenessProbe();
+            livenessSource = "subagent-discovery";
+          } catch {
+            liveByDurableId = null;
+            livenessSource = "unavailable";
+          }
+        }
+        const annotateLiveness = (m: MemberRecord): string => {
+          if (liveByDurableId === null) return "framework-invisible";
+          if (m.tier === 0) return "root-session"; // 主控 = 宿主主会话，不经 subagent 面
+          const live = liveByDurableId.get(m.durableId);
+          if (live === "running") return "running";
+          if (live === "inactive") return "inactive";
+          return "missing"; // 发现面枚举不到 = 冷子代理/已释放（能力性缺席）
+        };
         const memberLedger = members.map((m) => ({
           member: m.member,
           durable_id: m.durableId,
@@ -1028,7 +1057,7 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
             m.status === "spawned" && hasAnyTask(m.member) && !hasActiveTask(m.member)
               ? ("stopped" as const)
               : m.status,
-          liveness: "framework-invisible",
+          liveness: annotateLiveness(m),
           assigned_task_ids: byAssignee.get(m.member) ?? [],
         }));
         // 悬空态检测：账本指派了、但注册表无此成员。
@@ -1135,6 +1164,9 @@ export function createHandlers(teamHome: string, sessionId: string, caller: Call
             instantiated_at: snapshot.instantiated_at ?? null,
           },
           members: memberLedger,
+          // #192：存活核对来源（subagent-discovery = 官方发现 API 接入；
+          // unavailable = 未注入探测回调或探测失败，liveness 列保持旧口径）。
+          liveness_source: livenessSource,
           dangling_assignees,
           orphan_members,
           // 互斥冲突标注（#137，report-only）：findConflicts 对当前账本全量

@@ -26,7 +26,15 @@ interface RegisteredSection {
   text: string | ((context: { agent?: { id?: string } }) => string);
 }
 
-function makeHost() {
+function makeHost(opts?: {
+  /** #192：注入宿主 subagents 发现服务（listDescendants fake）。 */
+  subagents?: {
+    listDescendants: (
+      rootSessionId: string,
+      signal?: AbortSignal,
+    ) => Promise<Array<{ kind: string; id: string; activity?: string }>>;
+  };
+}) {
   const registered = new Map<string, RegisteredTool>();
   const sections = new Map<string, RegisteredSection>();
   const logs: string[] = [];
@@ -50,7 +58,7 @@ function makeHost() {
       warn: (msg: string) => logs.push(msg),
     },
     get(key: string) {
-      void key;
+      if (key === "subagents" && opts?.subagents !== undefined) return opts.subagents;
       return undefined;
     },
   };
@@ -219,6 +227,70 @@ describe("execute 路由与输出包装", () => {
       .get("team_inbox")!
       .execute({ member: "qa" }, exec)) as { unread: unknown[] };
     expect(inbox.unread).toHaveLength(1);
+  });
+
+  it("#192 存活探测：宿主 subagents 发现服务在场时 reconcile liveness 列为官方观测值", async () => {
+    // fake listDescendants：记录树根断言 + 返回一 child 一 diagnostic。
+    const probedRoots: string[] = [];
+    const { registered } = makeHost({
+      subagents: {
+        async listDescendants(rootSessionId: string) {
+          probedRoots.push(rootSessionId);
+          return [
+            { kind: "child", id: "dur-live", activity: "running" },
+            { kind: "child", id: "dur-cold", activity: "inactive" },
+            { kind: "diagnostic", id: "dur-broken", reason: "corrupt" },
+          ];
+        },
+      },
+    });
+    await createHandlers(resolveTeamHome("session-live"), "session-live", rootCaller()).init({});
+    await registered.get("team_spawn")!.execute(
+      { member: "coder", durable_id: "dur-live", role: "coder", tier: 1 },
+      { agent: { id: "session-live" } },
+    );
+    await registered.get("team_spawn")!.execute(
+      { member: "writer", durable_id: "dur-cold", role: "writer", tier: 1 },
+      { agent: { id: "session-live" } },
+    );
+    await registered.get("team_spawn")!.execute(
+      { member: "ghost", durable_id: "dur-broken", role: "ghost", tier: 1 },
+      { agent: { id: "session-live" } },
+    );
+    const view = (await registered.get("team_reconcile")!.execute(
+      {},
+      { agent: { id: "session-live" } },
+    )) as {
+      liveness_source: string;
+      members: Array<{ member: string; liveness: string }>;
+    };
+    expect(view.liveness_source).toBe("subagent-discovery");
+    // 探测树根 = 实例根（主会话 id），非子代理反查路径。
+    expect(probedRoots).toEqual(["session-live"]);
+    // kind=child → activity 直传；diagnostic → 保守缺席（missing）；
+    // tier0 主控 → root-session 豁免。
+    expect(view.members.find((m) => m.member === "master")?.liveness).toBe("root-session");
+    expect(view.members.find((m) => m.member === "coder")?.liveness).toBe("running");
+    expect(view.members.find((m) => m.member === "writer")?.liveness).toBe("inactive");
+    expect(view.members.find((m) => m.member === "ghost")?.liveness).toBe("missing");
+  });
+
+  it("#192 存活探测：宿主服务未挂载 → liveness_source=unavailable（对账不阻断）", async () => {
+    const { registered } = makeHost(); // 无 subagents 服务
+    await createHandlers(resolveTeamHome("session-nolive"), "session-nolive", rootCaller()).init({});
+    await registered.get("team_spawn")!.execute(
+      { member: "qa", durable_id: "d-q2", role: "qa", tier: 1 },
+      { agent: { id: "session-nolive" } },
+    );
+    const view = (await registered.get("team_reconcile")!.execute(
+      {},
+      { agent: { id: "session-nolive" } },
+    )) as {
+      liveness_source: string;
+      members: Array<{ member: string; liveness: string }>;
+    };
+    expect(view.liveness_source).toBe("unavailable");
+    expect(view.members.find((m) => m.member === "qa")?.liveness).toBe("framework-invisible");
   });
 });
 

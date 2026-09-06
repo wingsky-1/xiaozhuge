@@ -107,6 +107,47 @@ export function apply(ctx: {
 }): () => void {
   void ctx.get;
   const disposers: Array<() => void> = [];
+
+  /**
+   * #192：宿主存活探测回调（官方 subagent 发现 API 适配点，AGENTS.md 规则 11
+   * 官方对照：@deepseek-ai/dsh-subagent 0.1.2-rc.1 `SubagentRuntime.listDescendants`
+   * ——不加载/不唤醒子 agent 的只读枚举，血缘 + activity 一次带回）。
+   * 语义映射：entry.kind === "child" → activity（running/inactive）按 durableId
+   * 归档；diagnostic 条目（corrupt/unavailable）不计入存活集（保守缺席）。
+   * 探测失败/服务未挂载 → 空映射（handlers 层 liveness_source=unavailable 退化
+   * 旧口径），不阻断对账主流程。树根由 handlersFor 闭合进探测闭包（一次调用
+   * 上下文一个根），避免跨实例误枚举。
+   */
+
+  function makeLivenessProbe(
+    rootSessionId: string,
+  ): () => Promise<Map<string, "running" | "inactive">> {
+    return async () => {
+      const subagents = ctx.get("subagents") as
+        | {
+            listDescendants(
+              rootSessionId: string,
+              signal?: AbortSignal,
+            ): Promise<Array<{ kind: string; id: string; activity?: string }>>;
+          }
+        | undefined;
+      if (subagents === undefined || typeof subagents.listDescendants !== "function") {
+        // 服务未挂载：探测失败语义（handlers 层退化 framework-invisible 旧口径，
+        // liveness_source=unavailable），不与「服务在场但枚举为空」混淆。
+        throw new Error("subagent discovery service not mounted");
+      }
+      const live = new Map<string, "running" | "inactive">();
+      const entries = await subagents.listDescendants(rootSessionId);
+      for (const e of entries) {
+        if (e.kind !== "child") continue;
+        if (e.activity === "running" || e.activity === "inactive") {
+          live.set(e.id, e.activity);
+        }
+      }
+      return live;
+    };
+  }
+
   // 会话 -> handler 缓存：键 = 调用会话 id（agent.id），值 = 反查所得实例根上的
   // handler 集。不变量：一次会话生命周期内 durableId→实例映射不变（同一会话
   // 永远解析到同一 teamHome，缓存以会话 id 为键成立）；DSH_HOME 运行期变更 /
@@ -130,7 +171,16 @@ export function apply(ctx: {
           : existsSync(join(resolveTeamHome(sessionId), "team.yaml"))
             ? { kind: "root" }
             : undefined;
-      h = createHandlers(resolution.teamHome, sessionId, caller);
+      // #192：探测树根 = 实例根会话 id。membership 命中即子代理 → 用反查
+      // 所得的 root_session；主控自身 → 用调用会话 id（主会话直查场景）。
+      const probeRoot =
+        resolution.membership !== null ? resolution.membership.root_session : sessionId;
+      h = createHandlers(
+        resolution.teamHome,
+        sessionId,
+        caller,
+        makeLivenessProbe(probeRoot),
+      );
       // 缓存不变量（复核必改 5）：键 = 调用会话 id，值 = 反查所得实例根上的
       // handler 集；一次会话生命周期内 durableId→实例映射不变。DSH_HOME 运行期
       // 变更 / 实例迁移不在支持范围——需重启插件进程重建。
