@@ -40,7 +40,7 @@ Minimal loop for one item: Create `<item>-spec` -> `spec-writer` outputs 4-secti
 
 ## Dispatch Protocols
 
-- **Verbatim User Request**: Dispatch brief `background` section MUST paste raw user request verbatim without omission or paraphrasing. Write verbatim request to `rooms/root/brief/user-request.md` as team ground truth and attach path in briefs.
+- **Verbatim User Request**: Dispatch brief `background` section MUST paste raw user request verbatim without omission or paraphrasing. The framework pre-writes it to `rooms/root/brief/user-request.md` at init (instance-root absolute path) — verify + read back, do NOT rewrite it; attach path in briefs.
 - **Inlined Role Definitions**: Retrieve `roles[].prompt_inlined` from `team.yaml` snapshot and pass via `team_dispatch(role_inline.prompt)`. NEVER rewrite role prompts from memory.
 - **Unique Member Instances**: `member` parameter in `team_dispatch`/`team_spawn` MUST use unique name `<role>-<suffix>` (e.g. `coder-a1b2c3`). NEVER reuse bare role names for subsequent instances.
 - **Dispatch Sequence**:

@@ -48,7 +48,7 @@ async function readBody(req: IncomingMessage): Promise<string> {
 export const BOOT_MESSAGE_HEAD =
   "Team instance initialized. Please follow your System Prompt and execute the sequential startup protocol. " +
   "First-turn checklist: (1) First tool call MUST be team_reconcile (readiness gate; report error if failed); " +
-  "(2) Verify or create tracking goal; (3) Anchor verbatim user objective to rooms/root/brief/user-request.md; (4) Output startup summary.";
+  "(2) Verify or create tracking goal; (3) Verify the framework-written brief at rooms/root/brief/user-request.md (instance-root absolute path on takeover; never write a relative path); (4) Output startup summary.";
 
 /** 启动消息 = 前缀 + 组装好的 tier0_prompt。 */
 export function bootMessage(tier0Prompt: string): string {

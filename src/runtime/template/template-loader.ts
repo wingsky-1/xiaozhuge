@@ -144,6 +144,7 @@ export function instantiateSnapshot(
   playbookDigest?: string,
   workspace?: string,
   systemPrompt?: string,
+  briefFrameworkWritten?: boolean,
 ): Record<string, unknown> {
   return {
     name: loaded.template.name,
@@ -156,6 +157,19 @@ export function instantiateSnapshot(
     workspace: workspace ?? null,
     // 系统提示词（ADR 0023）：供 host systemPrompt 注入读取；旧快照无此字段为 null。
     system_prompt: systemPrompt ?? null,
+    // brief 工件化标志（#212 P0-1）：init 时框架已落盘 brief → true；
+    // 存量快照无此字段 → null → protocol_health 的 brief 检测输出
+    // not-applicable（防升级后存量实例全量误报）。旧快照按缺省容忍（只增不改）。
+    brief_framework_written: briefFrameworkWritten === true ? true : null,
+    // 黑板产出义务角色清单（#212 P0-2，模板声明、机器可读）：blackboard_silent
+    // 检测的前置条件——空/缺失 = 检测 not-applicable（ADR 0015 确定性/判断性
+    // 分离：是否应当写黑板是判断性成分，交由场景模板显式声明后才成确定性事实）。
+    blackboard_required_roles: Array.isArray(
+      (loaded.template as { blackboard_required_roles?: unknown }).blackboard_required_roles,
+    )
+      ? ((loaded.template as unknown as { blackboard_required_roles: string[] })
+          .blackboard_required_roles)
+      : [],
     // 通讯模式与 explicit 白名单（#138）：运行时可达性判定的载体；旧快照无
     // 此字段按缺省容忍（只增不改）——读取侧以 `comm_mode ?? "auto"` 归一。
     comm_mode: loaded.template.comm_mode ?? "auto",
@@ -211,6 +225,52 @@ export interface ActivationPromptParams {
 }
 
 /**
+ * 空 objective 兜底占位（ADR 0023）：brief 落盘与 activation 消息共用
+ * 同一常量——两处文案同源，防双事实源漂移（#212 P0-1）。
+ */
+export const USER_OBJECTIVE_PLACEHOLDER =
+  "(No initial user objective provided. Stand by for instructions or inspect project backlog.)";
+
+/**
+ * brief 锚点文件的实例根相对路径（#212 P0-1）。框架内唯一常量：init 落盘、
+ * reconcile 检测、activation 提示共用；playbook/模板侧为文档化引用（人工
+ * 同步，靠 playbook-guard 特征句守门防漂移）。
+ */
+export const BRIEF_REL_PATH = "rooms/root/brief/user-request.md";
+
+/** brief 落盘水印标记：检测器以此区分 framework_written / master_written（#212）。 */
+export const BRIEF_FRAMEWORK_MARKER = "framework-written";
+
+/**
+ * brief 原子写大小上限（字节）：超长 user_prompt 截断 + 标注，
+ * 防撑爆成员读回上下文（#212 评审 3.2）。
+ */
+export const BRIEF_MAX_BYTES = 64 * 1024;
+
+/**
+ * 构造 brief 锚点文件内容（#212 P0-1）：水印头 + verbatim 原文直通。
+ * 空输入写占位（与 activation 兜底占位同源）；超限截断并标注。
+ */
+export function briefMarkdown(userPrompt: string | null): string {
+  const raw = (userPrompt ?? "").trim();
+  const truncated = Buffer.byteLength(raw, "utf8") > BRIEF_MAX_BYTES;
+  const body =
+    raw.length === 0
+      ? USER_OBJECTIVE_PLACEHOLDER
+      : truncated
+        ? `${Buffer.from(raw, "utf8").subarray(0, BRIEF_MAX_BYTES).toString("utf8")}\n\n[truncated: exceeded ${BRIEF_MAX_BYTES} bytes limit]`
+        : raw;
+  return [
+    `<!-- ${BRIEF_FRAMEWORK_MARKER}: verbatim user objective artifact; master MUST NOT rewrite -->`,
+    "",
+    "# User Objective (verbatim)",
+    "",
+    body,
+    "",
+  ].join("\n");
+}
+
+/**
  * 构造首轮精炼激活消息（ADR 0023 解耦规范）：
  * 包含用户原始目标（保持原文直通）、实例元数据与首轮行动指令。
  */
@@ -219,7 +279,7 @@ export function buildActivationPrompt(params: ActivationPromptParams): string {
   const objectiveSection =
     userRequest.length > 0
       ? `## User Objective\n${userRequest}`
-      : `## User Objective\n(No initial user objective provided. Stand by for instructions or inspect project backlog.)`;
+      : `## User Objective\n${USER_OBJECTIVE_PLACEHOLDER}`;
 
   const metaItems = [
     `- **Scenario**: ${params.scenario}`,
@@ -238,7 +298,7 @@ export function buildActivationPrompt(params: ActivationPromptParams): string {
     "First-turn checklist:",
     "1. First tool call MUST be `team_reconcile` (readiness gate; report error if failed).",
     "2. Verify or create tracking goal (`create_goal`).",
-    "3. Anchor verbatim user objective to `rooms/root/brief/user-request.md`.",
+    `3. Verify the framework-written brief at \`${BRIEF_REL_PATH}\` (instance-root absolute path; framework wrote the verbatim objective at init).`,
     "4. Output startup summary and begin patrol loop.",
   ].join("\n");
 }

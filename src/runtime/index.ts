@@ -36,6 +36,7 @@ export {
   linkNoReplace,
   readJson,
   writeJsonAtomic,
+  writeTextAtomic,
   sweepTmp,
   confineToRoot,
   TMP_PREFIX,
@@ -59,6 +60,22 @@ export {
 export type { ReachabilityResult, TreeViolation, CommMode, CommEdge } from "./kernel/reachable.js";
 export { EventLog, WRITER_LOCK_SUFFIX } from "./kernel/event-log.js";
 export type { AppendInput, ReadResult } from "./kernel/event-log.js";
+export {
+  collectEventStats,
+  evaluateProtocolHealth,
+  briefFileFor,
+  briefHasFrameworkMarker,
+  emptyEventStats,
+  NO_DELEGATION_GRACE_MS,
+  DEVIATION_EVENT,
+} from "./kernel/protocol-health.js";
+export type {
+  ProtocolEventStats,
+  ProtocolHealthInput,
+  ProtocolHealthReport,
+  HealthItem,
+  HealthStatus,
+} from "./kernel/protocol-health.js";
 export { Registry } from "./kernel/registry.js";
 export {
   SESSION_PATTERN,
@@ -127,6 +144,11 @@ export {
   resolveScenarioDir,
   listScenarios,
   buildActivationPrompt,
+  USER_OBJECTIVE_PLACEHOLDER,
+  BRIEF_REL_PATH,
+  BRIEF_FRAMEWORK_MARKER,
+  BRIEF_MAX_BYTES,
+  briefMarkdown,
 } from "./template/template-loader.js";
 export type {
   LoadedTemplate,

@@ -75,7 +75,7 @@ interface ScenarioEntry {
  */
 export const BOOT_MESSAGE_HEAD =
   "Team instance initialized. Please follow your System Prompt and execute the sequential startup protocol. " +
-  "First-turn checklist: (1) First tool call MUST be team_reconcile (readiness gate; report error if failed); (2) Verify or create tracking goal; (3) Anchor verbatim user objective to rooms/root/brief/user-request.md; (4) Output startup summary.";
+  "First-turn checklist: (1) First tool call MUST be team_reconcile (readiness gate; report error if failed); (2) Verify or create tracking goal; (3) Verify the framework-written brief at rooms/root/brief/user-request.md (instance-root absolute path on takeover; never write a relative path); (4) Output startup summary.";
 
 /** 本插件注册名（cordis 名册 id = npm 包名，经 dsh.client 契约）。 */
 export const name = "@wingsky-1/dsh-xiaozhuge";

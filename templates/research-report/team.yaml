@@ -15,6 +15,10 @@ roles:
   - writer         # 编写
   - reviewer       # 复核（唯一 judge）
 comm_mode: auto
+# 黑板产出义务（#212 P0-2，ADR 0024）：完成任务时必须在黑板留下产出分片的
+# 角色——blackboard-silent 检测的机器可读前置条件；verifier/reviewer 等判断
+# 型角色豁免（未列即豁免）。
+blackboard_required_roles: [researcher, organizer, writer]
 archives:
   - id: run-log
     type: file

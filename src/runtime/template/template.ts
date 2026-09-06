@@ -236,6 +236,14 @@ export function validateTeamTemplate(tpl: unknown): ValidationResult {
       archives: z.array(z.unknown(), { error: "archives must be an array" }).optional(),
       gates: z.array(z.unknown(), { error: "gates must be an array" }).optional(),
       stages_ext: z.array(z.unknown(), { error: "stages_ext must be an array" }).optional(),
+      // 黑板产出义务角色清单（#212 P0-2）：场景模板显式声明哪些 role 完成
+      // 任务时必须在黑板留下产出分片——blackboard_silent 检测的前置条件
+      // （确定性/判断性分离：未声明 = 检测 not-applicable）。元素引用 role id。
+      blackboard_required_roles: z
+        .array(z.string({ error: "blackboard_required_roles must be an array of role ids" }), {
+          error: "blackboard_required_roles must be an array of role ids",
+        })
+        .optional(),
       source: z.enum(TEMPLATE_SOURCES as unknown as [string, ...string[]], { error: SOURCE_MSG }).optional(),
     })
     .loose();

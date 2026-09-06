@@ -23,6 +23,13 @@
 - **巡场循环**：dsh goal 原生驱动 + Tier-0 循环规程，无独立守夜人组件；
 - **单入口原则**：人只与 Tier-0 对话 + Gate 待办交互，其余一切只读。
 
+> **运行时状态落点**：框架状态（rooms/ledger/agents.json 等）全部锚定在实例根
+> `<DSH_HOME>/xiaozhuge/sessions/<主会话id>/`（详见
+> [ADR 0002](docs/adr/0002-persistence-layout-and-template-sources.md) 与
+> [docs/architecture.md](docs/architecture.md)），**永不写入 git 工作树**。
+> 主控规程中的 `rooms/...` 路径一律相对实例根；若发现 git 仓库出现未跟踪
+> `rooms/` 目录，即为主控旁路写盘违规，`team_reconcile(scope=audit)` 会检出。
+
 ## 状态与里程碑
 
 | 阶段 | 内容 | 状态 |
@@ -48,6 +55,7 @@
 - [ADR 0011](docs/adr/0011-team-launch-entry.md) — Team 拉起入口与 team_init 工具面下线（#51）
 - [ADR 0012](docs/adr/0012-two-stage-review.md) — oss-maintenance 两阶段核验（规格/成品双任务拆分，#46）
 - [ADR 0014](docs/adr/0014-in-session-team-launch.md) — 团队拉起入口收敛进会话输入框（#51 修订）
+- [ADR 0024](docs/adr/0024-brief-artifact-and-protocol-health.md) — brief 工件化框架落盘与协议偏差机械检测（#212）
 
 ## 内置模板（templates/）
 

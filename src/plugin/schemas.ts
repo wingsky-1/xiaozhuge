@@ -165,7 +165,8 @@ export const schemas = {
   },
   // team_reconcile（ADR 0015，#66）：对账全量视图一次返回；scope=audit 为
   // 旁路 report-only 子命令（只输出文件元数据，不读内容）。overview 含
-  // 互斥冲突标注 active_mutex_conflicts（#137，report-only，恒在场）。
+  // 互斥冲突标注 active_mutex_conflicts（#137，report-only，恒在场）与
+  // 协议偏差机械检测 protocol_health（#212，ADR 0024，report-only，恒在场）。
   reconcile: {
     parameters: {
       type: "object",
@@ -175,9 +176,11 @@ export const schemas = {
           enum: ["overview", "audit"],
           description:
             "overview (default): snapshot summary, member/ledger cross-view, task snapshot, " +
-            "active mutex conflicts (report-only), event cursors, goal placeholder. " +
+            "active mutex conflicts (report-only), protocol health deviations (report-only), " +
+            "event cursors, goal placeholder. " +
             "audit: additionally diffs ledger touched_paths " +
-            "against the recorded workspace tree (metadata only).",
+            "against the recorded workspace tree (metadata only), flagging suspected " +
+            "framework-state pollution under rooms/.",
         },
       },
       additionalProperties: false,
