@@ -14,10 +14,9 @@
  */
 import type { Shard } from "../collab/blackboard.js";
 import type { EventRecord } from "../kernel/types.js";
+import { staleVerdict } from "../kernel/stale.js";
 import {
-  STALE_THRESHOLD_MS,
   TASK_STATUSES,
-  type MemberRecord,
   type TaskRecord,
   type TaskStatus,
   type TeamRegistry,
@@ -279,21 +278,10 @@ function currentActivityFromExt(ext: unknown): string | null {
 }
 
 /**
- * ⚠️ 镜像实现注记（R4 双向同步）：本函数与 src/plugin/handlers.ts reconcile
- * 的 stale 标注段（L872-898 附近）是同一口径的镜像实现——reconcile 返回值是
- * 工具输出而非存储，detail 读面无法复用，且「handlers 写路径零触碰」红线禁止
- * 从 handlers 抽公共函数。修订任一侧判定规则（候选过滤 / 超阈比较 / 免责档 /
- * tier0 主控分支）必须双向同步另一侧，并以双方单测锚定 STALE_THRESHOLD_MS
- * 常量推导断言防漂移。口径逐条对齐 ADR 0016：
- * - 候选 = tier ≠ 0 且 status === "running" 且 Number.isFinite(lastSeen)
- *   （dead 一律不收录——lost 着色已表达防双计；spawned/stopped 非干活中）；
- * - 超阈判定 nowMs - lastSeen > STALE_THRESHOLD_MS 严格大于（恰达阈值不算；
- *   时钟回拨负 age 天然不超阈，无需特判）；
- * - 存在任一房间 status === "blocked" 分片者归 awaitingInput 免责档
- *   （等待输入 ≠ 停摆），否则入 staleMembers；
- * - tier0 不入两个名单：超阈单独置 masterIdle = true；注册表无 tier0 成员或
- *   其 lastSeen 非有限 → 恒 false（镜像 handlers Number.isFinite 分支）；
- * - 两名单均按 member localeCompare 升序输出。
+ * stale 判定（#194 F5-2 双镜像收敛）：判定逻辑唯一实现在
+ * src/runtime/kernel/stale.ts staleVerdict（handlers reconcile 标注段同消费），
+ * 本函数仅做视图侧适配——Shard[] → blocked 角色集聚合后委托共享函数。
+ * 口径细节见 stale.ts 头注（对齐 ADR 0016）。
  */
 export function staleAnnotations(
   registry: TeamRegistry,
@@ -305,32 +293,7 @@ export function staleAnnotations(
   for (const shard of shards) {
     if (shard.status === "blocked") blockedRoles.add(shard.role);
   }
-  const members = Object.values(registry.members);
-  const candidates = members.filter(
-    (m) => m.tier !== 0 && m.status === "running" && Number.isFinite(m.lastSeen),
-  );
-  const annotate = (m: MemberRecord): StaleAnnotation => ({
-    member: m.member,
-    lastSeenAgeMs: nowMs - m.lastSeen,
-  });
-  const byNameAsc = (a: { member: string }, b: { member: string }): number =>
-    a.member.localeCompare(b.member);
-  const overThreshold = (m: MemberRecord): boolean => nowMs - m.lastSeen > STALE_THRESHOLD_MS;
-  const tier0Master = members.find((m) => m.tier === 0);
-  return {
-    masterIdle:
-      tier0Master !== undefined &&
-      Number.isFinite(tier0Master.lastSeen) &&
-      nowMs - tier0Master.lastSeen > STALE_THRESHOLD_MS,
-    staleMembers: candidates
-      .filter((m) => overThreshold(m) && !blockedRoles.has(m.member))
-      .map(annotate)
-      .sort(byNameAsc),
-    awaitingInput: candidates
-      .filter((m) => overThreshold(m) && blockedRoles.has(m.member))
-      .map(annotate)
-      .sort(byNameAsc),
-  };
+  return staleVerdict(Object.values(registry.members), blockedRoles, nowMs);
 }
 
 /**

@@ -82,6 +82,8 @@ export {
 } from "./kernel/recovery.js";
 export type { DeliveryRecovery, SentinelRecovery } from "./kernel/recovery.js";
 export { RuntimeError, LedgerError, LockError, GateError } from "./kernel/errors.js";
+export { staleVerdict } from "./kernel/stale.js";
+export type { StaleMemberAnnotation, StaleVerdict } from "./kernel/stale.js";
 export {
   MAILBOX_SEGMENTS,
   DELIVERY_WAKEUP_MATRIX,

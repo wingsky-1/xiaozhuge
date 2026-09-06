@@ -40,11 +40,11 @@ import {
   deliver,
   readUnread,
   PROGRESS_CONTRACT,
-  STALE_THRESHOLD_MS,
   acquireCas,
   reachable,
   validateMemberName,
   SAFE_NAME_PATTERN,
+  staleVerdict,
 } from "../runtime/index.js";
 import { userTemplatesRoot, projectTemplatesRoot } from "./team-home.js";
 import { appendToolManifest } from "./tool-manifest.js";
@@ -155,6 +155,13 @@ function optStrArray(args: Record<string, unknown>, key: string): string[] | und
 
 /** role_inline 白名单（对齐模板 role schema 的动态字段，ADR 0015：随信封投递不持久化）。 */
 const ROLE_INLINE_FIELDS = ["prompt", "briefing", "dod", "max_hops", "as_judge"] as const;
+
+/**
+ * 心跳批刷窗口（#194 F3-2）：同一成员窗口内的重复心跳只在内存计数，到期才
+ * 落盘。取 30s = stale 阈值（30min）的 1/60，观测延迟相对阈值可忽略；
+ * 与 STALE_THRESHOLD_MS 的锚定关系在测试层断言（kernel 零反向依赖约束同款）。
+ */
+export const HEARTBEAT_FLUSH_INTERVAL_MS = 30_000;
 
 function optRoleInline(args: Record<string, unknown>): Record<string, unknown> | undefined {
   const v = args.role_inline;
@@ -358,14 +365,52 @@ export function createHandlers(
   // 不复用于账面归属——对照裁决见 issue #97 评论区 Wave 2 准备段。
   // best-effort：lastSeen 是可再生观测信号，刷新失败不得放大为调用失败
   // （宁漏刷不错杀主事务；下轮成功调用自愈），裁决记录于 ADR 0016。
+  //
+  // #194 F3-2 内存批刷（30s 粒度）：同一成员 HEARTBEAT_FLUSH_INTERVAL_MS 窗口
+  // 内的重复心跳只在内存计数，首个心跳立即落盘并开窗，窗口内的后续调用免写——
+  // 白名单七触点此前每次工具调用都整文件原子重写 + fsync，成员多时按注册表
+  // 大小线性放大（每次 O(注册表) 写放大）。磁盘 lastSeen 最大滞后 = 一个窗口
+  // （30s），相对 stale 阈值 30min（= 60 个窗口）可忽略（ADR 0016「分钟级
+  // 续轮节奏、非实时系统」口径）；批刷态仅存同进程内存，进程重启零残留。
+  //
+  // 机会式冲刷：任一成员的心跳调用顺带把「其他成员已到期窗口」落盘——
+  // 滞后上界 = 窗口 + 下一次同实例任意心跳；不挂读取侧冲刷（reconcile 等
+  // 只读面对账前不写盘：写路径零触碰，且读取侧冲刷会以当前时刻覆盖外部
+  // 直接改写的 lastSeen，破坏既有语义）。刻意不做到期定时器：handler 集
+  // 生命周期 = 调用会话，无 tick 循环，避免为观测信号引入常驻计时器。
+  const pendingHeartbeats = new Map<string, { count: number; nextFlushAt: number }>();
+
   async function heartbeat(member: string | undefined): Promise<void> {
     if (member === undefined || member === "system") return;
+    const nowMs = Date.now();
+    // ① 机会式冲刷：自身之外、窗口已到期的 pending 落盘（写次数仍 O(窗口)
+    // 而非 O(调用)；排除自身防「冲刷 + 立即写」同调用双写）。
+    for (const [m, e] of pendingHeartbeats) {
+      if (m !== member && nowMs >= e.nextFlushAt) {
+        pendingHeartbeats.delete(m);
+        try {
+          await reg().touchMember(m);
+        } catch {
+          // 吞错：观测信号写失败不影响主流程。
+        }
+      }
+    }
+    // ② 自身：窗口内 → 内存计数免写；首刷或窗口已过 → 立即落盘并开新窗口。
+    const entry = pendingHeartbeats.get(member);
+    if (entry !== undefined && nowMs < entry.nextFlushAt) {
+      entry.count += 1;
+      return;
+    }
     try {
       await reg().touchMember(member);
     } catch {
       // 吞错：观测信号一档陈旧不值得告警通道；插入点位于全部业务写成功
       // 之后，此处失败不影响本次调用的语义结果。
     }
+    pendingHeartbeats.set(member, {
+      count: 0,
+      nextFlushAt: nowMs + HEARTBEAT_FLUSH_INTERVAL_MS,
+    });
   }
 
   // 成员状态机迁移（Q6，#150）：写者 = 框架事件副作用——调用点在业务写成功
@@ -1119,40 +1164,24 @@ export function createHandlers(
           }
         }
 
-        // stale 心跳标注（#97，ADR 0016，report-only）：阈值与判定规则见
-        // types.ts STALE_THRESHOLD_MS（严格大于；dead 一律不收录——lost 着色
-        // 已表达防双计；tier0 主控不入名册，其静默独立走 master_idle 单项，
-        // 消除自刷矛盾与 reconcile 全员可调的续命放大通道；仅 status=running
-        // 的成员参与标注——spawned/stopped 非干活中；超阈且黑板任一分片
-        // blocked 者归 awaiting_input 免责档（等待输入 ≠ 停摆，避免误标触发
-        // 误干预）。时钟回拨致负 age 时天然不超阈，无需特判。
+        // stale 心跳标注（#97，ADR 0016，report-only）：#194 F5-2 双镜像收敛——
+        // 判定逻辑唯一实现在 runtime kernel/stale.ts staleVerdict（detail 视图
+        // 同消费），本处仅把 blockedIndex（Map）适配为 Set 后委托。口径细节
+        // （候选过滤/严格大于/免责档/tier0 主控单项/排序）见 stale.ts 头注。
         const now = Date.now();
-        const heartbeatCandidates = members.filter(
-          (m) => m.tier !== 0 && m.status === "running" && Number.isFinite(m.lastSeen),
+        const blockedRoles = new Set(
+          [...blockedIndex.entries()].filter(([, v]) => v === true).map(([k]) => k),
         );
-        const isOverThreshold = (m: MemberRecord): boolean =>
-          now - m.lastSeen > STALE_THRESHOLD_MS;
-        const formatStale = (m: MemberRecord): { member: string; last_seen_age_ms: number } => ({
-          member: m.member,
-          last_seen_age_ms: now - m.lastSeen,
-        });
-        const byNameAsc = (
-          a: { member: string },
-          b: { member: string },
-        ): number => a.member.localeCompare(b.member);
-        const stale_members = heartbeatCandidates
-          .filter((m) => isOverThreshold(m) && blockedIndex.get(m.member) !== true)
-          .map(formatStale)
-          .sort(byNameAsc);
-        const awaiting_input = heartbeatCandidates
-          .filter((m) => isOverThreshold(m) && blockedIndex.get(m.member) === true)
-          .map(formatStale)
-          .sort(byNameAsc);
-        const tier0Master = members.find((m) => m.tier === 0);
-        const master_idle =
-          tier0Master !== undefined &&
-          Number.isFinite(tier0Master.lastSeen) &&
-          now - tier0Master.lastSeen > STALE_THRESHOLD_MS;
+        const verdict = staleVerdict(members, blockedRoles, now);
+        const master_idle = verdict.masterIdle;
+        const stale_members = verdict.staleMembers.map((a) => ({
+          member: a.member,
+          last_seen_age_ms: a.lastSeenAgeMs,
+        }));
+        const awaiting_input = verdict.awaitingInput.map((a) => ({
+          member: a.member,
+          last_seen_age_ms: a.lastSeenAgeMs,
+        }));
 
         const overview = {
           initialized: snapshot !== null,
