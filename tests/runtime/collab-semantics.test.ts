@@ -126,6 +126,34 @@ describe("黑板分片", () => {
     expect(await getShard(home, "root", "coder")).toBeUndefined();
   });
 
+  it("#192 存活前置：aliveRoles 命中的 running 分片保留（热重载不误删），未命中的照常作废", async () => {
+    const home = tmpHome();
+    await setShard(home, "root", "coder", { status: "running", ext: { task: "t1" } });
+    await setShard(home, "root", "writer", { status: "running" });
+    await setShard(home, "root", "qa", { status: "done" });
+    const stateDir = join(home, "rooms", "root", "state");
+    // 热重载场景：coder 仍存活（宿主发现 API running），writer 已不在。
+    const alive = new Set(["coder"]);
+    const result = await discardRunningSentinels(stateDir, alive);
+    // coder 保留原分片（kept-alive），writer 作废，qa 非 running 不涉及。
+    expect(result).toEqual([
+      { role: "coder", action: "kept-alive" },
+      { role: "writer", action: "discarded" },
+    ]);
+    expect((await getShard(home, "root", "coder"))?.status).toBe("running");
+    expect((await getShard(home, "root", "coder"))?.ext).toEqual({ task: "t1" });
+    expect(await getShard(home, "root", "writer")).toBeUndefined();
+  });
+
+  it("#192 aliveRoles 缺省 = 全部作废（显式接管清场路径行为不变）", async () => {
+    const home = tmpHome();
+    await setShard(home, "root", "coder", { status: "running" });
+    const stateDir = join(home, "rooms", "root", "state");
+    const result = await discardRunningSentinels(stateDir);
+    expect(result).toEqual([{ role: "coder", action: "discarded" }]);
+    expect(await getShard(home, "root", "coder")).toBeUndefined();
+  });
+
   it("多实例同 role 分片互不覆盖（Q5，#159）：member 名带实例后缀各自独立文件", async () => {
     const home = tmpHome();
     await setShard(home, "root", "coder-a1b2c3", { status: "running", ext: { inst: "a" } });

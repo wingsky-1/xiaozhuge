@@ -389,6 +389,76 @@ describe("team_reconcile stale 心跳标注（#97 ADR 0016）", () => {
   });
 });
 
+describe("#192 存活核对官方化（subagent 发现 API 注入）", () => {
+  /** 构造带 livenessProbe 的 handlers：probe 返回固定 durableId → activity 映射。 */
+  function withProbe(
+    map: Map<string, "running" | "inactive">,
+  ): Handlers {
+    return createHandlers(home, SESSION, rootCaller(), async () => map);
+  }
+
+  it("探测命中：liveness 列升级为官方观测值，liveness_source=subagent-discovery", async () => {
+    await handlers.init({ project_root: workspace });
+    await handlers.spawn({ member: "coder", durable_id: "dur-c1", role: "coder", tier: 1 });
+    await handlers.spawn({ member: "writer", durable_id: "dur-w1", role: "writer", tier: 1 });
+    const probed = withProbe(
+      new Map([
+        ["dur-c1", "running"],
+        ["dur-w1", "inactive"],
+      ]),
+    );
+    const view = (await probed.reconcile({})) as {
+      liveness_source: string;
+      members: Array<{ member: string; tier: number; liveness: string }>;
+    };
+    expect(view.liveness_source).toBe("subagent-discovery");
+    // tier0 主控 = 宿主主会话，不经 subagent 面 → root-session。
+    expect(view.members.find((m) => m.member === "master")?.liveness).toBe("root-session");
+    expect(view.members.find((m) => m.member === "coder")?.liveness).toBe("running");
+    expect(view.members.find((m) => m.member === "writer")?.liveness).toBe("inactive");
+  });
+
+  it("发现面枚举不到的成员 → missing（保守缺席，供主控对账判 dead）", async () => {
+    await handlers.init({ project_root: workspace });
+    await handlers.spawn({ member: "coder", durable_id: "dur-c2", role: "coder", tier: 1 });
+    const probed = withProbe(new Map()); // 空枚举 = 全员缺席
+    const view = (await probed.reconcile({})) as {
+      members: Array<{ member: string; liveness: string }>;
+    };
+    expect(view.members.find((m) => m.member === "coder")?.liveness).toBe("missing");
+  });
+
+  it("探测抛错 → 退化为 framework-invisible 旧口径（liveness_source=unavailable），不阻断对账", async () => {
+    await handlers.init({ project_root: workspace });
+    await handlers.spawn({ member: "coder", durable_id: "dur-c3", role: "coder", tier: 1 });
+    const failing = createHandlers(home, SESSION, rootCaller(), async () => {
+      throw new Error("discovery unavailable");
+    });
+    const view = (await failing.reconcile({})) as {
+      liveness_source: string;
+      members: Array<{ member: string; liveness: string }>;
+      initialized: boolean;
+      task_status_counts: Record<string, number>;
+    };
+    expect(view.liveness_source).toBe("unavailable");
+    expect(view.members.find((m) => m.member === "coder")?.liveness).toBe("framework-invisible");
+    // 对账主体不受探测失败影响。
+    expect(view.initialized).toBe(true);
+    expect(view.task_status_counts).toEqual({});
+  });
+
+  it("未注入探测回调（既有路径）→ 全员 framework-invisible（行为不变）", async () => {
+    await handlers.init({ project_root: workspace });
+    await handlers.spawn({ member: "coder", durable_id: "dur-c4", role: "coder", tier: 1 });
+    const view = (await handlers.reconcile({})) as {
+      liveness_source: string;
+      members: Array<{ member: string; liveness: string }>;
+    };
+    expect(view.liveness_source).toBe("unavailable");
+    expect(view.members.every((m) => m.liveness === "framework-invisible")).toBe(true);
+  });
+});
+
 describe("team_reconcile scope=audit", () => {
   it("双向 diff：未登记文件命中、登记在案不误报、过期登记入 stale", async () => {
     // 工作树：src/a.ts（将登记）+ build.log（不登记）。

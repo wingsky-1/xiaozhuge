@@ -65,23 +65,37 @@ export async function recoverDeliveries(
 
 export interface SentinelRecovery {
   role: string;
-  action: "discarded";
+  action: "discarded" | "kept-alive";
 }
 
 /**
  * 黑板 running 哨兵处理：state/<role>.json 含 `"status":"running"` 的分片
  * 整体作废重做（unlink 整文件——半新半旧的脏黑板不可复用）。
+ *
+ * #192 存活前置（对抗评审 F1-7）：分片作废前按 `aliveRoles` 核对——
+ * 分片归属成员仍存活（在册且宿主发现 API 确认 running / 或注册表判定在干
+ * 干活）时跳过作废（action=kept-alive），消除「插件热重载/进程短暂重启而
+ * 成员仍存活 → 误删在干活的黑板」的误伤窗口。aliveRoles 缺省（undefined）
+ * 保持旧语义 = 全部作废（显式接管/收圈路径明确要求清场，行为不变）。
  */
-export async function discardRunningSentinels(stateDir: string): Promise<SentinelRecovery[]> {
+export async function discardRunningSentinels(
+  stateDir: string,
+  aliveRoles?: ReadonlySet<string>,
+): Promise<SentinelRecovery[]> {
   if (!existsSync(stateDir)) return [];
   const result: SentinelRecovery[] = [];
   for (const entry of await readdir(stateDir)) {
     if (!entry.endsWith(".json")) continue;
     const full = join(stateDir, entry);
+    const role = entry.replace(/\.json$/, "");
     const shard = await readJson<{ status?: string }>(full);
     if (shard?.status !== "running") continue;
+    if (aliveRoles !== undefined && aliveRoles.has(role)) {
+      result.push({ role, action: "kept-alive" });
+      continue;
+    }
     await rm(full);
-    result.push({ role: entry.replace(/\.json$/, ""), action: "discarded" });
+    result.push({ role, action: "discarded" });
   }
   return result;
 }
