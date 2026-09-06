@@ -127,7 +127,10 @@ function loadReportSource(seg, reportDir) {
 function loadBaselineSource(seg, root) {
   const baselinePath = join(root ?? ".", `${BASELINE_PREFIX}${seg}.json`);
   if (!existsSync(baselinePath)) {
-    bail(`段 ${seg} 未实跑且基线缺失：${baselinePath}（合成判分不放行）`);
+    bail(
+      `段 ${seg} 未实跑且基线缺失：${baselinePath}（合成判分不放行）。` +
+        "若本地缺失基线，请执行 pnpm mutation:restore 拉取孤立分支基线，或执行 pnpm mutation 跑全量。",
+    );
   }
   const totals = totalsFromReport(readJson(baselinePath));
   if (totals === null) {

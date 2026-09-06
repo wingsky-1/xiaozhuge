@@ -1,18 +1,13 @@
-# 变异测试基线归档（issue #62 建立机制；#101 P4 段式化；P1 PAT 自动化）：
-# 定时全量重跑变异并快照段式基线，PR 侧只做增量跑 + 聚合分数门禁。
-#
-# 为什么用 PAT 而非 GITHUB_TOKEN（issue #101 P1 实证）：GitHub 2026-06-11
-# 平台策略起，GITHUB_TOKEN 创建的 PR 其 CI run 需人工批准（action_required），
-# 自动归档链路反复卡死产出过期基线；PAT（secrets.BASELINE_PAT，细粒度、限本仓
-# contents+pull-requests）创建的快照 PR 以真人身份触发 CI 并自动放行。
-# ⚠ PAT 到期会静默断链——表现为快照 PR 再次卡 action_required，届时换发
-# token 更新 secret 即可（fail-visible）。
+# 变异测试基线全量刷新（#608 工业级孤立分支沉淀）：
+# 定时全量重跑变异并直接强推到独立孤立分支 refs/heads/baseline/mutation（深度恒为 1），
+# 彻底废除向 main 分支自动建 PR（杜绝主分支代码树膨胀、机器人 PR 噪音与 BASELINE_PAT 依赖）。
+# PR 门禁阶段仅需浅拉取孤立分支做增量跑 + 聚合分数门禁。
 name: Baseline
 
 on:
-  # 降频触发（维护者指示，2026-08-26）：每日北京时间 09:00（UTC 01:00）一次。
-  # 权衡留痕：基线新鲜度按天计足够——过期代价只是 PR 重测面扩大（慢）而非
-  # 正确性问题；逐合入快照的 git 体积与噪音不值得。手动 dispatch 兜底保留。
+  # 降频触发（维护者指示）：每日北京时间 09:00（UTC 01:00）一次。
+  # 权衡留痕：基线新鲜度按天计足够——过期代价只是 PR 重测面扩大少许（慢）而非
+  # 正确性问题；手动 dispatch 兜底保留。
   schedule:
     - cron: "0 1 * * *"
   workflow_dispatch:
@@ -26,7 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -36,58 +30,30 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      # 预先浅拉取孤立分支现存基线（作为增量执行与语义对比基准）
+      - name: Restore orphan branch baseline
+        run: node scripts/orphan-baseline.mjs restore
       # 全量跑 = 顺序执行 stryker.conf.d/ 全部段并聚合判分（scripts/mutation-all.mjs）
       - name: Mutation full run (aggregate score >= 70)
         run: pnpm mutation
-      # 规范化基线（剥运行期噪声、稳定键序）——快照 PR 的 diff 只含真实身份变化；
-      # 否则全量重跑的 status/location 漂移会让每次都产生假 diff。
+      # 规范化基线（剥运行期噪声、稳定键序）——使 diff 仅反映真实变异体身份变化
       - name: Normalize segment baselines
         run: node scripts/check-mutation-baseline.mjs --normalize
-      # 语义门控：与 HEAD 基线做身份集合比较，无实质差异则跳过快照 PR。
+      # 语义门控：与孤立分支当前基线做身份集合比较，无实质差异则跳过快照推送。
       # 复用校验脚本的退出码约定：1 = 存在内容级差异（此处即「需要快照」）。
       - name: Semantic diff gate
         id: semantic
         run: |
           if node scripts/check-mutation-baseline.mjs; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "基线无实质变化，跳过快照"
+            echo "基线无实质变化，跳过孤立分支快照"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "检测到变异体集合变化，进入快照"
+            echo "检测到变异体集合变化，准备推送孤立分支"
           fi
-      - name: Open baseline snapshot PR if changed
-        id: snapshot
+      # 强推至独立孤立分支（仅使用 Actions 默认 GITHUB_TOKEN，彻底摆脱 BASELINE_PAT 与机器人 PR）
+      - name: Push baseline snapshot to orphan branch
         if: steps.semantic.outputs.changed == 'true'
-        uses: peter-evans/create-pull-request@v7
-        with:
-          # PAT 身份：使快照 PR 的 CI 自动放行（GITHUB_TOKEN 会卡 action_required）
-          token: ${{ secrets.BASELINE_PAT }}
-          branch: chore/mutation-baseline
-          title: "chore: mutation baseline snapshot (segmented)"
-          body: |
-            自动归档：main 全量变异后的段式增量基线快照（issue #62 / #101 P1）。
-            合入后由 `paths-ignore` 防止再次触发全量跑。
-          commit-message: "chore: refresh stryker segmented incremental baselines"
-          add-paths: stryker-incremental-*.json
-          labels: chore
-      # merge 同样走 PAT：GITHUB_TOKEN 触发的 push 不产生 workflow run（防递归
-      # 机制），会导致「快照合入后的 main」从未被 CI 验证过；PAT 身份则正常触发。
-      # strict 分支保护要求 up-to-date：快照 PR 创建后 main 若前进会 BLOCKED，
-      # 故先 update-branch 同步并等待其 CI（skip 路由 + gauntlet，约 1 分钟）绿。
-      - name: Auto-merge baseline PR
-        if: steps.snapshot.outputs.pull-request-number != ''
         env:
-          GH_TOKEN: ${{ secrets.BASELINE_PAT }}
-        run: |
-          PR="${{ steps.snapshot.outputs.pull-request-number }}"
-          # 同步分支到最新 base；已最新时 update-branch 报无害错误（no changes）
-          gh pr update-branch "$PR" || true
-          # 最多等 5 分钟：路由应为 skip（仅基线文件），gauntlet 约 50s
-          for _ in $(seq 1 15); do
-            state="$(gh pr view "$PR" --json mergeStateStatus --jq .mergeStateStatus)"
-            if [ "$state" = "CLEAN" ] || [ "$state" = "MERGEABLE" ]; then
-              break
-            fi
-            sleep 20
-          done
-          gh pr merge --squash --delete-branch "$PR"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/orphan-baseline.mjs push

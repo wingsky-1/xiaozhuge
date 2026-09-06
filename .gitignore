@@ -19,3 +19,9 @@ reports/
 # 系统文件
 .DS_Store
 Thumbs.db
+.codegraph/
+
+# 变异测试增量基线（已转入孤立分支 baseline/mutation，杜绝主分支代码树膨胀与机器人 PR）
+stryker-incremental-*.json
+manifest.json
+

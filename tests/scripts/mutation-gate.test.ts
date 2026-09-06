@@ -23,6 +23,10 @@ import {
   compileGlob,
   discoverSegments as discoverRouteSegments,
 } from "../../scripts/mutation-segments.mjs";
+import {
+  checkMutationCoverage,
+  isServerSrcFile,
+} from "../../scripts/check-mutation-coverage.mjs";
 
 let root: string;
 
@@ -371,5 +375,73 @@ describe("P4 导出函数结构直测（#126）", () => {
     expect(r.rows.map((x) => x.seg)).toEqual(discoverSegments(gateDirs().confDir));
   });
 });
+
+describe("Anti-Silent-Drop 防漏测与防重合硬门禁（#608 工业级沉淀）", () => {
+  it("真实代码库中全部服务端业务 TS 源码 100% 互斥覆盖", () => {
+    const r = checkMutationCoverage();
+    expect(r.ok).toBe(true);
+    expect(r.uncovered).toEqual([]);
+    expect(r.duplicated).toEqual({});
+    expect(r.targetFiles.length).toBeGreaterThan(20);
+    expect(r.segments).toEqual(["handlers", "kernel", "plugin", "runtime-ext"]);
+  });
+
+  it("isServerSrcFile 严格排除声明文件与客户端 UI 模块", () => {
+    expect(isServerSrcFile("src/runtime/kernel/cas-lock.ts")).toBe(true);
+    expect(isServerSrcFile("src/plugin/handlers.ts")).toBe(true);
+    expect(isServerSrcFile("src/types/proper-lockfile.d.ts")).toBe(false);
+    expect(isServerSrcFile("src/client/fetch.ts")).toBe(false);
+    expect(isServerSrcFile("src/client/team-view.tsx")).toBe(false);
+    expect(isServerSrcFile("tests/unit/index.test.ts")).toBe(false);
+    expect(isServerSrcFile("package.json")).toBe(false);
+  });
+
+  it("当存在漏测文件时，checkMutationCoverage 立即阻断并报告未覆盖文件", () => {
+    const fixtureRoot = mkdtempSync(join(tmpdir(), "anti-drop-uncovered-"));
+    try {
+      const cDir = join(fixtureRoot, "conf.d");
+      const sDir = join(fixtureRoot, "src");
+      mkdirSync(cDir, { recursive: true });
+      mkdirSync(join(sDir, "mod"), { recursive: true });
+
+      // 仅覆盖 a.ts，漏测 b.ts
+      writeFileSync(join(cDir, "seg.json"), JSON.stringify({ mutate: ["src/mod/a.ts"] }));
+      writeFileSync(join(sDir, "mod", "a.ts"), "export const a = 1;");
+      writeFileSync(join(sDir, "mod", "b.ts"), "export const b = 2;");
+
+      const r = checkMutationCoverage("conf.d", "src", fixtureRoot);
+      expect(r.ok).toBe(false);
+      expect(r.uncovered).toEqual(["src/mod/b.ts"]);
+      expect(r.duplicated).toEqual({});
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("当存在多段重复覆盖时，checkMutationCoverage 立即阻断并报告重复分段", () => {
+    const fixtureRoot = mkdtempSync(join(tmpdir(), "anti-drop-dup-"));
+    try {
+      const cDir = join(fixtureRoot, "conf.d");
+      const sDir = join(fixtureRoot, "src");
+      mkdirSync(cDir, { recursive: true });
+      mkdirSync(join(sDir, "mod"), { recursive: true });
+
+      // seg1 和 seg2 都覆盖 shared.ts
+      writeFileSync(join(cDir, "seg1.json"), JSON.stringify({ mutate: ["src/mod/**/*.ts"] }));
+      writeFileSync(join(cDir, "seg2.json"), JSON.stringify({ mutate: ["src/mod/shared.ts"] }));
+      writeFileSync(join(sDir, "mod", "shared.ts"), "export const s = 1;");
+
+      const r = checkMutationCoverage("conf.d", "src", fixtureRoot);
+      expect(r.ok).toBe(false);
+      expect(r.uncovered).toEqual([]);
+      expect(r.duplicated).toEqual({
+        "src/mod/shared.ts": ["seg1", "seg2"],
+      });
+    } finally {
+      rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+});
+
 
 
